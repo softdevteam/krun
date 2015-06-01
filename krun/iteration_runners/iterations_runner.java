@@ -38,13 +38,16 @@ class IterationRunner {
         // reflectively call the benchmark's run_iter
         Class<?> cls = Class.forName(benchmark);
         java.lang.reflect.Constructor<?> constructor = cls.getConstructor();
-        Object instance = constructor.newInstance();
-        java.lang.reflect.Method method = cls.getMethod("runIter", int.class);
 
         System.out.print("[");
         for (int i = 0; i < iterations; i++) {
             System.err.println("Execution: " + i + "/" + iterations);
+
+            Object instance = constructor.newInstance();
+            java.lang.reflect.Method method = cls.getMethod("runIter", int.class);
+
             BenchTimer t = new BenchTimer();
+
             t.start();
             method.invoke(instance, param);
             t.stop();
