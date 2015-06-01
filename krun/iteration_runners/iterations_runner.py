@@ -18,6 +18,8 @@ double clock_gettime_monotonic();
 
 CSRC = """
 #include <time.h>
+#include <stdlib.h>
+#include <math.h>
 
 #if defined(__linux__)
 #define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC_RAW
