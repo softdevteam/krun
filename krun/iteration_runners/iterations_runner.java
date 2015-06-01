@@ -41,7 +41,7 @@ class IterationRunner {
 
         System.out.print("[");
         for (int i = 0; i < iterations; i++) {
-            System.err.println("Execution: " + i + "/" + iterations);
+            System.err.println("    Execution: " + (i + 1) + "/" + iterations);
 
             Object instance = constructor.newInstance();
             java.lang.reflect.Method method = cls.getMethod("runIter", int.class);
