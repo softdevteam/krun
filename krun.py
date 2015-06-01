@@ -16,7 +16,7 @@ import os, subprocess, sys, subprocess, json, time
 from collections import deque
 import datetime
 
-from util import should_skip
+from krun.util import should_skip
 
 UNKNOWN_TIME_DELTA = "?:??:??"
 ABS_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
