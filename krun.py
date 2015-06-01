@@ -3,7 +3,7 @@
 """
 Benchmark, running many fresh processes.
 
-usage: runner.py <config_file.py>
+usage: runner.py <config_file.krun>
 """
 
 ANSI_RED = '\033[91m'
@@ -16,7 +16,7 @@ import os, subprocess, sys, subprocess, json, time
 from collections import deque
 import datetime
 
-from krun.util import should_skip
+import krun.util as util
 
 UNKNOWN_TIME_DELTA = "?:??:??"
 ABS_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -24,6 +24,11 @@ UNKNOWN_ABS_TIME = "????-??-?? ??:??:??"
 
 BENCH_DEBUG = os.environ.get("BENCH_DEBUG", False)
 BENCH_DRYRUN = os.environ.get("BENCH_DRYRUN", False)
+
+KRUN_SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
+ITERATIONS_RUNNER_DIR = os.path.join(KRUN_SCRIPT_DIR,
+                                     "krun", "iteration_runners")
+HERE = os.path.abspath(os.getcwd())
 
 def usage():
     print(__doc__)
@@ -78,11 +83,12 @@ class ExecutionJob(object):
                     (ANSI_CYAN, self.benchmark, self.parameter, self.variant,
                      self.vm_name, ANSI_RESET))
 
-        benchmark_dir = os.path.join("benchmarks", self.benchmark)
+        benchmark_dir = self.benchmark
 
-        variant_info = self.config.VARIANTS[self.variant]
+        variant_info = self.config["VARIANTS"][self.variant]
         bench_file = os.path.join(benchmark_dir, variant_info["filename"])
-        iterations_runner = variant_info["iter_runner"]
+        iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR,
+                                         variant_info["iter_runner"])
 
         # Print ETA for execution if available
         exec_start = datetime.datetime.now()
@@ -295,52 +301,29 @@ class TimeEstimateFormatter(object):
         else:
             return UNKNOWN_TIME_DELTA
 
-
-def print_session_summary(config):
-    import socket
-
-    print("\nBecnchmarking Session Summary")
-    print("==============================\n\n")
-    print("Now:         " + datetime.datetime.now().strftime(ABS_TIME_FORMAT))
-    print("Platform:    " + sys.platform)
-    print("Host:        " + socket.gethostname())
-    print("Directory:   " + os.getcwd())
-    print("config file: " + sys.argv[1])
-    print("VMs:         " + str(config.VMS.keys()))
-    print("#benchmarks: " + str(len(config.BENCHMARKS)))
-    print("\n")
-
-    print("Hit enter to proceed...")
-    raw_input()
-
 def main():
     try:
         config_file = sys.argv[1]
     except IndexError:
         usage()
 
-    if not config_file.endswith(".py"):
+    if not config_file.endswith(".krun"):
         usage()
 
-    import_name = config_file[:-3]
-    out_file = import_name + "_results.json"
-    try:
-        config = __import__(import_name)
-    except:
-        print("*** error importing config file!\n")
-        raise
+    config = util.read_config(config_file)
+    out_file = util.output_name(config_file)
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
     sched = ExecutionScheduler(config_file, out_file)
     eta_avail_job = None
-    for exec_n in xrange(config.N_EXECUTIONS):
-        for vm_name, vm_info in config.VMS.items():
-            for bmark, param in config.BENCHMARKS.items():
+    for exec_n in xrange(config["N_EXECUTIONS"]):
+        for vm_name, vm_info in config["VMS"].items():
+            for bmark, param in config["BENCHMARKS"].items():
                 for variant in vm_info["variants"]:
                     job = ExecutionJob(sched, config, vm_name, vm_info, bmark, variant, param)
 
-                    if not should_skip(config, job.key):
+                    if not util.should_skip(config, job.key):
                         if one_exec_scheduled and not eta_avail_job:
                             eta_avail_job = job # first job of second executions eta becomes known.
                             sched.set_eta_avail()
@@ -350,8 +333,6 @@ def main():
                             print("%s    DEBUG: %s is in skip list. Not scheduling.%s" %
                                   (ANSI_GREEN, job.key, ANSI_RESET))
         one_exec_scheduled = True
-
-    print_session_summary(config)
 
     sched.run() # does the benchmarking
 

@@ -1,5 +1,9 @@
 <?php
 
+/*
+ * Note! You will need to provide an implementation of clock_gettime_monotonic()
+ */
+
 define('ANSI_MAGENTA', "\033[95m");
 define('ANSI_RESET', "\033[0m");
 
