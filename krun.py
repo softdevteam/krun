@@ -86,9 +86,16 @@ class ExecutionJob(object):
         benchmark_dir = self.benchmark
 
         variant_info = self.config["VARIANTS"][self.variant]
-        bench_file = os.path.join(benchmark_dir, variant_info["filename"])
-        iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR,
-                                         variant_info["iter_runner"])
+
+        if self.vm_info["path"] != "java": # XXX hack! makes me feel ill.
+            bench_file = os.path.join(benchmark_dir, variant_info["filename"])
+        else:
+            bench_file = variant_info["filename"]
+
+        if self.vm_info["path"] != "java": # XXX hack! makes me feel ill.
+            iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, variant_info["iter_runner"])
+        else:
+            iterations_runner = variant_info["iter_runner"]
 
         # Print ETA for execution if available
         exec_start = datetime.datetime.now()
