@@ -83,14 +83,23 @@ class ExecutionJob(object):
                     (ANSI_CYAN, self.benchmark, self.parameter, self.variant,
                      self.vm_name, ANSI_RESET))
 
-        benchmark_dir = self.benchmark
+        benchmark_dir = os.path.abspath(self.benchmark)
 
         variant_info = self.config["VARIANTS"][self.variant]
+
+        # XXX These hacks need to be handled properly.
+        # Each language has a backend defining these quirks perhaps?
+        try:
+            del(os.environ["CLASSPATH"])
+        except KeyError:
+            pass
 
         if self.vm_info["path"] != "java": # XXX hack! makes me feel ill.
             bench_file = os.path.join(benchmark_dir, variant_info["filename"])
         else:
+            os.environ["CLASSPATH"] = "%s:%s" % (ITERATIONS_RUNNER_DIR, benchmark_dir)
             bench_file = variant_info["filename"]
+            print("XXX: %s" % os.environ["CLASSPATH"])
 
         if self.vm_info["path"] != "java": # XXX hack! makes me feel ill.
             iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, variant_info["iter_runner"])
