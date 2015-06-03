@@ -6,11 +6,12 @@ Benchmark, running many fresh processes.
 usage: runner.py <config_file.krun>
 """
 
-ANSI_RED = '\033[91m'
-ANSI_GREEN = '\033[92m'
-ANSI_MAGENTA = '\033[95m'
-ANSI_CYAN = '\033[36m'
-ANSI_RESET = '\033[0m'
+from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
+#ANSI_RED = '\033[91m'
+#ANSI_GREEN = '\033[92m'
+#ANSI_MAGENTA = '\033[95m'
+#ANSI_CYAN = '\033[36m'
+#ANSI_RESET = '\033[0m'
 
 import os, subprocess, sys, subprocess, json, time
 from collections import deque
@@ -25,9 +26,6 @@ UNKNOWN_ABS_TIME = "????-??-?? ??:??:??"
 BENCH_DEBUG = os.environ.get("BENCH_DEBUG", False)
 BENCH_DRYRUN = os.environ.get("BENCH_DRYRUN", False)
 
-KRUN_SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
-ITERATIONS_RUNNER_DIR = os.path.join(KRUN_SCRIPT_DIR,
-                                     "krun", "iteration_runners")
 HERE = os.path.abspath(os.getcwd())
 
 def usage():
@@ -76,7 +74,7 @@ class ExecutionJob(object):
         """Feed back a rough execution time for ETA usage"""
         self.sched.add_eta_info(self.key, exec_time)
 
-    def run(self):
+    def oldrun(self):
         """Runs this job (execution)"""
 
         print("%sRunning '%s(%d)' (%s variant) under '%s'%s" %
@@ -140,6 +138,78 @@ class ExecutionJob(object):
         stdout, stderr = subprocess.Popen(
                 args, stdout=subprocess.PIPE).communicate()
 
+        exec_time_rough = time.time() - exec_start_rough
+
+        try:
+            iterations_results = eval(stdout) # we should get a list of floats
+        except SyntaxError:
+            print(ANSI_RED)
+            print("=ERROR=" * 8)
+            print("*error: benchmark didn't print a parsable list.")
+            print("We got:\n---\n%s\n---\n" % stdout)
+            print("When running: %s" % " ".join(args))
+            print("=ERROR=" * 8)
+            print(ANSI_RESET)
+            print("")
+
+            return []
+
+        # Add to ETA estimation figures
+        self.add_exec_time(exec_time_rough)
+
+        print("")
+        return iterations_results
+
+    def run(self):
+        """Runs this job (execution)"""
+
+        print("%sRunning '%s(%d)' (%s variant) under '%s'%s" %
+                    (ANSI_CYAN, self.benchmark, self.parameter, self.variant,
+                     self.vm_name, ANSI_RESET))
+
+        #benchmark_dir = os.path.abspath(self.benchmark)
+
+        variant = self.config["VARIANTS"][self.variant]
+
+        ## XXX These hacks need to be handled properly.
+        ## Each language has a backend defining these quirks perhaps?
+        #try:
+        #    del(os.environ["CLASSPATH"])
+        #except KeyError:
+        #    pass
+
+        #if self.vm_info["path"] != "java": # XXX hack! makes me feel ill.
+        #    bench_file = os.path.join(benchmark_dir, variant_info["filename"])
+        #else:
+        #    os.environ["CLASSPATH"] = "%s:%s" % (ITERATIONS_RUNNER_DIR, benchmark_dir)
+        #    bench_file = variant_info["filename"]
+        #    print("XXX: %s" % os.environ["CLASSPATH"])
+
+        #if self.vm_info["path"] != "java": # XXX hack! makes me feel ill.
+        #    iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, variant_info["iter_runner"])
+        #else:
+        #    iterations_runner = variant_info["iter_runner"]
+
+        # Print ETA for execution if available
+        exec_start = datetime.datetime.now()
+        exec_start_str = "%s" % exec_start.strftime(ABS_TIME_FORMAT)
+
+        tfmt = self.get_exec_estimate_time_formatter()
+        print("{}    {:<35s}: {}{}".format(ANSI_MAGENTA,
+                                         "Current time",
+                                         tfmt.start_str,
+                                         ANSI_RESET))
+
+
+        print("{}    {:<35s}: {} ({} from now){}".format(ANSI_MAGENTA,
+                                         "Estimated completion (this exec)",
+                                         tfmt.finish_str,
+                                         tfmt.delta_str,
+                                         ANSI_RESET))
+
+        # Rough ETA execution timer
+        exec_start_rough = time.time()
+        stdout = variant.run_exec(self.vm_info["path"], self.benchmark, self.vm_info["n_iterations"], self.parameter)
         exec_time_rough = time.time() - exec_start_rough
 
         try:
