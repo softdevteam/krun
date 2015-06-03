@@ -23,7 +23,7 @@ class BenchTimer {
     }
 }
 
-class IterationRunner {
+class IterationsRunner {
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
 
