@@ -8,6 +8,7 @@ In Kalibera terms, this script represents one executions level run.
 """
 
 import cffi, sys, imp
+import gc
 
 ANSI_MAGENTA = '\033[95m'
 ANSI_RESET = '\033[0m'
@@ -99,10 +100,12 @@ if __name__ == "__main__":
                          (ANSI_MAGENTA, i + 1, iters, ANSI_RESET))
 
         timer = BenchTimer()
+        gc.collect()
         timer.start()
         bench_func(param)
         timer.stop()
 
         sys.stdout.write("%f, " % timer.get())
+        sys.stdout.flush()
 
     sys.stdout.write("]\n")
