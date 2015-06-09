@@ -5,12 +5,17 @@ from krun import ANSI_GREEN, ANSI_RESET
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "iteration_runners"))
+BENCHMARKS_DIR = "benchmarks"
 
 class BaseVariant(object):
 
-    def __init__(self, iterations_runner, entry_point):
+    def __init__(self, iterations_runner, entry_point=None, subdir=None):
+        assert entry_point is not None
+        if subdir is None:
+            subdir = "."
         self.entry_point = entry_point
         self.iterations_runner = iterations_runner
+        self.subdir = subdir
 
     def run_exec(self, interpreter, benchmark, iterations, param):
         raise NotImplemented("abstract")
@@ -29,23 +34,28 @@ class BaseVariant(object):
         return stdout
 
 class GenericScriptingVariant(BaseVariant):
-    def __init__(self, iterations_runner, entry_point):
+    def __init__(self, iterations_runner, entry_point=None, subdir=None):
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
-        BaseVariant.__init__(self, fp_iterations_runner, entry_point)
+        BaseVariant.__init__(self,
+                             fp_iterations_runner,
+                             entry_point=entry_point,
+                             subdir=subdir)
 
     def run_exec(self, interpreter, benchmark, iterations, param):
-        script_path = os.path.join(benchmark, self.entry_point)
+        script_path = os.path.join(BENCHMARKS_DIR, benchmark, self.subdir, self.entry_point)
         args = [interpreter, self.iterations_runner, script_path, str(iterations), str(param)]
         return self._run_exec(args, env=None)
 
 class JavaVariant(BaseVariant):
-    def __init__(self, entry_point):
-        BaseVariant.__init__(self, "IterationsRunner", entry_point)
-        self.entry_point = entry_point
+    def __init__(self, entry_point=None, subdir=None):
+        BaseVariant.__init__(self,
+                             "IterationsRunner",
+                             entry_point=entry_point,
+                             subdir=subdir)
 
     def run_exec(self, interpreter, benchmark, iterations, param):
         args = [interpreter, self.iterations_runner, self.entry_point, str(iterations), str(param)]
-        bench_dir = os.path.abspath(os.path.join(os.getcwd(), benchmark))
+        bench_dir = os.path.abspath(os.path.join(os.getcwd(), BENCHMARKS_DIR, benchmark, self.subdir))
 
         # deal with CLASSPATH
         cur_classpath = os.environ.get("CLASSPATH", "")
@@ -60,9 +70,15 @@ class JavaVariant(BaseVariant):
 
 
 class PythonVariant(GenericScriptingVariant):
-    def __init__(self, entrypoint):
-        GenericScriptingVariant.__init__(self, "iterations_runner.py", entrypoint)
+    def __init__(self, entry_point=None, subdir=None):
+        GenericScriptingVariant.__init__(self,
+                                         "iterations_runner.py",
+                                         entry_point=entry_point,
+                                         subdir=subdir)
 
 class LuaVariant(GenericScriptingVariant):
-    def __init__(self, entrypoint):
-        GenericScriptingVariant.__init__(self, "iterations_runner.lua", entrypoint)
+    def __init__(self, entry_point=None, subdir=None):
+        GenericScriptingVariant.__init__(self,
+                                         "iterations_runner.lua",
+                                         entry_point=entry_point,
+                                         subdir=subdir)
