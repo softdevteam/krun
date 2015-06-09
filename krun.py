@@ -109,7 +109,7 @@ class ExecutionJob(object):
             print("=ERROR=" * 8)
             print("*error: benchmark didn't print a parsable list.")
             print("We got:\n---\n%s\n---\n" % stdout)
-            print("When running: %s" % " ".join(args))
+            print("To see the invokation set the BENCH_DEBUG env and run again")
             print("=ERROR=" * 8)
             print(ANSI_RESET)
             print("")
