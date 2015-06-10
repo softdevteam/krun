@@ -9,18 +9,27 @@ BENCHMARKS_DIR = "benchmarks"
 
 class BaseVariant(object):
 
-    def __init__(self, iterations_runner, entry_point=None, subdir=None):
+    def __init__(self, iterations_runner, entry_point=None, subdir=None, extra_env=None):
         assert entry_point is not None
         if subdir is None:
             subdir = "."
+        if extra_env is None:
+            extra_env = {}
         self.entry_point = entry_point
         self.iterations_runner = iterations_runner
         self.subdir = subdir
+        self.extra_env = extra_env
 
-    def run_exec(self, interpreter, benchmark, iterations, param):
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env):
         raise NotImplemented("abstract")
 
     def _run_exec(self, args, env=None):
+        if env is not None:
+            use_env = env.copy()
+        else:
+            use_env = {}
+        use_env.update(self.extra_env)
+
         if os.environ.get("BENCH_DEBUG"):
             print("%s    DEBUG: cmdline='%s'%s" % (ANSI_GREEN, " ".join(args), ANSI_RESET))
             print("%s    DEBUG: env='%s'%s" % (ANSI_GREEN, env, ANSI_RESET))
@@ -34,26 +43,33 @@ class BaseVariant(object):
         return stdout
 
 class GenericScriptingVariant(BaseVariant):
-    def __init__(self, iterations_runner, entry_point=None, subdir=None):
+    def __init__(self, iterations_runner, entry_point=None, subdir=None, extra_env=None):
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
         BaseVariant.__init__(self,
                              fp_iterations_runner,
                              entry_point=entry_point,
-                             subdir=subdir)
+                             subdir=subdir,
+                             extra_env=extra_env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param):
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env):
         script_path = os.path.join(BENCHMARKS_DIR, benchmark, self.subdir, self.entry_point)
         args = [interpreter, self.iterations_runner, script_path, str(iterations), str(param)]
-        return self._run_exec(args, env=None)
+
+        use_env = os.environ.copy()
+        if vm_env is not None:
+            use_env.update(vm_env)
+
+        return self._run_exec(args, use_env)
 
 class JavaVariant(BaseVariant):
-    def __init__(self, entry_point=None, subdir=None):
+    def __init__(self, entry_point=None, subdir=None, extra_env=None):
         BaseVariant.__init__(self,
                              "IterationsRunner",
                              entry_point=entry_point,
-                             subdir=subdir)
+                             subdir=subdir,
+                             extra_env=extra_env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param):
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env):
         args = [interpreter, self.iterations_runner, self.entry_point, str(iterations), str(param)]
         bench_dir = os.path.abspath(os.path.join(os.getcwd(), BENCHMARKS_DIR, benchmark, self.subdir))
 
@@ -65,27 +81,40 @@ class JavaVariant(BaseVariant):
 
         new_env = os.environ.copy()
         new_env["CLASSPATH"] = os.pathsep.join(paths)
+        if vm_env is not None:
+            new_env.update(vm_env)
 
         return self._run_exec(args, new_env)
 
 
 class PythonVariant(GenericScriptingVariant):
-    def __init__(self, entry_point=None, subdir=None):
+    def __init__(self, entry_point=None, subdir=None, extra_env=None):
         GenericScriptingVariant.__init__(self,
                                          "iterations_runner.py",
                                          entry_point=entry_point,
-                                         subdir=subdir)
+                                         subdir=subdir,
+                                         extra_env=extra_env)
 
 class LuaVariant(GenericScriptingVariant):
-    def __init__(self, entry_point=None, subdir=None):
+    def __init__(self, entry_point=None, subdir=None, extra_env=None):
         GenericScriptingVariant.__init__(self,
                                          "iterations_runner.lua",
                                          entry_point=entry_point,
-                                         subdir=subdir)
+                                         subdir=subdir,
+                                         extra_env=extra_env)
 
 class PHPVariant(GenericScriptingVariant):
-    def __init__(self, entry_point=None, subdir=None):
+    def __init__(self, entry_point=None, subdir=None, extra_env=None):
         GenericScriptingVariant.__init__(self,
                                          "iterations_runner.php",
                                          entry_point=entry_point,
-                                         subdir=subdir)
+                                         subdir=subdir,
+                                         extra_env=extra_env)
+
+class RubyVariant(GenericScriptingVariant):
+    def __init__(self, entry_point=None, subdir=None, extra_env=None):
+        GenericScriptingVariant.__init__(self,
+                                         "iterations_runner.rb",
+                                         entry_point=entry_point,
+                                         subdir=subdir,
+                                         extra_env=extra_env)
