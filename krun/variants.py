@@ -20,7 +20,7 @@ class BaseVariant(object):
         self.subdir = subdir
         self.extra_env = extra_env
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env):
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
         raise NotImplemented("abstract")
 
     def _run_exec(self, args, env=None):
@@ -51,13 +51,12 @@ class GenericScriptingVariant(BaseVariant):
                              subdir=subdir,
                              extra_env=extra_env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env):
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
         script_path = os.path.join(BENCHMARKS_DIR, benchmark, self.subdir, self.entry_point)
-        args = [interpreter, self.iterations_runner, script_path, str(iterations), str(param)]
+        args = [interpreter] + vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
 
         use_env = os.environ.copy()
-        if vm_env is not None:
-            use_env.update(vm_env)
+        use_env.update(vm_env)
 
         return self._run_exec(args, use_env)
 
@@ -69,8 +68,8 @@ class JavaVariant(BaseVariant):
                              subdir=subdir,
                              extra_env=extra_env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env):
-        args = [interpreter, self.iterations_runner, self.entry_point, str(iterations), str(param)]
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
+        args = [interpreter] + vm_args + [self.iterations_runner, self.entry_point, str(iterations), str(param)]
         bench_dir = os.path.abspath(os.path.join(os.getcwd(), BENCHMARKS_DIR, benchmark, self.subdir))
 
         # deal with CLASSPATH
@@ -81,8 +80,7 @@ class JavaVariant(BaseVariant):
 
         new_env = os.environ.copy()
         new_env["CLASSPATH"] = os.pathsep.join(paths)
-        if vm_env is not None:
-            new_env.update(vm_env)
+        new_env.update(vm_env)
 
         return self._run_exec(args, new_env)
 

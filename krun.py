@@ -96,12 +96,13 @@ class ExecutionJob(object):
                                          tfmt.delta_str,
                                          ANSI_RESET))
 
-        vm_env = self.vm_info.get("vm_env", None)
+        vm_env = self.vm_info.get("vm_env", {})
+        vm_args = self.vm_info.get("vm_args", [])
 
         # Rough ETA execution timer
         exec_start_rough = time.time()
         stdout = variant.run_exec(self.vm_info["path"], self.benchmark,
-                                  self.vm_info["n_iterations"], self.parameter, vm_env)
+                                  self.vm_info["n_iterations"], self.parameter, vm_env, vm_args)
         exec_time_rough = time.time() - exec_start_rough
 
         try:
