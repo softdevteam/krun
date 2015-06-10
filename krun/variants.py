@@ -82,3 +82,10 @@ class LuaVariant(GenericScriptingVariant):
                                          "iterations_runner.lua",
                                          entry_point=entry_point,
                                          subdir=subdir)
+
+class PHPVariant(GenericScriptingVariant):
+    def __init__(self, entry_point=None, subdir=None):
+        GenericScriptingVariant.__init__(self,
+                                         "iterations_runner.php",
+                                         entry_point=entry_point,
+                                         subdir=subdir)
