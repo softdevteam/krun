@@ -116,3 +116,22 @@ class RubyVariant(GenericScriptingVariant):
                                          entry_point=entry_point,
                                          subdir=subdir,
                                          extra_env=extra_env)
+
+class JavascriptVariant(GenericScriptingVariant):
+    def __init__(self, entry_point=None, subdir=None, extra_env=None):
+        GenericScriptingVariant.__init__(self,
+                                         "iterations_runner.js",
+                                         entry_point=entry_point,
+                                         subdir=subdir,
+                                         extra_env=extra_env)
+
+    # pretty much the same as the generic implementation, but needs a '--' argument.
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
+        script_path = os.path.join(BENCHMARKS_DIR, benchmark, self.subdir, self.entry_point)
+        args = [interpreter] + vm_args + \
+            [self.iterations_runner, '--', script_path, str(iterations), str(param)]
+
+        use_env = os.environ.copy()
+        use_env.update(vm_env)
+
+        return self._run_exec(args, use_env)
