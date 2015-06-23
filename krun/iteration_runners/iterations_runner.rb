@@ -51,7 +51,7 @@ if __FILE__ == $0
     param = Integer(param)
 
     assert benchmark.end_with?(".rb")
-    require("./" + benchmark)
+    require("#{Dir.pwd}/#{benchmark}")
 
     STDOUT.write "["
     iters.times do
