@@ -1,3 +1,5 @@
+// NOTE: you need to provide clock_gettime_monotonic.
+
 /* Javascript has no assert() */
 function _bench_assert(condition) {
     if (!condition) {
@@ -12,11 +14,11 @@ function BenchTimer() {
 
     this.start = function() {
         _bench_assert(this.start_time == null);
-        this.start_time = Date.now(); // XXX bad clock!
+        this.start_time = clock_gettime_monotonic();
     };
 
     this.stop = function() {
-        this.stop_time = Date.now(); // XXX bad clock!
+        this.stop_time = clock_gettime_monotonic();
         _bench_assert(this.start_time != null);
     };
 
