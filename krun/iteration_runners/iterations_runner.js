@@ -40,6 +40,7 @@ load(entry_point);
 
 print("[");
 for (i = 0; i < n_iters; i++) {
+    //print("    Execution " + (i + 1) + "/" + n_iters); // XXX needs to got o stderr
 	var tmr = new BenchTimer();
 	tmr.start();
 	run_iter(param);

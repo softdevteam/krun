@@ -54,7 +54,9 @@ if __FILE__ == $0
     require("#{Dir.pwd}/#{benchmark}")
 
     STDOUT.write "["
+    krun_iter_num = 0
     iters.times do
+        STDERR.write "    Execution #{krun_iter_num + 1}/#{iters}"
         t = BenchTimer.new()
         t.start()
         run_iter(param)
