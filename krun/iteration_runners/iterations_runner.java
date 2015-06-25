@@ -1,16 +1,17 @@
+// XXX nanotime is actually CLOCK_MONOTONIC on linux, not MONOTONIC_RAW!
+// https://bugs.openjdk.java.net/browse/JDK-8006942
+
 class BenchTimer {
     private long startTime, endTime;
     private boolean hasStarted = false, hasStopped = false;
 
     public void start() {
-        // XXX is this monotonic?
-        // http://docs.oracle.com/javase/1.5.0/docs/api/java/lang/System.html#nanoTime()
         hasStarted = true;
-        startTime = System.nanoTime();
+        startTime = System.nanoTime(); // XXX almost monotonic
     }
 
     public void stop() {
-        endTime = System.nanoTime();
+        endTime = System.nanoTime(); // XXX almost monotonic
         assert(hasStarted);
         hasStopped = true;
     }
