@@ -12,46 +12,12 @@ import cffi, sys, imp
 ANSI_MAGENTA = '\033[95m'
 ANSI_RESET = '\033[0m'
 
-CDEFS = """
-double clock_gettime_monotonic();
-"""
-
-CSRC = """
-#include <time.h>
-#include <stdlib.h>
-#include <math.h>
-
-#if defined(__linux__)
-#define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC_RAW
-#else
-#define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC
-#endif
-
-double
-clock_gettime_monotonic()
-{
-    struct timespec         ts;
-    double                  result;
-
-    if ((clock_gettime(ACTUAL_CLOCK_MONOTONIC, &ts)) < 0) {
-        perror("clock_gettime");
-        exit(1);
-    }
-
-    result = ts.tv_sec + ts.tv_nsec * pow(10, -9);
-    return (result);
-}
-"""
-
-LINK_LIBS = []
-if sys.platform.startswith("linux"):
-    LINK_LIBS += ["rt"]
 
 ffi = cffi.FFI()
-ffi.cdef(CDEFS)
-our_lib = ffi.verify(CSRC, libraries=LINK_LIBS)
+ffi.cdef("double clock_gettime_monotonic();")
+libkruntime = ffi.dlopen("libkruntime.so")
 
-clock_gettime_monotonic = our_lib.clock_gettime_monotonic
+clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
 
 class BenchTimer(object):
 
