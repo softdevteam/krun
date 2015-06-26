@@ -3,7 +3,6 @@
  */
 #include <time.h>
 #include <stdlib.h>
-#include <math.h>
 #include <errno.h>
 #include <stdio.h>
 
@@ -24,6 +23,6 @@ clock_gettime_monotonic()
         exit(1);
     }
 
-    result = ts.tv_sec + ts.tv_nsec * pow(10, -9);
+    result = ts.tv_sec + ts.tv_nsec * 10e-9;
     return (result);
 }
