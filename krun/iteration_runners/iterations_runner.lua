@@ -41,7 +41,6 @@ for i = 1, iters, 1 do -- inclusive upper bound in lua
     io.stderr:write(string.format("    Iteration %d/%d\n", i, iters))
 
     t = new_timer()
-    collectgarbage()
     start_timer(t)
     run_iter(param) -- run one iteration of benchmark
     stop_timer(t)

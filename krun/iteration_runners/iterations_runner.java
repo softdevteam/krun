@@ -47,7 +47,6 @@ class IterationsRunner {
             //Object instance = constructor.newInstance();
             java.lang.reflect.Method method = cls.getMethod("run_iter", int.class);
 
-            System.gc();
             BenchTimer t = new BenchTimer();
 
             t.start();
