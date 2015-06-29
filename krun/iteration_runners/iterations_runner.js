@@ -1,12 +1,5 @@
 // NOTE: you need to provide clock_gettime_monotonic.
 
-/* Javascript has no assert() */
-function _bench_assert(condition) {
-    if (!condition) {
-        throw "Assertion failed";
-    }
-}
-
 if (this.arguments.length != 3) {
     throw "usage: iterations_runner.js <benchmark> <# of iterations> <benchmark param>";
 }
