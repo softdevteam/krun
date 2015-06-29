@@ -1,6 +1,11 @@
 // XXX nanotime is actually CLOCK_MONOTONIC on linux, not MONOTONIC_RAW!
 // https://bugs.openjdk.java.net/browse/JDK-8006942
 
+// All entry points must implement this
+interface BaseKrunEntry {
+    public abstract void run_iter(int param);
+}
+
 class BenchTimer {
     private long startTime, endTime;
     private boolean hasStarted = false, hasStopped = false;
@@ -38,21 +43,19 @@ class IterationsRunner {
 
         // reflectively call the benchmark's run_iter
         Class<?> cls = Class.forName(benchmark);
-        //java.lang.reflect.Constructor<?> constructor = cls.getConstructor();
+        java.lang.reflect.Constructor<?>[] constructors = cls.getDeclaredConstructors();
+        assert constructors.length == 1;
+        Object instance = constructors[0].newInstance();
+        BaseKrunEntry ke = (BaseKrunEntry) instance; // evil
 
         System.out.print("[");
+        // Please, no refelction inside the timed code!
         for (int i = 0; i < iterations; i++) {
             System.err.println("    Execution: " + (i + 1) + "/" + iterations);
 
-            //Object instance = constructor.newInstance();
-            java.lang.reflect.Method method = cls.getMethod("run_iter", int.class);
-
             BenchTimer t = new BenchTimer();
-
             t.start();
-            //method.invoke(instance, param);
-            // The entrypoint mus provide a static void method accepting one in arg called run_iter.
-            method.invoke(null, param);
+            ke.run_iter(param);
             t.stop();
             System.out.print(t.get() + ", ");
         }
