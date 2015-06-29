@@ -19,7 +19,7 @@ load(entry_point);
 
 print("[");
 for (i = 0; i < n_iters; i++) {
-    //print("    Execution " + (i + 1) + "/" + n_iters); // XXX needs to got o stderr
+	//print("    Execution " + (i + 1) + "/" + n_iters); // XXX needs to got to stderr
 	var start_time = clock_gettime_monotonic();
 	run_iter(param);
 	var stop_time = clock_gettime_monotonic();
