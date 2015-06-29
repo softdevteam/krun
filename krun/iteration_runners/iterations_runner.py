@@ -12,31 +12,11 @@ import cffi, sys, imp
 ANSI_MAGENTA = '\033[95m'
 ANSI_RESET = '\033[0m'
 
-
 ffi = cffi.FFI()
 ffi.cdef("double clock_gettime_monotonic();")
 libkruntime = ffi.dlopen("libkruntime.so")
 
 clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
-
-class BenchTimer(object):
-
-    def __init__(self):
-        self.start_time = None
-        self.end_time = None
-
-    def start(self):
-        self.start_time = clock_gettime_monotonic()
-
-    def stop(self):
-        self.stop_time = clock_gettime_monotonic()
-        if self.start_time is None:
-            raise RuntimeError("timer was not started")
-
-    def get(self):
-        if self.stop_time is None:
-            raise RuntimeError("timer was not stopped")
-        return self.stop_time - self.start_time
 
 # main
 if __name__ == "__main__":
@@ -64,12 +44,11 @@ if __name__ == "__main__":
         sys.stderr.write("    %sIteration %3d/%3d%s\n" %
                          (ANSI_MAGENTA, i + 1, iters, ANSI_RESET))
 
-        timer = BenchTimer()
-        timer.start()
+        start_time = clock_gettime_monotonic()
         bench_func(param)
-        timer.stop()
+        stop_time = clock_gettime_monotonic()
 
-        sys.stdout.write("%f, " % timer.get())
+        sys.stdout.write("%f, " % (stop_time - start_time))
         sys.stdout.flush()
 
     sys.stdout.write("]\n")

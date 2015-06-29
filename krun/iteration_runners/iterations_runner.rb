@@ -17,28 +17,6 @@ def assert(cond)
     end
 end
 
-class BenchTimer
-    def initialize()
-        @start_time = nil;
-        @end_time = nil;
-    end
-
-    def start
-        assert @start_time == nil
-        @start_time = clock_gettime_monotonic()
-    end
-
-    def stop
-        @end_time = clock_gettime_monotonic()
-        assert @start_time != nil
-    end
-
-    def read
-        assert @end_time != nil
-        @end_time - @start_time
-    end
-end
-
 # main
 if __FILE__ == $0
     if ARGV.length != 3
@@ -57,11 +35,13 @@ if __FILE__ == $0
     krun_iter_num = 0
     iters.times do
         STDERR.write "    Execution #{krun_iter_num + 1}/#{iters}"
-        t = BenchTimer.new()
-        t.start()
+
+	start_time = clock_gettime_monotonic()
         run_iter(param)
-        t.stop()
-        STDOUT.write String(t.read()) + ", "
+	stop_time = clock_gettime_monotonic()
+
+	intvl = stop_time - start_time
+        STDOUT.write String(intvl) + ", "
     end
     STDOUT.write "]"
 end

@@ -6,29 +6,6 @@ interface BaseKrunEntry {
     public abstract void run_iter(int param);
 }
 
-class BenchTimer {
-    private long startTime, endTime;
-    private boolean hasStarted = false, hasStopped = false;
-
-    public void start() {
-        hasStarted = true;
-        startTime = System.nanoTime(); // XXX almost monotonic
-    }
-
-    public void stop() {
-        endTime = System.nanoTime(); // XXX almost monotonic
-        assert(hasStarted);
-        hasStopped = true;
-    }
-
-    public float get() {
-        assert(hasStopped);
-        // XXX check for integer/float pitfalls.
-        float secs = (endTime - startTime) / (float) 1000000000; // One nano is 10^-9
-        return secs;
-    }
-}
-
 class IterationsRunner {
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
@@ -53,11 +30,12 @@ class IterationsRunner {
         for (int i = 0; i < iterations; i++) {
             System.err.println("    Execution: " + (i + 1) + "/" + iterations);
 
-            BenchTimer t = new BenchTimer();
-            t.start();
+            double startTime = System.nanoTime(); // XXX almost monotonic
             ke.run_iter(param);
-            t.stop();
-            System.out.print(t.get() + ", ");
+            double stopTime = System.nanoTime(); // XXX almost monotonic
+
+            double intvl = (stopTime - startTime) / (float) 1000000000; // nanosecs to secs
+            System.out.print(intvl + ", ");
         }
         System.out.print("]");
 

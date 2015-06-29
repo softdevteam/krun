@@ -8,22 +8,6 @@ local ffi = require("ffi")
 ffi.cdef[[double clock_gettime_monotonic();]]
 local kruntime = ffi.load("kruntime")
 
-function new_timer()
-    return {start_time=nil, end_time=nil}
-end
-
-function start_timer(tmr)
-    tmr.start_time = kruntime.clock_gettime_monotonic();
-end
-
-function stop_timer(tmr)
-    tmr.end_time = kruntime.clock_gettime_monotonic();
-end
-
-function read_timer(tmr)
-    return tmr.end_time - tmr.start_time
-end
-
 benchmark = arg[1]
 iters = tonumber(arg[2])
 param = tonumber(arg[3])
@@ -40,12 +24,12 @@ io.stdout:flush()
 for i = 1, iters, 1 do -- inclusive upper bound in lua
     io.stderr:write(string.format("    Iteration %d/%d\n", i, iters))
 
-    t = new_timer()
-    start_timer(t)
+    start_time = kruntime.clock_gettime_monotonic()
     run_iter(param) -- run one iteration of benchmark
-    stop_timer(t)
+    end_time = kruntime.clock_gettime_monotonic()
 
-    io.stdout:write(read_timer(t) .. ", ")
+    intvl = end_time - start_time
+    io.stdout:write(intvl .. ", ")
     io.stdout:flush()
 end
 

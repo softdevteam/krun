@@ -16,29 +16,6 @@ ini_set('memory_limit', '8192M');
  * In Kalibera terms, this script represents one executions level run.
  */
 
-class BenchTimer {
-	private $start_time = -1.0;
-	private $end_time = -1.0;
-
-	function start() {
-		$this->start_time = clock_gettime_monotonic();
-	}
-
-	function stop() {
-		$this->stop_time = clock_gettime_monotonic();
-		if ($this->start_time == -1) {
-			throw new RuntimeException("timer was not started");
-		}
-	}
-
-	function get() {
-		if ($this->stop_time == -1) {
-			throw new RuntimeException("timer was not stopped");
-		}
-		return $this->stop_time - $this->start_time;
-	}
-};
-
 # main
 if ($argc != 4) {
 	echo "usage: iterations_runner.php <benchmark> <# of iterations> <benchmark param>\n";
@@ -69,12 +46,11 @@ echo "["; // we are going to print a Python eval-able list.
 for ($BM_i = 0; $BM_i < $BM_iters; $BM_i++) {
         fprintf(STDERR, "    %sIteration %3d/%3d%s\n", ANSI_MAGENTA, $BM_i + 1, $BM_iters, ANSI_RESET);
 
-	$timer = new BenchTimer();
-	$timer->start();
+	$start_time = clock_gettime_monotonic();
 	run_iter($BM_param);
-	$timer->stop();
+	$stop_time = clock_gettime_monotonic();
 
-	echo $timer->get();
+	echo $stop_time - $start_time;
 	echo ", ";
 }
 echo "]\n";
