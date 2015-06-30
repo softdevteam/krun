@@ -6,7 +6,8 @@ java:
 	cd krun/iteration_runners && javac *.java
 
 libkruntime:
-	cd libkruntime && ${MAKE}
+	cd libkruntime && ${MAKE} JAVA_CPPFLAGS=${JAVA_CPPFLAGS} \
+		JAVA_CFLAGS=${JAVA_CFLAGS} JAVA_LDFLAGS=${JAVA_LDFLAGS}
 
 clean: clean-java clean-libkruntime
 

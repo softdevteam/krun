@@ -12,6 +12,7 @@
 #define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC
 #endif
 
+
 double
 clock_gettime_monotonic()
 {
@@ -23,6 +24,17 @@ clock_gettime_monotonic()
         exit(1);
     }
 
-    result = ts.tv_sec + ts.tv_nsec * 10e-9;
+    result = ts.tv_sec + ts.tv_nsec * 1e-9;
     return (result);
 }
+
+/*
+ * JNI Implementation -- Optionally compiled in
+ */
+#ifdef WITH_JAVA
+#include <jni.h>
+
+JNIEXPORT jdouble JNICALL Java_IterationsRunner_JNI_1clock_1gettime_1monotonic(JNIEnv *e, jclass c) {
+	return (jdouble) clock_gettime_monotonic();
+}
+#endif

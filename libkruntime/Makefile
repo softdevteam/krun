@@ -1,9 +1,11 @@
-EXTRA_CFLAGS=-Wall -Wextra
+EXTRA_CFLAGS=-Wall
 
 all: libkruntime.so
 
 libkruntime.so: libkruntime.c
-	${CC} ${EXTRA_CFLAGS} ${CFLAGS} ${CPPFLAGS} ${LDFLAGS} -shared -fPIC libkruntime.c -o libkruntime.so
+	${CC} ${JAVA_CPPFLAGS} ${JAVA_CFLAGS} ${EXTRA_CFLAGS} ${CFLAGS} \
+		${CPPFLAGS} ${JAVA_LDFLAGS} ${LDFLAGS} -shared -fPIC \
+		libkruntime.c -o libkruntime.so
 
 .PHONY: clean
 clean:
