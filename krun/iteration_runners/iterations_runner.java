@@ -7,6 +7,12 @@ interface BaseKrunEntry {
 }
 
 class IterationsRunner {
+    static {
+        System.loadLibrary("kruntime");
+    }
+
+    private static native double JNI_clock_gettime_monotonic();
+
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
 
@@ -30,11 +36,11 @@ class IterationsRunner {
         for (int i = 0; i < iterations; i++) {
             System.err.println("    Execution: " + (i + 1) + "/" + iterations);
 
-            double startTime = System.nanoTime(); // XXX almost monotonic
+            double startTime = IterationsRunner.JNI_clock_gettime_monotonic();
             ke.run_iter(param);
-            double stopTime = System.nanoTime(); // XXX almost monotonic
+            double stopTime = IterationsRunner.JNI_clock_gettime_monotonic();
 
-            double intvl = (stopTime - startTime) / (float) 1000000000; // nanosecs to secs
+            double intvl = (stopTime - startTime);
             System.out.print(intvl + ", ");
         }
         System.out.print("]");
