@@ -11,7 +11,7 @@ BENCHMARKS_DIR = "benchmarks"
 # Don't mutate any lists passed down from the user's config file!
 # !!!
 
-class BaseVariant(object):
+class BaseVMDef(object):
 
     def __init__(self, iterations_runner, entry_point=None, subdir=None, extra_env=None):
         assert entry_point is not None
@@ -47,10 +47,10 @@ class BaseVariant(object):
                 args, stdout=subprocess.PIPE, env=env).communicate()
         return stdout
 
-class GenericScriptingVariant(BaseVariant):
+class GenericScriptingVMDef(BaseVMDef):
     def __init__(self, iterations_runner, entry_point=None, subdir=None, extra_env=None):
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
-        BaseVariant.__init__(self,
+        BaseVMDef.__init__(self,
                              fp_iterations_runner,
                              entry_point=entry_point,
                              subdir=subdir,
@@ -65,9 +65,9 @@ class GenericScriptingVariant(BaseVariant):
 
         return self._run_exec(args, use_env)
 
-class JavaVariant(BaseVariant):
+class JavaVMDef(BaseVMDef):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        BaseVariant.__init__(self,
+        BaseVMDef.__init__(self,
                              "IterationsRunner",
                              entry_point=entry_point,
                              subdir=subdir,
@@ -91,9 +91,9 @@ class JavaVariant(BaseVariant):
         return self._run_exec(args, new_env)
 
 
-class PythonVariant(GenericScriptingVariant):
+class PythonVMDef(GenericScriptingVMDef):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVariant.__init__(self,
+        GenericScriptingVMDef.__init__(self,
                                          "iterations_runner.py",
                                          entry_point=entry_point,
                                          subdir=subdir,
@@ -104,9 +104,9 @@ class PythonVariant(GenericScriptingVariant):
         # Python reads the rlimit structure to decide its heap limit.
         return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
 
-class LuaVariant(GenericScriptingVariant):
+class LuaVMDef(GenericScriptingVMDef):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVariant.__init__(self,
+        GenericScriptingVMDef.__init__(self,
                                          "iterations_runner.lua",
                                          entry_point=entry_point,
                                          subdir=subdir,
@@ -120,9 +120,9 @@ class LuaVariant(GenericScriptingVariant):
         #  * Stock lua doesn't seem to do anything special. Just realloc().
         return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
 
-class PHPVariant(GenericScriptingVariant):
+class PHPVMDef(GenericScriptingVMDef):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVariant.__init__(self,
+        GenericScriptingVMDef.__init__(self,
                                          "iterations_runner.php",
                                          entry_point=entry_point,
                                          subdir=subdir,
@@ -132,29 +132,29 @@ class PHPVariant(GenericScriptingVariant):
         vm_args = vm_args[:] + ["-d", "memory_limit=%sK" % heap_limit_kb]
         return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
 
-class RubyVariant(GenericScriptingVariant):
+class RubyVMDef(GenericScriptingVMDef):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVariant.__init__(self,
+        GenericScriptingVMDef.__init__(self,
                                          "iterations_runner.rb",
                                          entry_point=entry_point,
                                          subdir=subdir,
                                          extra_env=extra_env)
 
-class JRubyVariant(RubyVariant):
+class JRubyVMDef(RubyVMDef):
     def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
         vm_args = vm_args[:] + ["-J-Xmx%sK" % heap_limit_kb]
         return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
 
-class JavascriptVariant(GenericScriptingVariant):
+class JavascriptVMDef(GenericScriptingVMDef):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVariant.__init__(self,
+        GenericScriptingVMDef.__init__(self,
                                          "iterations_runner.js",
                                          entry_point=entry_point,
                                          subdir=subdir,
                                          extra_env=extra_env)
 
 
-class V8Variant(JavascriptVariant):
+class V8VMDef(JavascriptVMDef):
     def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
 
         # this is a best effort at limiting the heap space.
