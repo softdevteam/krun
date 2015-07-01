@@ -4,7 +4,7 @@ import os
 from krun import ANSI_GREEN, ANSI_RESET
 
 DIR = os.path.abspath(os.path.dirname(__file__))
-ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "iteration_runners"))
+ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
 BENCHMARKS_DIR = "benchmarks"
 
 class BaseVariant(object):
