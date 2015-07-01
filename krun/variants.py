@@ -20,10 +20,11 @@ class BaseVariant(object):
         self.subdir = subdir
         self.extra_env = extra_env
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
         raise NotImplemented("abstract")
 
     def _run_exec(self, args, env=None):
+        """ Deals with actually shelling out """
         if env is not None:
             use_env = env.copy()
         else:
@@ -51,7 +52,7 @@ class GenericScriptingVariant(BaseVariant):
                              subdir=subdir,
                              extra_env=extra_env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
+    def _generic_scripting_run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
         script_path = os.path.join(BENCHMARKS_DIR, benchmark, self.subdir, self.entry_point)
         args = [interpreter] + vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
 
@@ -68,7 +69,7 @@ class JavaVariant(BaseVariant):
                              subdir=subdir,
                              extra_env=extra_env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
         args = [interpreter] + vm_args + [self.iterations_runner, self.entry_point, str(iterations), str(param)]
         bench_dir = os.path.abspath(os.path.join(os.getcwd(), BENCHMARKS_DIR, benchmark, self.subdir))
 
@@ -93,6 +94,10 @@ class PythonVariant(GenericScriptingVariant):
                                          subdir=subdir,
                                          extra_env=extra_env)
 
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+        # XXX heap
+        return self._generic_scripting_run_exec(interpreter, benchmark, param, vm_env, vm_args)
+
 class LuaVariant(GenericScriptingVariant):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
         GenericScriptingVariant.__init__(self,
@@ -100,6 +105,10 @@ class LuaVariant(GenericScriptingVariant):
                                          entry_point=entry_point,
                                          subdir=subdir,
                                          extra_env=extra_env)
+
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+        # XXX heap
+        return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
 
 class PHPVariant(GenericScriptingVariant):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
@@ -109,6 +118,10 @@ class PHPVariant(GenericScriptingVariant):
                                          subdir=subdir,
                                          extra_env=extra_env)
 
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+        # XXX heap
+        return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
+
 class RubyVariant(GenericScriptingVariant):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
         GenericScriptingVariant.__init__(self,
@@ -116,6 +129,10 @@ class RubyVariant(GenericScriptingVariant):
                                          entry_point=entry_point,
                                          subdir=subdir,
                                          extra_env=extra_env)
+
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+        # XXX heap
+        return self._generic_scripting_run_exec(interpreter, benchmark, param, vm_env, vm_args)
 
 class JavascriptVariant(GenericScriptingVariant):
     def __init__(self, entry_point=None, subdir=None, extra_env=None):
@@ -125,8 +142,10 @@ class JavascriptVariant(GenericScriptingVariant):
                                          subdir=subdir,
                                          extra_env=extra_env)
 
+
     # pretty much the same as the generic implementation, but needs a '--' argument.
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
+    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+        # XXX heap
         script_path = os.path.join(BENCHMARKS_DIR, benchmark, self.subdir, self.entry_point)
         args = [interpreter] + vm_args + \
             [self.iterations_runner, '--', script_path, str(iterations), str(param)]

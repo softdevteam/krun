@@ -101,14 +101,16 @@ class ExecutionJob(object):
         vm_args = self.vm_info.get("vm_args", [])
 
         # Set heap limit
-        heap_t = (self.config["HEAP_LIMIT"], self.config["HEAP_LIMIT"])
+        heap_limit_kb = self.config["HEAP_LIMIT"]
+        heap_t = (heap_limit_kb, heap_limit_kb)
         resource.setrlimit(resource.RLIMIT_DATA, heap_t)
         assert resource.getrlimit(resource.RLIMIT_DATA) == heap_t
 
         # Rough ETA execution timer
         exec_start_rough = time.time()
         stdout = variant.run_exec(self.vm_info["path"], self.benchmark,
-                                  self.vm_info["n_iterations"], self.parameter, vm_env, vm_args)
+                                  self.vm_info["n_iterations"], self.parameter, vm_env,
+                                  vm_args, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
         try:
