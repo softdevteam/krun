@@ -102,7 +102,8 @@ class ExecutionJob(object):
 
         # Set heap limit
         heap_limit_kb = self.config["HEAP_LIMIT"]
-        heap_t = (heap_limit_kb, heap_limit_kb)
+        heap_limit_b = heap_limit_kb * 1024  # resource module speaks in bytes
+        heap_t = (heap_limit_b, heap_limit_b)
         resource.setrlimit(resource.RLIMIT_DATA, heap_t)
         assert resource.getrlimit(resource.RLIMIT_DATA) == heap_t
 
