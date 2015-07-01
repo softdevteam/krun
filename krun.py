@@ -9,6 +9,7 @@ usage: runner.py <config_file.krun>
 import os, subprocess, sys, subprocess, json, time
 from collections import deque
 import datetime
+import resource
 
 import krun.util as util
 from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
@@ -99,10 +100,18 @@ class ExecutionJob(object):
         vm_env = self.vm_info.get("vm_env", {})
         vm_args = self.vm_info.get("vm_args", [])
 
+        # Set heap limit
+        heap_limit_kb = self.config["HEAP_LIMIT"]
+        heap_limit_b = heap_limit_kb * 1024  # resource module speaks in bytes
+        heap_t = (heap_limit_b, heap_limit_b)
+        resource.setrlimit(resource.RLIMIT_DATA, heap_t)
+        assert resource.getrlimit(resource.RLIMIT_DATA) == heap_t
+
         # Rough ETA execution timer
         exec_start_rough = time.time()
         stdout = variant.run_exec(self.vm_info["path"], self.benchmark,
-                                  self.vm_info["n_iterations"], self.parameter, vm_env, vm_args)
+                                  self.vm_info["n_iterations"], self.parameter, vm_env,
+                                  vm_args, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
         try:
