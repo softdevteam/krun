@@ -1,5 +1,8 @@
-// XXX nanotime is actually CLOCK_MONOTONIC on linux, not MONOTONIC_RAW!
+// Note:
+// On Linux nanotime() calls clock_gettime() with the CLOCK_MONOTONIC flag.
 // https://bugs.openjdk.java.net/browse/JDK-8006942
+// This is not quite ideal. We should use CLOCK_MONOTONIC_RAW instead.
+// For this reason we use JNI to make a call to clock_gettime() ourselves.
 
 // All entry points must implement this
 interface BaseKrunEntry {
