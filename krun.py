@@ -74,8 +74,6 @@ class ExecutionJob(object):
 
         entry_point = self.config["VARIANTS"][self.variant]
         vm_def = self.vm_info["vm_def"]
-        vm_env = self.vm_info.get("vm_env", {})
-        vm_args = self.vm_info.get("vm_args", [])
 
         print("%sRunning '%s(%d)' (%s variant) under '%s'%s" %
                     (ANSI_CYAN, self.benchmark, self.parameter, self.variant,
@@ -109,9 +107,8 @@ class ExecutionJob(object):
 
         # Rough ETA execution timer
         exec_start_rough = time.time()
-        #def run_exec(self, entry_point, benchmark, iterations, param, vm_env, vm_args):
         stdout = vm_def.run_exec(entry_point, self.benchmark, self.vm_info["n_iterations"],
-                                 self.parameter, vm_env, vm_args, heap_limit_kb)
+                                 self.parameter, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
         try:
