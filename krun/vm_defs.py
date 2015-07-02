@@ -13,18 +13,15 @@ BENCHMARKS_DIR = "benchmarks"
 
 class BaseVMDef(object):
 
-    def __init__(self, iterations_runner, entry_point=None, subdir=None, extra_env=None):
-        assert entry_point is not None
-        if subdir is None:
-            subdir = "."
+    def __init__(self, iterations_runner, extra_env=None):
+        self.iterations_runner = iterations_runner
         if extra_env is None:
             extra_env = {}
-        self.entry_point = entry_point
-        self.iterations_runner = iterations_runner
-        self.subdir = subdir
         self.extra_env = extra_env
+        # tempting as it is to add a self.vm_path, we don't. If we were to add
+        # natively compiled languages, then there is no "VM" to speak of.
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+    def run_exec(self, entry_point, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
         raise NotImplementedError("abstract")
 
     def _run_exec(self, args, env=None):
@@ -48,17 +45,14 @@ class BaseVMDef(object):
         return stdout
 
 class GenericScriptingVMDef(BaseVMDef):
-    def __init__(self, iterations_runner, entry_point=None, subdir=None, extra_env=None):
+    def __init__(self, vm_path, iterations_runner, entry_point=None, subdir=None, extra_env=None):
+        self.vm_path = vm_path
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
-        BaseVMDef.__init__(self,
-                             fp_iterations_runner,
-                             entry_point=entry_point,
-                             subdir=subdir,
-                             extra_env=extra_env)
+        BaseVMDef.__init__(self, fp_iterations_runner, extra_env=extra_env)
 
-    def _generic_scripting_run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args):
-        script_path = os.path.join(BENCHMARKS_DIR, benchmark, self.subdir, self.entry_point)
-        args = [interpreter] + vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
+    def _generic_scripting_run_exec(self, entry_point, benchmark, iterations, param, vm_env, vm_args):
+        script_path = os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir, entry_point.target)
+        args = [self.vm_path] + vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
 
         use_env = os.environ.copy()
         use_env.update(vm_env)
@@ -66,17 +60,14 @@ class GenericScriptingVMDef(BaseVMDef):
         return self._run_exec(args, use_env)
 
 class JavaVMDef(BaseVMDef):
-    def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        BaseVMDef.__init__(self,
-                             "IterationsRunner",
-                             entry_point=entry_point,
-                             subdir=subdir,
-                             extra_env=extra_env)
+    def __init__(self, vm_path, extra_env=None):
+        self.vm_path = vm_path
+        BaseVMDef.__init__(self, "IterationsRunner", extra_env=extra_env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+    def run_exec(self, entry_point, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
         vm_args = vm_args[:] + ["-Xmx%sK" % heap_limit_kb]
-        args = [interpreter] + vm_args + [self.iterations_runner, self.entry_point, str(iterations), str(param)]
-        bench_dir = os.path.abspath(os.path.join(os.getcwd(), BENCHMARKS_DIR, benchmark, self.subdir))
+        args = [self.vm_path] + vm_args + [self.iterations_runner, entry_point.target, str(iterations), str(param)]
+        bench_dir = os.path.abspath(os.path.join(os.getcwd(), BENCHMARKS_DIR, benchmark, entry_point.subdir))
 
         # deal with CLASSPATH
         cur_classpath = os.environ.get("CLASSPATH", "")
@@ -90,27 +81,19 @@ class JavaVMDef(BaseVMDef):
 
         return self._run_exec(args, new_env)
 
-
 class PythonVMDef(GenericScriptingVMDef):
-    def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVMDef.__init__(self,
-                                         "iterations_runner.py",
-                                         entry_point=entry_point,
-                                         subdir=subdir,
-                                         extra_env=extra_env)
+    def __init__(self, vm_path, extra_env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
+                                       extra_env=extra_env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+    def run_exec(self, entry_point, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
         # heap_limit_kb unused.
         # Python reads the rlimit structure to decide its heap limit.
-        return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
+        return self._generic_scripting_run_exec(entry_point, benchmark, iterations, param, vm_env, vm_args)
 
 class LuaVMDef(GenericScriptingVMDef):
-    def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVMDef.__init__(self,
-                                         "iterations_runner.lua",
-                                         entry_point=entry_point,
-                                         subdir=subdir,
-                                         extra_env=extra_env)
+    def __init__(self, vm_path, extra_env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.lua", extra_env=extra_env)
 
     def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
         # I was unable to find any special switches to limit lua's heap size.
@@ -121,24 +104,16 @@ class LuaVMDef(GenericScriptingVMDef):
         return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
 
 class PHPVMDef(GenericScriptingVMDef):
-    def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVMDef.__init__(self,
-                                         "iterations_runner.php",
-                                         entry_point=entry_point,
-                                         subdir=subdir,
-                                         extra_env=extra_env)
+    def __init__(self, vm_path, extra_env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.php", extra_env=extra_env)
 
     def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
         vm_args = vm_args[:] + ["-d", "memory_limit=%sK" % heap_limit_kb]
         return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
 
 class RubyVMDef(GenericScriptingVMDef):
-    def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVMDef.__init__(self,
-                                         "iterations_runner.rb",
-                                         entry_point=entry_point,
-                                         subdir=subdir,
-                                         extra_env=extra_env)
+    def __init__(self, vm_path, extra_env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.rb", extra_env=extra_env)
 
 class JRubyVMDef(RubyVMDef):
     def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
@@ -146,23 +121,19 @@ class JRubyVMDef(RubyVMDef):
         return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, vm_env, vm_args)
 
 class JavascriptVMDef(GenericScriptingVMDef):
-    def __init__(self, entry_point=None, subdir=None, extra_env=None):
-        GenericScriptingVMDef.__init__(self,
-                                         "iterations_runner.js",
-                                         entry_point=entry_point,
-                                         subdir=subdir,
-                                         extra_env=extra_env)
+    def __init__(self, vm_path, extra_env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.js", extra_env=extra_env)
 
 
 class V8VMDef(JavascriptVMDef):
-    def run_exec(self, interpreter, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
+    def run_exec(self, entry_point, benchmark, iterations, param, vm_env, vm_args, heap_limit_kb):
 
         # this is a best effort at limiting the heap space.
         # V8 has a "new" and "old" heap. I can't see a way to limit the total of the two.
         vm_args = vm_args[:] + ["--max_old_space_size", "%s" % int(heap_limit_kb / 1024)] # as MB
 
-        script_path = os.path.join(BENCHMARKS_DIR, benchmark, self.subdir, self.entry_point)
-        args = [interpreter] + vm_args + \
+        script_path = os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir, entry_point.target)
+        args = [self.vm_path] + vm_args + \
             [self.iterations_runner, '--', script_path, str(iterations), str(param)]
 
         use_env = os.environ.copy()
