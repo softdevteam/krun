@@ -72,13 +72,14 @@ class ExecutionJob(object):
     def run(self):
         """Runs this job (execution)"""
 
+        entry_point = self.config["VARIANTS"][self.variant]
+        vm_def = self.vm_info["vm_def"]
+
         print("%sRunning '%s(%d)' (%s variant) under '%s'%s" %
                     (ANSI_CYAN, self.benchmark, self.parameter, self.variant,
                      self.vm_name, ANSI_RESET))
 
         #benchmark_dir = os.path.abspath(self.benchmark)
-
-        variant = self.config["VARIANTS"][self.variant]
 
         # Print ETA for execution if available
         exec_start = datetime.datetime.now()
@@ -97,9 +98,6 @@ class ExecutionJob(object):
                                          tfmt.delta_str,
                                          ANSI_RESET))
 
-        vm_env = self.vm_info.get("vm_env", {})
-        vm_args = self.vm_info.get("vm_args", [])
-
         # Set heap limit
         heap_limit_kb = self.config["HEAP_LIMIT"]
         heap_limit_b = heap_limit_kb * 1024  # resource module speaks in bytes
@@ -109,9 +107,8 @@ class ExecutionJob(object):
 
         # Rough ETA execution timer
         exec_start_rough = time.time()
-        stdout = variant.run_exec(self.vm_info["path"], self.benchmark,
-                                  self.vm_info["n_iterations"], self.parameter, vm_env,
-                                  vm_args, heap_limit_kb)
+        stdout = vm_def.run_exec(entry_point, self.benchmark, self.vm_info["n_iterations"],
+                                 self.parameter, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
         try:
