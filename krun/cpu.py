@@ -95,8 +95,8 @@ class LinuxPlatform(BasePlatform):
             v = fh.read().strip()
 
         if v != "performance":
-            fatal(("Expected 'performance' got '%s'. "
-                   "Use cpufreq-set from the cpufrequtils package") % v)
+            fatal("Expected 'performance' got '%s'. "
+                   "Use cpufreq-set from the cpufrequtils package" % v)
 
     def collect_audit(self):
         BasePlatform.collect_audit(self)
