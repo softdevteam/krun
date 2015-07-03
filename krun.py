@@ -13,6 +13,7 @@ import resource
 from subprocess import Popen, PIPE
 
 import krun.util as util
+from portautils.cpu import check_cpu_throttled
 from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
 
 UNKNOWN_TIME_DELTA = "?:??:??"
@@ -333,6 +334,7 @@ def main():
                                   (ANSI_GREEN, job.key, ANSI_RESET))
         one_exec_scheduled = True
 
+    check_cpu_throttled()
     sched.run() # does the benchmarking
 
     print("Time now is %s" % datetime.datetime.now().strftime(ABS_TIME_FORMAT))
