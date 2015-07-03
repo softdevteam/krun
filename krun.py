@@ -253,6 +253,7 @@ class ExecutionScheduler(object):
 
             self.jobs_done += 1
             self.platform.wait_until_cpu_cool()
+            self.platform.check_dmesg_for_changes()
 
         end_time = time.time() # rough overall timer, not used for actual results
 

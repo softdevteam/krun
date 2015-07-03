@@ -3,6 +3,7 @@
 import time
 import os
 import sys
+import difflib
 from collections import OrderedDict
 from krun.util import fatal, collect_cmd_output
 
@@ -14,6 +15,27 @@ class BasePlatform(object):
 
     def __init__(self):
         self.audit = OrderedDict()
+
+        # We will be looking for changes in the dmesg output.
+        # In the past we have seen benchmarks trigger performance-related
+        # errors and warnings in the Linux dmesg. If that happens, we
+        # really want to know about it!
+        self.current_dmesg = self._collect_dmesg_lines()
+
+    def _collect_dmesg_lines(self):
+        return collect_cmd_output("dmesg").split("\n")
+
+    def check_dmesg_for_changes(self):
+        new_dmesg = self._collect_dmesg_lines()
+        lines = [x for x in difflib.unified_diff(
+            self.current_dmesg, new_dmesg, "old", "new", lineterm="")]
+
+        if lines:
+            # dmesg changed!
+            print("Dmesg seems to have changed! Diff follows:\n")
+            print("\n".join(lines))
+            print("")
+            self.current_dmesg = new_dmesg
 
     def wait_until_cpu_cool(self):
         time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
