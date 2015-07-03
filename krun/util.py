@@ -1,3 +1,5 @@
+import sys
+
 def should_skip(config, this_key):
     skips = config["SKIP"]
 
@@ -34,3 +36,7 @@ def output_name(config_path):
     assert config_path.endswith(".krun")
     return config_path[:-5] + "_results.json"
 
+
+def fatal(msg):
+    sys.stderr.write("krun: fatal: %s\n" % msg)
+    sys.exit(1)

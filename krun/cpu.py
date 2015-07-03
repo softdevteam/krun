@@ -2,53 +2,18 @@
 
 import time
 import os
-from krun.detect import detect_platform, PLATFORM_LINUX
-
-# Checking the CPU is running at full-speed
-# -----------------------------------------
-# Typically you need to be root to change the power settings, so we just
-# crash out and let the user sort it out in the case that the CPU is not
-# screaming along at max speed.
-
-LINUX_GOV_FILE = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
-
-class CPUNotThrottledError(Exception):
-    pass
-
-def check_cpu_throttled():
-    print("Checking CPU is throttled")
-    p = detect_platform()
-    if p == PLATFORM_LINUX:
-        check_cpu_throttled_linux()
-    else:
-        raise NotImplementedError("I don't know how to check your CPU")
-
-def check_cpu_throttled_linux():
-    with open(LINUX_GOV_FILE, "r") as fh:
-        v = fh.read().strip()
-
-    if v != "performance":
-        raise CPUNotThrottledError(("Expected 'performance' got '%s'. "
-                                    "Use cpufreq-set from the "
-                                    "cpufrequtils package") % v)
+from krun.util import fatal
 
 
-# Waiting for the CPU to cool down
-# --------------------------------
-# Wait until the CPU is within a number of degrees of its starting temperature.
+class BasePlatform(object):
+    CPU_TEMP_MANDATORY_WAIT = 1
+    CPU_TEMP_POLL_FREQ = 5
 
-class BaseCPUTempRegulator(object):
-    MANDATORY_WAIT = 1
-    POLL_FREQ = 5
-
-    def __init__(self):
-        self.take_initial_readings()
-
-    def wait_until_cool(self):
-        time.sleep(BaseCPUTempRegulator.MANDATORY_WAIT)
+    def wait_until_cpu_cool(self):
+        time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
         msg_shown = False
         while True:
-            cool, reason = self.has_cooled()
+            cool, reason = self.has_cpu_cooled()
             if cool:
                 break
 
@@ -59,48 +24,56 @@ class BaseCPUTempRegulator(object):
                 print("Waiting to cool")
                 msg_shown = True
 
-            time.sleep(BaseCPUTempRegulator.POLL_FREQ)
+            time.sleep(BasePlatform.CPU_TEMP_POLL_FREQ)
 
-    # The interfaces subclasses must provide:
-    def take_readings(self):
+    # When porting to a new platform, implement the following:
+    def take_cpu_temp_readings(self):
         raise NotImplementedError("abstract")
 
-    def take_initial_readings(self):
+    def set_base_cpu_temps(self):
         raise NotImplementedError("abstract")
 
-    def has_cooled(self):
+    def has_cpu_cooled(self):
         raise NotImplementedError("abstract")
 
-class LinuxCPUTempRegulator(BaseCPUTempRegulator):
+    def check_cpu_throttled(self):
+        raise NotImplementedError("abstract")
+
+class LinuxPlatform(BasePlatform):
     THERMAL_BASE = "/sys/class/thermal/"
+    CPU_GOV_FILE = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
 
     # Temperature files under /sys measure in millidegrees
     # https://www.kernel.org/doc/Documentation/thermal/sysfs-api.txt
     THRESHOLD = 1000  # therefore one degree
 
     def __init__(self):
+        self.initial_readings = None
         self.zones = self._find_thermal_zones()
-        BaseCPUTempRegulator.__init__(self)
+        BasePlatform.__init__(self)
 
     def _find_thermal_zones(self):
-        return [x for x in os.listdir(LinuxCPUTempRegulator.THERMAL_BASE) if
+        return [x for x in os.listdir(LinuxPlatform.THERMAL_BASE) if
                 x.startswith("thermal_zone")]
 
-    def take_initial_readings(self):
-        self.initial_readings = self.take_readings()
+    def set_base_cpu_temps(self):
+        self.initial_readings = self.take_cpu_temp_readings()
 
     def _read_zone(self, zone):
-        fn = os.path.join(LinuxCPUTempRegulator.THERMAL_BASE, zone, "temp")
+        fn = os.path.join(LinuxPlatform.THERMAL_BASE, zone, "temp")
         with open(fn, "r") as fh:
             return int(fh.read())
 
-    def take_readings(self):
+    def take_cpu_temp_readings(self):
         return [self._read_zone(z) for z in self.zones]
 
-    def has_cooled(self):
+    def has_cpu_cooled(self):
         """returns tuple: cool * str_reason_if_false"""
 
-        readings = self.take_readings()
+        if self.initial_readings is None:
+            fatal("Base CPU temperature was not set")
+
+        readings = self.take_cpu_temp_readings()
         for i in range(len(self.initial_readings)):
             if readings[i] - self.initial_readings[i] - self.THRESHOLD > 0:
                 reason = "Zone 1 started at %d but is now %d" % \
@@ -108,10 +81,19 @@ class LinuxCPUTempRegulator(BaseCPUTempRegulator):
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
-def new_cpu_temp_regulator():
-    p = detect_platform()
-    if p == PLATFORM_LINUX:
-        return LinuxCPUTempRegulator()
+    def check_cpu_throttled(self):
+        with open(LinuxPlatform.CPU_GOV_FILE, "r") as fh:
+            v = fh.read().strip()
+
+        if v != "performance":
+            fatal(("Expected 'performance' got '%s'. "
+                   "Use cpufreq-set from the cpufrequtils package") % v)
+
+class DebianLinuxPlatform(LinuxPlatform):
+    pass
+
+def platform():
+    if os.path.exists("/etc/debian_version"):
+        return DebianLinuxPlatform()
     else:
-        raise NotImplementedError("I don't know how to measure CPU "
-                                  "temperature for your platform")
+        fatal("I don't have support for your platform")

@@ -13,7 +13,7 @@ import resource
 from subprocess import Popen, PIPE
 
 import krun.util as util
-from krun.cpu import check_cpu_throttled, new_cpu_temp_regulator
+from krun.cpu import platform
 from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
 
 UNKNOWN_TIME_DELTA = "?:??:??"
@@ -144,7 +144,9 @@ class ExecutionScheduler(object):
         self.work_deque = deque()
         self.eta_avail = None
         self.jobs_done = 0
-        self.cpu_temp_reg = cpu_temp_reg
+        self.platform = platform()
+
+        self.platform.set_base_cpu_temps()
 
         # Record how long processes are taking so we can make a
         # rough ETA for the user.
@@ -252,7 +254,7 @@ class ExecutionScheduler(object):
             self.jobs_done += 1
 
             print("Waiting for CPU to cool...")
-            self.cpu_temp_reg.wait_until_cool()
+            self.platform.wait_until_cpu_cool()
 
         end_time = time.time() # rough overall timer, not used for actual results
 
@@ -319,8 +321,7 @@ def main():
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
-    cpu_temp_reg = new_cpu_temp_regulator()
-    sched = ExecutionScheduler(config_file, out_file, audit_txt, cpu_temp_reg)
+    sched = ExecutionScheduler(config_file, out_file, audit_txt)
     eta_avail_job = None
     for exec_n in xrange(config["N_EXECUTIONS"]):
         for vm_name, vm_info in config["VMS"].items():
@@ -339,7 +340,6 @@ def main():
                                   (ANSI_GREEN, job.key, ANSI_RESET))
         one_exec_scheduled = True
 
-    check_cpu_throttled()
     sched.run() # does the benchmarking
 
     print("Time now is %s" % datetime.datetime.now().strftime(ABS_TIME_FORMAT))
