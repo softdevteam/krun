@@ -32,12 +32,12 @@ def usage():
 def mean(seq):
     return sum(seq) / float(len(seq))
 
-def dump_json(config_file, out_file, all_results, audit_txt):
+def dump_json(config_file, out_file, all_results, audit):
     # dump out into json file, incluing contents of the config file
     with open(config_file, "r") as f:
         config_text = f.read()
 
-    to_write = {"config" : config_text, "data" : all_results, "audit": audit_txt}
+    to_write = {"config" : config_text, "data" : all_results, "audit": audit}
 
     with open(out_file, "w") as f:
         f.write(json.dumps(to_write, indent=1, sort_keys=True))
@@ -140,13 +140,14 @@ class ScheduleEmpty(Exception):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config_file, out_file, audit_txt=None, cpu_temp_reg=None):
+    def __init__(self, config_file, out_file):
         self.work_deque = deque()
         self.eta_avail = None
         self.jobs_done = 0
         self.platform = platform()
 
         self.platform.set_base_cpu_temps()
+        self.platform.collect_audit()
 
         # Record how long processes are taking so we can make a
         # rough ETA for the user.
@@ -160,8 +161,6 @@ class ExecutionScheduler(object):
         # file names
         self.config_file = config_file
         self.out_file = out_file
-
-        self.audit_txt = audit_txt
 
     def set_eta_avail(self):
         """call after adding job before eta should become available"""
@@ -249,7 +248,8 @@ class ExecutionScheduler(object):
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
-            dump_json(self.config_file, self.out_file, self.results, self.audit_txt)
+            dump_json(self.config_file, self.out_file, self.results,
+                      self.platform.audit)
 
             self.jobs_done += 1
 
@@ -315,13 +315,9 @@ def main():
     config = util.read_config(config_file)
     out_file = util.output_name(config_file)
 
-    audit_txt = ""
-    if config.has_key("AUDIT_CMD"):
-        audit_txt = run_cmd(config["AUDIT_CMD"])
-
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
-    sched = ExecutionScheduler(config_file, out_file, audit_txt)
+    sched = ExecutionScheduler(config_file, out_file)
     eta_avail_job = None
     for exec_n in xrange(config["N_EXECUTIONS"]):
         for vm_name, vm_info in config["VMS"].items():

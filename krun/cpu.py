@@ -2,12 +2,16 @@
 
 import time
 import os
-from krun.util import fatal
+from collections import OrderedDict
+from krun.util import fatal, collect_cmd_output
 
 
 class BasePlatform(object):
     CPU_TEMP_MANDATORY_WAIT = 1
     CPU_TEMP_POLL_FREQ = 5
+
+    def __init__(self):
+        self.audit = OrderedDict()
 
     def wait_until_cpu_cool(self):
         time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
@@ -38,6 +42,11 @@ class BasePlatform(object):
 
     def check_cpu_throttled(self):
         raise NotImplementedError("abstract")
+
+    # And you may want to extend this
+    def collect_audit(self):
+        self.audit["uname"] = collect_cmd_output("uname")
+        self.audit["dmesg"] = collect_cmd_output("dmesg")
 
 class LinuxPlatform(BasePlatform):
     THERMAL_BASE = "/sys/class/thermal/"
@@ -89,8 +98,17 @@ class LinuxPlatform(BasePlatform):
             fatal(("Expected 'performance' got '%s'. "
                    "Use cpufreq-set from the cpufrequtils package") % v)
 
+    def collect_audit(self):
+        BasePlatform.collect_audit(self)
+
+        # Extra CPU info, some not in dmesg. E.g. CPU cache size.
+        self.audit["cpuinfo"] = collect_cmd_output("cat /proc/cpuinfo")
+
 class DebianLinuxPlatform(LinuxPlatform):
-    pass
+    def collect_audit(self):
+        LinuxPlatform.collect_audit(self)
+        self.audit["packages"] = collect_cmd_output("dpkg-query -l")
+        self.audit["debian_version"] = collect_cmd_output("cat /etc/debian_version")
 
 def platform():
     if os.path.exists("/etc/debian_version"):
