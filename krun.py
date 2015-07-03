@@ -6,7 +6,7 @@ Benchmark, running many fresh processes.
 usage: runner.py <config_file.krun>
 """
 
-import os, subprocess, sys, subprocess, json, time
+import os, sys, json, time
 from collections import deque
 import datetime
 import resource
@@ -82,9 +82,6 @@ class ExecutionJob(object):
         #benchmark_dir = os.path.abspath(self.benchmark)
 
         # Print ETA for execution if available
-        exec_start = datetime.datetime.now()
-        exec_start_str = "%s" % exec_start.strftime(ABS_TIME_FORMAT)
-
         tfmt = self.get_exec_estimate_time_formatter()
         print("{}    {:<35s}: {}{}".format(ANSI_MAGENTA,
                                          "Current time",
