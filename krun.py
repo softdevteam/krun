@@ -13,7 +13,7 @@ import resource
 from subprocess import Popen, PIPE
 
 import krun.util as util
-from krun.cpu import platform
+from krun.platform import platform
 from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
 
 UNKNOWN_TIME_DELTA = "?:??:??"
