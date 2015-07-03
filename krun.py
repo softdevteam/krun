@@ -252,8 +252,6 @@ class ExecutionScheduler(object):
                       self.platform.audit)
 
             self.jobs_done += 1
-
-            print("Waiting for CPU to cool...")
             self.platform.wait_until_cpu_cool()
 
         end_time = time.time() # rough overall timer, not used for actual results

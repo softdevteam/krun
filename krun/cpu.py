@@ -2,6 +2,7 @@
 
 import time
 import os
+import sys
 from collections import OrderedDict
 from krun.util import fatal, collect_cmd_output
 
@@ -9,6 +10,7 @@ from krun.util import fatal, collect_cmd_output
 class BasePlatform(object):
     CPU_TEMP_MANDATORY_WAIT = 1
     CPU_TEMP_POLL_FREQ = 5
+    CPU_TEMP_POLLS_BEFORE_MELTDOWN = 12  #  * 5 = one minute
 
     def __init__(self):
         self.audit = OrderedDict()
@@ -16,6 +18,7 @@ class BasePlatform(object):
     def wait_until_cpu_cool(self):
         time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
         msg_shown = False
+        trys = 0
         while True:
             cool, reason = self.has_cpu_cooled()
             if cool:
@@ -25,10 +28,19 @@ class BasePlatform(object):
             if not msg_shown:
                 print("CPU is running hot.")
                 print(reason)
-                print("Waiting to cool")
+                sys.stdout.write("Waiting to cool")
+                sys.stdout.flush()
                 msg_shown = True
 
+            trys += 1
+            if trys >= BasePlatform.CPU_TEMP_POLLS_BEFORE_MELTDOWN:
+                print("")
+                fatal("CPU didn't cool down")
+
             time.sleep(BasePlatform.CPU_TEMP_POLL_FREQ)
+            sys.stdout.write(".")
+            sys.stdout.flush()
+        print("")
 
     # When porting to a new platform, implement the following:
     def take_cpu_temp_readings(self):
