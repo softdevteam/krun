@@ -1,0 +1,79 @@
+#!/usr/bin/env python2.7
+
+from subprocess import Popen, PIPE
+from collections import OrderedDict
+import sys
+
+RULE = 72 * "#"
+DFL_OUTFILE = "sdaudit.txt"
+
+from krun.detect import detect_os, OS_DEBIAN
+
+
+def run_cmd(cmd):
+    p = Popen(cmd, shell=True, stdout=PIPE)
+    stdout, stderr = p.communicate()
+    rc = p.wait()
+    assert(rc == 0)
+    return stdout.strip()
+
+
+class BaseSysInfo(object):
+    def __init__(self):
+        self.sections = OrderedDict()
+        self.sections["uname -a"] = run_cmd("uname -a")
+        self.sections["Packages"] = self.collect_pkgs()
+
+    def collect_pkgs(self):
+        raise NotImplementedError("abstract")
+
+    def sys_name(self):
+        raise NotImplementedError("abstract")
+
+    def __str__(self):
+        return "System(%s)" % self.uname_a
+
+    def report_text(self):
+        lines = []
+        for k, v in self.sections.items():
+            lines += [k, RULE, "", v, ""]
+        return "\n".join(lines)
+
+
+class LinuxSysInfo(BaseSysInfo):
+    def __init__(self):
+        BaseSysInfo.__init__(self)
+        self.sections["/proc/cpuinfo"] = run_cmd("cat /proc/cpuinfo")
+
+
+class DebianLinuxSysInfo(LinuxSysInfo):
+    def collect_pkgs(self):
+        return run_cmd("dpkg-query -l")
+
+    def sys_name(self):
+        return "Debian Linux"
+
+
+# ---
+if __name__ == "__main__":
+    osys = detect_os()
+
+    if osys == OS_DEBIAN:
+        si = DebianLinuxSysInfo()
+    else:
+        raise NotImplementedError("Unknown OS")
+
+    sys.stderr.write("Looks like %s\n" % si.sys_name())
+
+    if len(sys.argv) == 1:
+        filename = DFL_OUTFILE
+    elif len(sys.argv) == 2:
+        filename = sys.argv[1]
+    else:
+        print("usage: sdaudit [filename]")
+        sys.exit(1)
+
+    with open(filename, "w") as fh:
+        fh.write(si.report_text())
+
+    sys.stderr.write("Audit dumped to %s\n" % filename)

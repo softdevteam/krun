@@ -13,7 +13,7 @@ import resource
 from subprocess import Popen, PIPE
 
 import krun.util as util
-from portautils.cpu import check_cpu_throttled, new_cpu_temp_regulator
+from krun.cpu import check_cpu_throttled, new_cpu_temp_regulator
 from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
 
 UNKNOWN_TIME_DELTA = "?:??:??"
