@@ -69,7 +69,7 @@ class LinuxPlatform(BasePlatform):
     THRESHOLD = 1000  # therefore one degree
 
     def __init__(self):
-        self.initial_readings = None
+        self.base_cpu_temps = None
         self.zones = self._find_thermal_zones()
         BasePlatform.__init__(self)
 
@@ -78,7 +78,7 @@ class LinuxPlatform(BasePlatform):
                 x.startswith("thermal_zone")]
 
     def set_base_cpu_temps(self):
-        self.initial_readings = self.take_cpu_temp_readings()
+        self.base_cpu_temps = self.take_cpu_temp_readings()
 
     def _read_zone(self, zone):
         fn = os.path.join(LinuxPlatform.THERMAL_BASE, zone, "temp")
@@ -91,14 +91,14 @@ class LinuxPlatform(BasePlatform):
     def has_cpu_cooled(self):
         """returns tuple: cool * str_reason_if_false"""
 
-        if self.initial_readings is None:
+        if self.base_cpu_temps is None:
             fatal("Base CPU temperature was not set")
 
         readings = self.take_cpu_temp_readings()
-        for i in range(len(self.initial_readings)):
-            if readings[i] - self.initial_readings[i] - self.THRESHOLD > 0:
+        for i in range(len(self.base_cpu_temps)):
+            if readings[i] - self.base_cpu_temps[i] - self.THRESHOLD > 0:
                 reason = "Zone 1 started at %d but is now %d" % \
-                    (self.initial_readings[i], readings[i])
+                    (self.base_cpu_temps[i], readings[i])
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
