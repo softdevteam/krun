@@ -32,7 +32,7 @@ class BasePlatform(object):
 
         if lines:
             # dmesg changed!
-            print("Dmesg seems to have changed! Diff follows:\n")
+            print("dmesg seems to have changed! Diff follows:\n")
             print("\n".join(lines))
             print("")
             self.current_dmesg = new_dmesg
