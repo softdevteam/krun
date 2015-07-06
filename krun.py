@@ -15,10 +15,7 @@ from subprocess import Popen, PIPE
 import krun.util as util
 from krun.platform import platform
 from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
-
-UNKNOWN_TIME_DELTA = "?:??:??"
-ABS_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-UNKNOWN_ABS_TIME = "????-??-?? ??:??:??"
+from krun import ABS_TIME_FORMAT, UNKNOWN_TIME_DELTA, UNKNOWN_ABS_TIME
 
 BENCH_DEBUG = os.environ.get("BENCH_DEBUG", False)
 BENCH_DRYRUN = os.environ.get("BENCH_DRYRUN", False)
@@ -253,6 +250,8 @@ class ExecutionScheduler(object):
             self.platform.check_dmesg_for_changes()
 
         end_time = time.time() # rough overall timer, not used for actual results
+
+        self.platform.print_all_dmesg_changes()
 
         print("Done: Results dumped to %s" % self.out_file)
         if errors:
