@@ -1,7 +1,7 @@
 import subprocess
 import os
 
-from krun import ANSI_GREEN, ANSI_RESET
+from logging import info, debug
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
@@ -43,12 +43,11 @@ class BaseVMDef(object):
                 a = a(heap_lim_k)
             actual_args.append(a)
 
-        if os.environ.get("BENCH_DEBUG"):
-            print("%s    DEBUG: cmdline='%s'%s" % (ANSI_GREEN, " ".join(actual_args), ANSI_RESET))
-            print("%s    DEBUG: env='%s'%s" % (ANSI_GREEN, use_env, ANSI_RESET))
+        debug("cmdline='%s'" % " ".join(actual_args))
+        debug("env='%s'" % use_env)
 
         if os.environ.get("BENCH_DRYRUN") != None:
-            print("%s    DEBUG: %s%s" % (ANSI_GREEN, "DRY RUN, SKIP", ANSI_RESET))
+            info("Dry run. Skipping.")
             return "[]"
 
         stdout, stderr = subprocess.Popen(

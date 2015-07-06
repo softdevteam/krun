@@ -7,6 +7,7 @@ import difflib
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
 from krun.util import fatal, collect_cmd_output
+from logging import warn, info
 from time import localtime
 
 class BasePlatform(object):
@@ -42,10 +43,9 @@ class BasePlatform(object):
 
         if lines:
             # dmesg changed!
-            print("dmesg seems to have changed! Diff follows:\n")
+            warn("dmesg seems to have changed! Diff follows:")
             diff = "\n".join(lines)
-            print(diff)
-            print("")
+            warn(diff)
 
             self.dmesg_changes.append(diff)
             self.last_dmesg = new_dmesg
@@ -55,15 +55,13 @@ class BasePlatform(object):
         if not self.dmesg_changes:
             return
 
-        print("dmesg output changed during benchmarking!")
-        print("It is advisable to check for performance critical errors and warnings")
-        print("")
+        warn("dmesg output changed during benchmarking!")
+        warn("It is advisable to check for performance critical errors and warnings")
 
         n_changes = len(self.dmesg_changes)
         for i in range(n_changes):
-            print("dmesg change %d/%d:" % (i + 1, n_changes))
-            print(self.dmesg_changes[i])
-            print("")
+            warn("dmesg change %d/%d:" % (i + 1, n_changes))
+            warn(self.dmesg_changes[i])
 
     def wait_until_cpu_cool(self):
         time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
@@ -76,21 +74,16 @@ class BasePlatform(object):
 
             # if we get here, CPU is too hot!
             if not msg_shown:
-                print("CPU is running hot.")
-                print(reason)
-                sys.stdout.write("Waiting to cool")
-                sys.stdout.flush()
+                info("CPU is running hot.")
+                info(reason)
+                info("Waiting to cool")
                 msg_shown = True
 
             trys += 1
             if trys >= BasePlatform.CPU_TEMP_POLLS_BEFORE_MELTDOWN:
-                print("")
                 fatal("CPU didn't cool down")
 
             time.sleep(BasePlatform.CPU_TEMP_POLL_FREQ)
-            sys.stdout.write(".")
-            sys.stdout.flush()
-        print("")
 
     # When porting to a new platform, implement the following:
     def take_cpu_temp_readings(self):

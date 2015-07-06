@@ -1,5 +1,6 @@
 import sys
 from subprocess import Popen, PIPE
+from logging import error
 
 def should_skip(config, this_key):
     skips = config["SKIP"]
@@ -27,8 +28,7 @@ def read_config(path):
     try:
         execfile(path, dct)
     except:
-        print("*** error importing config file!\n")
-        raise
+        fatal("error importing config file")
 
     return dct
 
@@ -39,7 +39,7 @@ def output_name(config_path):
 
 
 def fatal(msg):
-    sys.stderr.write("krun: fatal: %s\n" % msg)
+    error(msg)
     sys.exit(1)
 
 

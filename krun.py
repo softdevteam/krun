@@ -7,17 +7,17 @@ usage: runner.py <config_file.krun>
 """
 
 import os, sys, json, time
+import logging
 from collections import deque
 import datetime
 import resource
 from subprocess import Popen, PIPE
+from logging import warn, info, error, debug
 
 import krun.util as util
 from krun.platform import platform
-from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
 from krun import ABS_TIME_FORMAT, UNKNOWN_TIME_DELTA, UNKNOWN_ABS_TIME
 
-BENCH_DEBUG = os.environ.get("BENCH_DEBUG", False)
 BENCH_DRYRUN = os.environ.get("BENCH_DRYRUN", False)
 
 HERE = os.path.abspath(os.getcwd())
@@ -74,25 +74,17 @@ class ExecutionJob(object):
         entry_point = self.config["VARIANTS"][self.variant]
         vm_def = self.vm_info["vm_def"]
 
-        print("%sRunning '%s(%d)' (%s variant) under '%s'%s" %
-                    (ANSI_CYAN, self.benchmark, self.parameter, self.variant,
-                     self.vm_name, ANSI_RESET))
+        info("Running '%s(%d)' (%s variant) under '%s'" %
+                    (self.benchmark, self.parameter, self.variant, self.vm_name))
 
         #benchmark_dir = os.path.abspath(self.benchmark)
 
         # Print ETA for execution if available
         tfmt = self.get_exec_estimate_time_formatter()
-        print("{}    {:<35s}: {}{}".format(ANSI_MAGENTA,
-                                         "Current time",
-                                         tfmt.start_str,
-                                         ANSI_RESET))
-
-
-        print("{}    {:<35s}: {} ({} from now){}".format(ANSI_MAGENTA,
+        info("{:<35s}: {} ({} from now)".format(
                                          "Estimated completion (this exec)",
                                          tfmt.finish_str,
-                                         tfmt.delta_str,
-                                         ANSI_RESET))
+                                         tfmt.delta_str))
 
         # Set heap limit
         heap_limit_kb = self.config["HEAP_LIMIT"]
@@ -110,21 +102,17 @@ class ExecutionJob(object):
         try:
             iterations_results = eval(stdout) # we should get a list of floats
         except SyntaxError:
-            print(ANSI_RED)
-            print("=ERROR=" * 8)
-            print("*error: benchmark didn't print a parsable list.")
-            print("We got:\n---\n%s\n---\n" % stdout)
-            print("To see the invokation set the BENCH_DEBUG env and run again")
-            print("=ERROR=" * 8)
-            print(ANSI_RESET)
-            print("")
+            error("=ERROR=" * 8)
+            error("*error: benchmark didn't error a parsable list.")
+            error("We got:\n---\n%s\n---\n" % stdout)
+            error("To see the invokation set the BENCH_DEBUG env and run again")
+            error("=ERROR=" * 8)
 
             return []
 
         # Add to ETA estimation figures
         self.add_exec_time(exec_time_rough)
 
-        print("")
         return iterations_results
 
 
@@ -209,29 +197,18 @@ class ExecutionScheduler(object):
 
         while True:
             jobs_left = len(self)
-            print("%s%d jobs left in scheduler queue%s" %
-                        (ANSI_CYAN, jobs_left, ANSI_RESET))
+            info("%d jobs left in scheduler queue" % jobs_left)
 
             if jobs_left == 0:
                 break
 
             tfmt = self.get_overall_time_estimate_formatter()
-            print("{}{:<25s}: {}{}".format(ANSI_CYAN,
-                                             "Current time",
-                                             tfmt.start_str,
-                                             ANSI_RESET))
-
-
-            print("{}{:<25s}: {} ({} from now){}".format(ANSI_CYAN,
-                                             "Estimated completion",
-                                             tfmt.finish_str,
-                                             tfmt.delta_str,
-                                             ANSI_RESET))
+            info("{:<25s}: {} ({} from now)".format(
+                "Estimated completion", tfmt.finish_str, tfmt.delta_str))
 
             if (self.eta_avail is not None) and (self.jobs_done < self.eta_avail):
-                print("{}Jobs until ETA known: {}{}".format(ANSI_CYAN,
-                                                             self.jobs_until_eta_known(),
-                                                             ANSI_RESET))
+                info("Jobs until ETA known: %s" % self.jobs_until_eta_known())
+
             job = self.next_job()
             exec_result = job.run()
 
@@ -253,11 +230,11 @@ class ExecutionScheduler(object):
 
         self.platform.print_all_dmesg_changes()
 
-        print("Done: Results dumped to %s" % self.out_file)
+        info("Done: Results dumped to %s" % self.out_file)
         if errors:
-            print("%s ERRORS OCCURRED! READ THE LOG!%s" % (ANSI_RED, ANSI_RESET))
+            warn("%s ERRORS OCCURRED! READ THE LOG!%s" % (ANSI_RED, ANSI_RESET))
 
-        print("Completed in (roughly) %f seconds" % (end_time - start_time))
+        info("Completed in (roughly) %f seconds" % (end_time - start_time))
 
 class TimeEstimateFormatter(object):
     def __init__(self, seconds):
@@ -319,14 +296,48 @@ def main():
                             sched.set_eta_avail()
                         sched.add_job(job)
                     else:
-                        if BENCH_DEBUG and not one_exec_scheduled:
-                            print("%s    DEBUG: %s is in skip list. Not scheduling.%s" %
-                                  (ANSI_GREEN, job.key, ANSI_RESET))
+                        if not one_exec_scheduled:
+                            debug("DEBUG: %s is in skip list. Not scheduling." %
+                                  job.key)
         one_exec_scheduled = True
 
     sched.run() # does the benchmarking
 
-    print("Time now is %s" % datetime.datetime.now().strftime(ABS_TIME_FORMAT))
+    info("Time now is %s" % datetime.datetime.now().strftime(ABS_TIME_FORMAT))
+
+def setup_logging():
+    # Colours help to distinguish benchmark stderr from messages printed
+    # by the runner. We also print warnings and errors in red so that it
+    # is quite impossible to miss them.
+    colours = True
+    try:
+        import colorlog
+    except ImportError:
+        colours = False
+
+    if colours:
+        formatter = colorlog.ColoredFormatter(
+            "%(log_color)s[%(asctime)s %(levelname)s]%(reset)s %(message)s",
+            ABS_TIME_FORMAT)
+    else:
+        formatter = logging.Formatter(
+            '[%(asctime)s: %(levelname)s] %(message)s',
+            ABS_TIME_FORMAT)
+
+    # We default to "info" level, user can change by setting
+    # KRUN_DEBUG in the environment.
+    level_str = os.environ.get("KRUN_DEBUG", "info").upper()
+    if level_str not in ("DEBUG", "INFO", "WARN", "DEBUG", "CRITICAL", "ERROR"):
+        util.fatal("Bad debug level: %s" % level_str)
+
+    level = getattr(logging, level_str.upper())
+
+    logging.root.setLevel(level)
+    stream = logging.StreamHandler()
+    stream.setLevel(level)
+    stream.setFormatter(formatter)
+    logging.root.addHandler(stream)
 
 if __name__ == "__main__":
+    setup_logging()
     main()
