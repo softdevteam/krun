@@ -113,7 +113,11 @@ class LinuxPlatform(BasePlatform):
     def has_cpu_cooled(self):
         """returns tuple: bool_cool * str_reason_if_false
 
-        bool_cool is True if the CPU has cooled (or was never hot).
+        'bool_cool' is True if the CPU has cooled (or was never hot).
+
+        'str_reason_if_false' is None if the CPU cooled down
+        (bool_cool=True) , otherwise it is a string indicating the reason
+        the CPU failed to cool.
         """
 
         assert self.base_cpu_temps is not None
