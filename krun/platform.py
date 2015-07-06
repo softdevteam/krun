@@ -111,7 +111,10 @@ class LinuxPlatform(BasePlatform):
         return [self._read_zone(z) for z in self.zones]
 
     def has_cpu_cooled(self):
-        """returns tuple: cool * str_reason_if_false"""
+        """returns tuple: bool_cool * str_reason_if_false
+
+        bool_cool is True if the CPU has cooled (or was never hot).
+        """
 
         if self.base_cpu_temps is None:
             fatal("Base CPU temperature was not set")
