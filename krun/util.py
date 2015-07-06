@@ -1,3 +1,6 @@
+import sys
+from subprocess import Popen, PIPE
+
 def should_skip(config, this_key):
     skips = config["SKIP"]
 
@@ -34,3 +37,15 @@ def output_name(config_path):
     assert config_path.endswith(".krun")
     return config_path[:-5] + "_results.json"
 
+
+def fatal(msg):
+    sys.stderr.write("krun: fatal: %s\n" % msg)
+    sys.exit(1)
+
+
+def collect_cmd_output(cmd):
+    p = Popen(cmd, shell=True, stdout=PIPE)
+    stdout, stderr = p.communicate()
+    rc = p.wait()
+    assert rc == 0
+    return stdout.strip()

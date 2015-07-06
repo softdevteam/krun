@@ -10,8 +10,10 @@ import os, sys, json, time
 from collections import deque
 import datetime
 import resource
+from subprocess import Popen, PIPE
 
 import krun.util as util
+from krun.platform import platform
 from krun import ANSI_RED, ANSI_GREEN, ANSI_MAGENTA, ANSI_CYAN, ANSI_RESET
 
 UNKNOWN_TIME_DELTA = "?:??:??"
@@ -30,12 +32,12 @@ def usage():
 def mean(seq):
     return sum(seq) / float(len(seq))
 
-def dump_json(config_file, out_file, all_results):
+def dump_json(config_file, out_file, all_results, audit):
     # dump out into json file, incluing contents of the config file
     with open(config_file, "r") as f:
         config_text = f.read()
 
-    to_write = {"config" : config_text, "data" : all_results}
+    to_write = {"config" : config_text, "data" : all_results, "audit": audit}
 
     with open(out_file, "w") as f:
         f.write(json.dumps(to_write, indent=1, sort_keys=True))
@@ -139,6 +141,10 @@ class ExecutionScheduler(object):
         self.work_deque = deque()
         self.eta_avail = None
         self.jobs_done = 0
+        self.platform = platform()
+
+        self.platform.set_base_cpu_temps()
+        self.platform.collect_audit()
 
         # Record how long processes are taking so we can make a
         # rough ETA for the user.
@@ -239,9 +245,12 @@ class ExecutionScheduler(object):
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
-            dump_json(self.config_file, self.out_file, self.results)
+            dump_json(self.config_file, self.out_file, self.results,
+                      self.platform.audit)
 
             self.jobs_done += 1
+            self.platform.wait_until_cpu_cool()
+            self.platform.check_dmesg_for_changes()
 
         end_time = time.time() # rough overall timer, not used for actual results
 
