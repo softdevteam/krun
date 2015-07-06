@@ -1,9 +1,3 @@
-ANSI_RED = '\033[91m'
-ANSI_GREEN = '\033[92m'
-ANSI_MAGENTA = '\033[95m'
-ANSI_CYAN = '\033[36m'
-ANSI_RESET = '\033[0m'
-
 ABS_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 UNKNOWN_TIME_DELTA = "?:??:??"
 UNKNOWN_ABS_TIME = "????-??-?? ??:??:??"
