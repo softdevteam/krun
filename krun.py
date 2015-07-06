@@ -295,13 +295,6 @@ class TimeEstimateFormatter(object):
         else:
             return UNKNOWN_TIME_DELTA
 
-def run_cmd(cmd):
-    p = Popen(cmd, shell=True, stdout=PIPE)
-    stdout, stderr = p.communicate()
-    rc = p.wait()
-    assert(rc == 0)
-    return stdout.strip()
-
 def main():
     try:
         config_file = sys.argv[1]

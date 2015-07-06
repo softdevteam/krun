@@ -116,8 +116,7 @@ class LinuxPlatform(BasePlatform):
         bool_cool is True if the CPU has cooled (or was never hot).
         """
 
-        if self.base_cpu_temps is None:
-            fatal("Base CPU temperature was not set")
+        assert self.base_cpu_temps is not None
 
         readings = self.take_cpu_temp_readings()
         for i in range(len(self.base_cpu_temps)):

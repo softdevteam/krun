@@ -47,5 +47,5 @@ def collect_cmd_output(cmd):
     p = Popen(cmd, shell=True, stdout=PIPE)
     stdout, stderr = p.communicate()
     rc = p.wait()
-    assert(rc == 0)
+    assert rc == 0
     return stdout.strip()
