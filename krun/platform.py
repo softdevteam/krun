@@ -5,8 +5,9 @@ import os
 import sys
 import difflib
 from collections import OrderedDict
+from krun import ABS_TIME_FORMAT
 from krun.util import fatal, collect_cmd_output
-
+from time import localtime
 
 class BasePlatform(object):
     CPU_TEMP_MANDATORY_WAIT = 1
@@ -20,22 +21,49 @@ class BasePlatform(object):
         # In the past we have seen benchmarks trigger performance-related
         # errors and warnings in the Linux dmesg. If that happens, we
         # really want to know about it!
-        self.current_dmesg = self._collect_dmesg_lines()
+        self.last_dmesg = self._collect_dmesg_lines()
+        self.last_dmesg_time = localtime()
+        self.dmesg_changes = []
 
     def _collect_dmesg_lines(self):
         return collect_cmd_output("dmesg").split("\n")
 
+    def _timestamp_to_str(self, lt):
+        return time.strftime(ABS_TIME_FORMAT, lt)
+
     def check_dmesg_for_changes(self):
+        new_dmesg_time = localtime()
         new_dmesg = self._collect_dmesg_lines()
+
+        old_fn = self._timestamp_to_str(self.last_dmesg_time)
+        new_fn = self._timestamp_to_str(new_dmesg_time)
         lines = [x for x in difflib.unified_diff(
-            self.current_dmesg, new_dmesg, "old", "new", lineterm="")]
+            self.last_dmesg, new_dmesg, old_fn, new_fn, lineterm="")]
 
         if lines:
             # dmesg changed!
             print("dmesg seems to have changed! Diff follows:\n")
-            print("\n".join(lines))
+            diff = "\n".join(lines)
+            print(diff)
             print("")
-            self.current_dmesg = new_dmesg
+
+            self.dmesg_changes.append(diff)
+            self.last_dmesg = new_dmesg
+            self.last_dmesg_time = new_dmesg_time
+
+    def print_all_dmesg_changes(self):
+        if not self.dmesg_changes:
+            return
+
+        print("dmesg output changed during benchmarking!")
+        print("It is advisable to check for performance critical errors and warnings")
+        print("")
+
+        n_changes = len(self.dmesg_changes)
+        for i in range(n_changes):
+            print("dmesg change %d/%d:" % (i + 1, n_changes))
+            print(self.dmesg_changes[i])
+            print("")
 
     def wait_until_cpu_cool(self):
         time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
