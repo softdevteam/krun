@@ -4,9 +4,6 @@
  * Note! You will need to provide an implementation of clock_gettime_monotonic()
  */
 
-/* PHP has a very small memory limit by default, crank */
-ini_set('memory_limit', '8192M');
-
 /*
  * Executes a benchmark many times within a single process.
  *
