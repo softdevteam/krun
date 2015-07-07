@@ -51,8 +51,9 @@ class BaseVMDef(object):
             return "[]"
 
         stdout, stderr = subprocess.Popen(
-            actual_args, stdout=subprocess.PIPE, env=use_env).communicate()
-        return stdout
+            actual_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env=use_env).communicate()
+        return stdout, stderr
 
 class GenericScriptingVMDef(BaseVMDef):
     def __init__(self, vm_path, iterations_runner, entry_point=None, subdir=None, extra_env=None):

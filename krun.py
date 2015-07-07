@@ -14,12 +14,33 @@ import resource
 from logging import warn, info, error, debug
 
 import krun.util as util
+from krun.util import log_and_mail, log_name, fatal
 from krun.platform import platform
 from krun import ABS_TIME_FORMAT, UNKNOWN_TIME_DELTA, UNKNOWN_ABS_TIME
+from krun.mail import Mailer
 
 BENCH_DRYRUN = os.environ.get("BENCH_DRYRUN", False)
 
 HERE = os.path.abspath(os.getcwd())
+
+
+try:
+    import colorlog
+    COLOURS = True
+except ImportError:
+    COLOURS = False
+
+COLOUR_FORMATTER = colorlog.ColoredFormatter(
+    "%(log_color)s[%(asctime)s %(levelname)s] %(message)s%(reset)s",
+    ABS_TIME_FORMAT)
+PLAIN_FORMATTER = logging.Formatter(
+    '[%(asctime)s: %(levelname)s] %(message)s',
+    ABS_TIME_FORMAT)
+
+if COLOURS:
+    CONSOLE_FORMATTER = COLOUR_FORMATTER
+else:
+    CONSOLE_FORMATTER = PLAIN_FORMATTER
 
 def usage():
     print(__doc__)
@@ -67,7 +88,7 @@ class ExecutionJob(object):
         """Feed back a rough execution time for ETA usage"""
         self.sched.add_eta_info(self.key, exec_time)
 
-    def run(self):
+    def run(self, mailer):
         """Runs this job (execution)"""
 
         entry_point = self.config["VARIANTS"][self.variant]
@@ -92,20 +113,24 @@ class ExecutionJob(object):
 
         # Rough ETA execution timer
         exec_start_rough = time.time()
-        stdout = vm_def.run_exec(entry_point, self.benchmark, self.vm_info["n_iterations"],
-                                 self.parameter, heap_limit_kb)
+        stdout, stderr = vm_def.run_exec(entry_point, self.benchmark, self.vm_info["n_iterations"],
+                                         self.parameter, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
         try:
             iterations_results = eval(stdout) # we should get a list of floats
         except SyntaxError:
-            error("=ERROR=" * 8)
-            error("*error: benchmark didn't error a parsable list.")
-            error("We got:\n---\n%s\n---\n" % stdout)
-            error("To see the invokation set the BENCH_DEBUG env and run again")
-            error("=ERROR=" * 8)
-
+            rule = 50 * "-"
+            err_s = "Benchmark didn't emit a parsable list on stdout.\n"
+            err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
+            err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
+            log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, err_s)
             return []
+        else:
+            # Note that because we buffered stderr, we will be seeing the
+            # 'iteration x/y' message from the iterations runner *after*
+            # each iteration, not before.
+            info(stderr)
 
         # Add to ETA estimation figures
         self.add_exec_time(exec_time_rough)
@@ -119,11 +144,13 @@ class ScheduleEmpty(Exception):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config_file, out_file):
+    def __init__(self, config_file, out_file, mail_recipients, max_mails):
+        self.mailer = Mailer(mail_recipients, max_mails=max_mails)
+
         self.work_deque = deque()
         self.eta_avail = None
         self.jobs_done = 0
-        self.platform = platform()
+        self.platform = platform(self.mailer)
 
         self.platform.set_base_cpu_temps()
         self.platform.collect_audit()
@@ -140,6 +167,7 @@ class ExecutionScheduler(object):
         # file names
         self.config_file = config_file
         self.out_file = out_file
+        self.log_path = os.path.abspath(log_name(self.config_file))
 
     def set_eta_avail(self):
         """call after adding job before eta should become available"""
@@ -184,6 +212,12 @@ class ExecutionScheduler(object):
 
     def run(self):
         """Benchmark execution starts here"""
+
+        log_and_mail(self.mailer, info,
+                     "Benchmarking started",
+                     "Benchmarking started.\nLogging to %s" % self.log_path,
+                     bypass_limiter=True)
+
         # scaffold dicts
         for j in self.work_deque:
             self.eta_estimates[j.key] = []
@@ -207,7 +241,7 @@ class ExecutionScheduler(object):
                 info("Jobs until ETA known: %s" % self.jobs_until_eta_known())
 
             job = self.next_job()
-            exec_result = job.run()
+            exec_result = job.run(self.mailer)
 
             if not exec_result and not BENCH_DRYRUN:
                 errors = True
@@ -229,9 +263,12 @@ class ExecutionScheduler(object):
 
         info("Done: Results dumped to %s" % self.out_file)
         if errors:
-            warn("Errors occurred! Read the scrollback!")
+            warn("Errors occurred --  read the log!")
 
-        info("Completed in (roughly) %f seconds" % (end_time - start_time))
+        msg = "Completed in (roughly) %f seconds.\nLog file at: %s" % \
+            ((end_time - start_time), self.log_path)
+        log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
+                     bypass_limiter=True)
 
 class TimeEstimateFormatter(object):
     def __init__(self, seconds):
@@ -277,9 +314,19 @@ def main():
     config = util.read_config(config_file)
     out_file = util.output_name(config_file)
 
+    mail_recipients = config.get("MAIL_TO", [])
+    if type(mail_recipients) is not list:
+        fatal("MAIL_TO config should be a list")
+
+    max_mails = config.get("MAX_MAILS", 5)
+
+    attach_log_file(config_file)
+
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
-    sched = ExecutionScheduler(config_file, out_file)
+    sched = ExecutionScheduler(config_file, out_file, mail_recipients,
+                               max_mails)
+
     eta_avail_job = None
     for exec_n in xrange(config["N_EXECUTIONS"]):
         for vm_name, vm_info in config["VMS"].items():
@@ -300,40 +347,30 @@ def main():
 
     sched.run() # does the benchmarking
 
-    info("Time now is %s" % datetime.datetime.now().strftime(ABS_TIME_FORMAT))
-
 def setup_logging():
     # Colours help to distinguish benchmark stderr from messages printed
     # by the runner. We also print warnings and errors in red so that it
     # is quite impossible to miss them.
-    colours = True
-    try:
-        import colorlog
-    except ImportError:
-        colours = False
-
-    if colours:
-        formatter = colorlog.ColoredFormatter(
-            "%(log_color)s[%(asctime)s %(levelname)s]%(reset)s %(message)s",
-            ABS_TIME_FORMAT)
-    else:
-        formatter = logging.Formatter(
-            '[%(asctime)s: %(levelname)s] %(message)s',
-            ABS_TIME_FORMAT)
 
     # We default to "info" level, user can change by setting
     # KRUN_DEBUG in the environment.
     level_str = os.environ.get("KRUN_DEBUG", "info").upper()
     if level_str not in ("DEBUG", "INFO", "WARN", "DEBUG", "CRITICAL", "ERROR"):
-        util.fatal("Bad debug level: %s" % level_str)
+        fatal("Bad debug level: %s" % level_str)
 
     level = getattr(logging, level_str.upper())
 
     logging.root.setLevel(level)
     stream = logging.StreamHandler()
     stream.setLevel(level)
-    stream.setFormatter(formatter)
+    stream.setFormatter(CONSOLE_FORMATTER)
     logging.root.addHandler(stream)
+
+
+def attach_log_file(config_filename):
+    fh = logging.FileHandler(log_name(config_filename), mode='w')
+    fh.setFormatter(PLAIN_FORMATTER)
+    logging.root.addHandler(fh)
 
 if __name__ == "__main__":
     setup_logging()
