@@ -37,7 +37,7 @@ class IterationsRunner {
         System.out.print("[");
         // Please, no refelction inside the timed code!
         for (int i = 0; i < iterations; i++) {
-            System.err.println("    Execution: " + (i + 1) + "/" + iterations);
+            System.err.println("[iterations_runner.java] iteration: " + (i + 1) + "/" + iterations);
 
             double startTime = IterationsRunner.JNI_clock_gettime_monotonic();
             ke.run_iter(param);

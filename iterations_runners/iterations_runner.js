@@ -12,7 +12,7 @@ load(BM_entry_point);
 
 print("[");
 for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
-	//print("    Execution " + (BM_i + 1) + "/" + BM_n_iters); // XXX needs to got to stderr
+	print_err("[iterations_runner.js] iteration " + (BM_i + 1) + "/" + BM_n_iters);
 	var BM_start_time = clock_gettime_monotonic();
 	run_iter(BM_param);
 	var BM_stop_time = clock_gettime_monotonic();

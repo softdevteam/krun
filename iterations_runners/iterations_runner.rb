@@ -34,7 +34,7 @@ if __FILE__ == $0
     STDOUT.write "["
     krun_iter_num = 0
     iters.times do
-        STDERR.write "    Execution #{krun_iter_num + 1}/#{iters}"
+        STDERR.write "[iterations_runner.rb] iteration #{krun_iter_num + 1}/#{iters}\n"
 
 	start_time = clock_gettime_monotonic()
         run_iter(param)
