@@ -11,7 +11,6 @@ import logging
 from collections import deque
 import datetime
 import resource
-from subprocess import Popen, PIPE
 from logging import warn, info, error, debug
 
 import krun.util as util
@@ -34,7 +33,7 @@ def dump_json(config_file, out_file, all_results, audit):
     with open(config_file, "r") as f:
         config_text = f.read()
 
-    to_write = {"config" : config_text, "data" : all_results, "audit": audit}
+    to_write = {"config": config_text, "data": all_results, "audit": audit}
 
     with open(out_file, "w") as f:
         f.write(json.dumps(to_write, indent=1, sort_keys=True))
@@ -76,8 +75,6 @@ class ExecutionJob(object):
 
         info("Running '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
-
-        #benchmark_dir = os.path.abspath(self.benchmark)
 
         # Print ETA for execution if available
         tfmt = self.get_exec_estimate_time_formatter()
@@ -232,7 +229,7 @@ class ExecutionScheduler(object):
 
         info("Done: Results dumped to %s" % self.out_file)
         if errors:
-            warn("%s ERRORS OCCURRED! READ THE LOG!%s" % (ANSI_RED, ANSI_RESET))
+            warn("Errors occurred! Read the scrollback!")
 
         info("Completed in (roughly) %f seconds" % (end_time - start_time))
 

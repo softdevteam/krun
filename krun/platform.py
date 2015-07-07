@@ -2,7 +2,6 @@
 
 import time
 import os
-import sys
 import difflib
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
@@ -157,7 +156,7 @@ class LinuxPlatform(BasePlatform):
 
         if v != "performance":
             fatal("Expected 'performance' got '%s'. "
-                   "Use cpufreq-set from the cpufrequtils package" % v)
+                  "Use cpufreq-set from the cpufrequtils package" % v)
 
     def collect_audit(self):
         BasePlatform.collect_audit(self)

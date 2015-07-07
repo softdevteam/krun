@@ -46,12 +46,12 @@ class BaseVMDef(object):
         debug("cmdline='%s'" % " ".join(actual_args))
         debug("env='%s'" % use_env)
 
-        if os.environ.get("BENCH_DRYRUN") != None:
+        if os.environ.get("BENCH_DRYRUN") is not None:
             info("Dry run. Skipping.")
             return "[]"
 
         stdout, stderr = subprocess.Popen(
-                actual_args, stdout=subprocess.PIPE, env=use_env).communicate()
+            actual_args, stdout=subprocess.PIPE, env=use_env).communicate()
         return stdout
 
 class GenericScriptingVMDef(BaseVMDef):
