@@ -22,7 +22,7 @@ dofile(BM_benchmark)
 io.stdout:write("[")
 io.stdout:flush()
 for BM_i = 1, BM_iters, 1 do -- inclusive upper bound in lua
-    io.stderr:write(string.format("    Iteration %d/%d\n", BM_i, BM_iters))
+    io.stderr:write(string.format("[iterations_runner.lua] iteration %d/%d\n", BM_i, BM_iters))
 
     BM_start_time = kruntime.clock_gettime_monotonic()
     run_iter(BM_param) -- run one iteration of benchmark
