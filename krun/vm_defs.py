@@ -59,6 +59,9 @@ class BaseVMDef(object):
     def sanity_checks(self):
         pass
 
+    def check_benchmark_files(self, ep):
+        raise NotImplementedError("abstract")
+
 class GenericScriptingVMDef(BaseVMDef):
     def __init__(self, vm_path, iterations_runner, entry_point=None, subdir=None, extra_env=None):
         self.vm_path = vm_path
@@ -66,8 +69,12 @@ class GenericScriptingVMDef(BaseVMDef):
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
         BaseVMDef.__init__(self, fp_iterations_runner, extra_env=extra_env)
 
+    def _get_script_path(self, benchmark, entry_point):
+        return os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir,
+                            entry_point.target)
+
     def _generic_scripting_run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k):
-        script_path = os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir, entry_point.target)
+        script_path = self._get_script_path(benchmark, entry_point)
         args = [self.vm_path] + self.extra_vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
         return self._run_exec(args, heap_lim_k)
 
@@ -76,6 +83,11 @@ class GenericScriptingVMDef(BaseVMDef):
 
         if not os.path.exists(self.vm_path):
             fatal("VM path non-existent: %s" % self.vm_path)
+
+    def check_benchmark_files(self, benchmark, entry_point):
+        script_path = self._get_script_path(benchmark, entry_point)
+        if not os.path.exists(script_path):
+            fatal("Benchmark file non-existent: %s" % script_path)
 
 class JavaVMDef(BaseVMDef):
     def __init__(self, vm_path, extra_env=None):
@@ -105,6 +117,15 @@ class JavaVMDef(BaseVMDef):
 
         if not os.path.exists(self.vm_path):
             fatal("VM path non-existent: %s" % self.vm_path)
+
+    def _get_classfile_path(self, benchmark, entry_point):
+        return os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir,
+                            entry_point.target + ".class")
+
+    def check_benchmark_files(self, benchmark, entry_point):
+        classfile_path = self._get_classfile_path(benchmark, entry_point)
+        if not os.path.exists(classfile_path):
+            fatal("Benchmark file non-existent: %s" % classfile_path)
 
 class GraalVMDef(JavaVMDef):
     def __init__(self, vm_path, java_home, extra_env=None):
