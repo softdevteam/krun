@@ -1,8 +1,8 @@
 from email.mime.text import MIMEText
-import smtplib
 import socket
 import textwrap
 import logging
+from subprocess import Popen, PIPE
 
 
 FROM_USER = "noreply"
@@ -14,6 +14,8 @@ QUOTA_THRESHOLD_TEMPLATE = (
     "Note: krun is configured to send no more than %d mails per-run. "
     "This is the last email krun will send for this run. Please check "
     "the log file on the benchmark system for subsequent errors.")
+
+SENDMAIL = "/usr/sbin/sendmail"
 
 
 class Mailer(object):
@@ -54,9 +56,12 @@ class Mailer(object):
             msg['From'] = "%s@%s" % (FROM_USER, self.fqdn)
             msg['To'] = ", ".join(self.recipients)
 
-            s = smtplib.SMTP(SMTP_HOST)
-            s.sendmail(msg["From"], self.recipients, msg.as_string())
-            s.quit()
+            pipe = Popen([SENDMAIL, "-t", "-oi"], stdin=PIPE)
+            pipe.communicate(msg.as_string())
+
+            rc = pipe.returncode
+            if rc != 0:
+                logging.error("Sendmail process returned %d" % rc)
 
             if not bypass_limiter:
                 self.n_mails_sent += 1
