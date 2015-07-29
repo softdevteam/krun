@@ -5,7 +5,7 @@ import os
 import difflib
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
-from krun.util import fatal, collect_cmd_output
+from krun.util import fatal, collect_cmd_output, log_and_mail
 from logging import warn, info
 from time import localtime
 
@@ -14,7 +14,8 @@ class BasePlatform(object):
     CPU_TEMP_POLL_FREQ = 5
     CPU_TEMP_POLLS_BEFORE_MELTDOWN = 12  #  * 5 = one minute
 
-    def __init__(self):
+    def __init__(self, mailer):
+        self.mailer = mailer
         self.audit = OrderedDict()
 
         # We will be looking for changes in the dmesg output.
@@ -42,9 +43,9 @@ class BasePlatform(object):
 
         if lines:
             # dmesg changed!
-            warn("dmesg seems to have changed! Diff follows:")
             diff = "\n".join(lines)
-            warn(diff)
+            warn_s = "dmesg seems to have changed! Diff follows:\n" + diff
+            log_and_mail(self.mailer, warn, "dmesg changed", warn_s)
 
             self.dmesg_changes.append(diff)
             self.last_dmesg = new_dmesg
@@ -54,13 +55,17 @@ class BasePlatform(object):
         if not self.dmesg_changes:
             return
 
-        warn("dmesg output changed during benchmarking!")
-        warn("It is advisable to check for performance critical errors and warnings")
+        warn_s = (
+            "dmesg output changed during benchmarking!\n"
+            "It is advisable to check for errors and warnings\n"
+        )
 
         n_changes = len(self.dmesg_changes)
         for i in range(n_changes):
-            warn("dmesg change %d/%d:" % (i + 1, n_changes))
-            warn(self.dmesg_changes[i])
+            warn_s += "dmesg change %d/%d:\n" % (i + 1, n_changes)
+            warn_s += self.dmesg_changes[i] + "\n"
+
+        warn(warn_s)
 
     def wait_until_cpu_cool(self):
         time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
@@ -110,10 +115,10 @@ class LinuxPlatform(BasePlatform):
     # https://www.kernel.org/doc/Documentation/thermal/sysfs-api.txt
     THRESHOLD = 1000  # therefore one degree
 
-    def __init__(self):
+    def __init__(self, mailer):
         self.base_cpu_temps = None
         self.zones = self._find_thermal_zones()
-        BasePlatform.__init__(self)
+        BasePlatform.__init__(self, mailer)
 
     def _find_thermal_zones(self):
         return [x for x in os.listdir(LinuxPlatform.THERMAL_BASE) if
@@ -170,8 +175,8 @@ class DebianLinuxPlatform(LinuxPlatform):
         self.audit["packages"] = collect_cmd_output("dpkg-query -l")
         self.audit["debian_version"] = collect_cmd_output("cat /etc/debian_version")
 
-def platform():
+def platform(mailer):
     if os.path.exists("/etc/debian_version"):
-        return DebianLinuxPlatform()
+        return DebianLinuxPlatform(mailer)
     else:
         fatal("I don't have support for your platform")
