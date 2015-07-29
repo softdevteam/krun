@@ -305,6 +305,7 @@ class TimeEstimateFormatter(object):
 def sanity_checks(config):
     # per-VM sanity checks
     for vm_name, vm_info in config["VMS"].items():
+        debug("Running sanity check for VM %s" % vm_name)
         vm_info["vm_def"].sanity_checks()
 
     # check all necessary benchmark files exist
@@ -313,6 +314,7 @@ def sanity_checks(config):
             for variant in vm_info["variants"]:
                 entry_point = config["VARIANTS"][variant]
                 key = "%s:%s:%s" % (bench, vm_name, variant)
+                debug("Running sanity check for experiment %s" % key)
 
                 if util.should_skip(config, key):
                     continue  # won't execute, so no check needed
