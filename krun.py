@@ -302,6 +302,11 @@ class TimeEstimateFormatter(object):
         else:
             return UNKNOWN_TIME_DELTA
 
+def sanity_checks(config):
+    # per-VM sanity checks
+    for vm_name, vm_info in config["VMS"].items():
+        vm_info["vm_def"].sanity_checks()
+
 def main():
     try:
         config_file = sys.argv[1]
@@ -321,6 +326,8 @@ def main():
     max_mails = config.get("MAX_MAILS", 5)
 
     attach_log_file(config_file)
+
+    sanity_checks(config)
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False

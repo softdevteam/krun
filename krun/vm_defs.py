@@ -2,6 +2,7 @@ import subprocess
 import os
 
 from logging import info, debug
+from krun.util import fatal
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
@@ -55,6 +56,9 @@ class BaseVMDef(object):
             env=use_env).communicate()
         return stdout, stderr
 
+    def sanity_checks(self):
+        pass
+
 class GenericScriptingVMDef(BaseVMDef):
     def __init__(self, vm_path, iterations_runner, entry_point=None, subdir=None, extra_env=None):
         self.vm_path = vm_path
@@ -66,6 +70,12 @@ class GenericScriptingVMDef(BaseVMDef):
         script_path = os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir, entry_point.target)
         args = [self.vm_path] + self.extra_vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
         return self._run_exec(args, heap_lim_k)
+
+    def sanity_checks(self):
+        BaseVMDef.sanity_checks(self)
+
+        if not os.path.exists(self.vm_path):
+            fatal("VM path non-existent: %s" % self.vm_path)
 
 class JavaVMDef(BaseVMDef):
     def __init__(self, vm_path, extra_env=None):
@@ -90,6 +100,12 @@ class JavaVMDef(BaseVMDef):
         args = [self.vm_path] + self.extra_vm_args + [self.iterations_runner, entry_point.target, str(iterations), str(param)]
         return self._run_exec(args, heap_lim_k, bench_env=new_env)
 
+    def sanity_checks(self):
+        BaseVMDef.sanity_checks(self)
+
+        if not os.path.exists(self.vm_path):
+            fatal("VM path non-existent: %s" % self.vm_path)
+
 class GraalVMDef(JavaVMDef):
     def __init__(self, vm_path, java_home, extra_env=None):
         java_env = {"JAVA_HOME": java_home, "DEFAULT_VM": "server"}
@@ -99,8 +115,13 @@ class GraalVMDef(JavaVMDef):
             extra_env.update(java_env)
 
         JavaVMDef.__init__(self, vm_path, extra_env)
-        assert(vm_path.endswith("mx"))
         self.extra_vm_args.insert(0, "vm") # must come first!
+
+    def sanity_checks(self):
+        JavaVMDef.sanity_checks(self)
+
+        if not self.vm_path.endswith("mx"):
+            fatal("Graal vm_path should be a path to 'mx'")
 
 class PythonVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path, extra_env=None):
