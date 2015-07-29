@@ -59,8 +59,9 @@ class Mailer(object):
             pipe = Popen([SENDMAIL, "-t", "-oi"], stdin=PIPE)
             pipe.communicate(msg.as_string())
 
-            if pipe.returncode != 0:
-                logging.error("mailing failed!")
+            rc = pipe.returncode
+            if rc != 0:
+                logging.error("Sendmail process returned %d" % rc)
 
             if not bypass_limiter:
                 self.n_mails_sent += 1
