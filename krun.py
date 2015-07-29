@@ -302,6 +302,25 @@ class TimeEstimateFormatter(object):
         else:
             return UNKNOWN_TIME_DELTA
 
+def sanity_checks(config):
+    # per-VM sanity checks
+    for vm_name, vm_info in config["VMS"].items():
+        debug("Running sanity check for VM %s" % vm_name)
+        vm_info["vm_def"].sanity_checks()
+
+    # check all necessary benchmark files exist
+    for bench, bench_param in config["BENCHMARKS"].items():
+        for vm_name, vm_info in config["VMS"].items():
+            for variant in vm_info["variants"]:
+                entry_point = config["VARIANTS"][variant]
+                key = "%s:%s:%s" % (bench, vm_name, variant)
+                debug("Running sanity check for experiment %s" % key)
+
+                if util.should_skip(config, key):
+                    continue  # won't execute, so no check needed
+
+                vm_info["vm_def"].check_benchmark_files(bench, entry_point)
+
 def main():
     try:
         config_file = sys.argv[1]
@@ -321,6 +340,8 @@ def main():
     max_mails = config.get("MAX_MAILS", 5)
 
     attach_log_file(config_file)
+
+    sanity_checks(config)
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
