@@ -152,6 +152,7 @@ class ExecutionScheduler(object):
         self.jobs_done = 0
         self.platform = platform(self.mailer)
 
+        self.platform.check_cpus_throttled()
         self.platform.set_base_cpu_temps()
         self.platform.collect_audit()
 
