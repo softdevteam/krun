@@ -6,7 +6,7 @@ import difflib
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
 from krun.util import fatal, collect_cmd_output, log_and_mail
-from logging import warn, info
+from logging import warn, info, debug
 from time import localtime
 
 class BasePlatform(object):
@@ -99,7 +99,7 @@ class BasePlatform(object):
     def has_cpu_cooled(self):
         raise NotImplementedError("abstract")
 
-    def check_cpu_throttled(self):
+    def check_cpus_throttled(self):
         raise NotImplementedError("abstract")
 
     # And you may want to extend this
@@ -109,7 +109,7 @@ class BasePlatform(object):
 
 class LinuxPlatform(BasePlatform):
     THERMAL_BASE = "/sys/class/thermal/"
-    CPU_GOV_FILE = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+    CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
 
     # Temperature files under /sys measure in millidegrees
     # https://www.kernel.org/doc/Documentation/thermal/sysfs-api.txt
@@ -118,11 +118,16 @@ class LinuxPlatform(BasePlatform):
     def __init__(self, mailer):
         self.base_cpu_temps = None
         self.zones = self._find_thermal_zones()
+        self.num_cpus = self._get_num_cpus()
         BasePlatform.__init__(self, mailer)
 
     def _find_thermal_zones(self):
         return [x for x in os.listdir(LinuxPlatform.THERMAL_BASE) if
                 x.startswith("thermal_zone")]
+
+    def _get_num_cpus(self):
+        cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
+        return int(collect_cmd_output(cmd))
 
     def set_base_cpu_temps(self):
         self.base_cpu_temps = self.take_cpu_temp_readings()
@@ -155,13 +160,22 @@ class LinuxPlatform(BasePlatform):
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
-    def check_cpu_throttled(self):
-        with open(LinuxPlatform.CPU_GOV_FILE, "r") as fh:
-            v = fh.read().strip()
+    def check_cpus_throttled(self):
+        """Checks the Linux CPU governors for the cpus.
 
-        if v != "performance":
-            fatal("Expected 'performance' got '%s'. "
-                  "Use cpufreq-set from the cpufrequtils package" % v)
+        Since we do not know which CPU benchmarks will be scheduled on,
+        we simply check them all"""
+
+        for cpu_n in xrange(self.num_cpus):
+            debug("Checking CPU governor for CPU%d" % cpu_n)
+
+            with open(LinuxPlatform.CPU_GOV_FMT % cpu_n, "r") as fh:
+                v = fh.read().strip()
+
+            if v != "performance":
+                fatal("Linux CPU%d governor: expected 'performance' got '%s'. "
+                      "Use cpufreq-set from the cpufrequtils package."
+                      % (cpu_n, v))
 
     def collect_audit(self):
         BasePlatform.collect_audit(self)
