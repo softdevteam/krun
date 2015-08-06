@@ -24,28 +24,33 @@ class EnvChange(object):
     def __init__(self, var, val):
         self.var, self.val = var, val
 
+
+    @staticmethod
+    def apply_all(changes, env):
+        """Apply a collection of changes"""
+        for change in changes:
+            change.apply(env)
+
+    def apply(self, env):
+        raise NotImplementedError("abstract")
+
+
 class EnvChangeSet(EnvChange):
-    pass
+    def apply(self, env):
+        cur_val = env.get(self.var, None)
+        if cur_val is not None:
+            fatal("Environment %s is already defined" % self.var)
+        else:
+            env[self.var] = self.val
+
 
 class EnvChangeAppend(EnvChange):
-    pass
-
-
-def _apply_env_changes(env, changes):
-    for change in changes:
-        cur_val = env.get(change.var, None)
-        if isinstance(change, EnvChangeSet):
-            if cur_val is not None:
-                fatal("Environment %s is already defined" % change.var)
-            else:
-                env[change.var] = change.val
-        elif isinstance(change, EnvChangeAppend):
-            if cur_val is None:
-                env[change.var] = change.val
-            else:
-                env[change.var] = "%s%s%s" % (cur_val, os.pathsep, change.val)
+    def apply(self, env):
+        cur_val = env.get(self.var, None)
+        if cur_val is None:
+            env[self.var] = self.val
         else:
-            assert False  # unreachable
+            env[self.var] = "%s%s%s" % (cur_val, os.pathsep, self.val)
 
 
 class BaseVMDef(object):
@@ -69,13 +74,15 @@ class BaseVMDef(object):
     def _run_exec(self, args, heap_lim_k, bench_env_changes=None):
         """ Deals with actually shelling out """
 
+        if bench_env_changes is None:
+            bench_env_changes = []
+
         use_env = BASE_ENV.copy()
         # Apply vm specific environment changes
-        _apply_env_changes(use_env, self.common_env_changes)
+        EnvChange.apply_all(self.common_env_changes, use_env)
 
         # Apply benchmark specific environment changes
-        if bench_env_changes:
-            _apply_env_changes(use_env, bench_env_changes)
+        EnvChange.apply_all(bench_env_changes, use_env)
 
         # This is kind of awkward. We don't have the heap limit at
         # VMDef construction time, so we have to substitute it in later.
