@@ -7,7 +7,7 @@ Executes a benchmark many times within a single process.
 In Kalibera terms, this script represents one executions level run.
 """
 
-import cffi, sys, imp
+import cffi, sys, imp, os
 
 ffi = cffi.FFI()
 ffi.cdef("double clock_gettime_monotonic();")
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     iters, param = int(iters), int(param)
 
     assert benchmark.endswith(".py")
-    bench_mod_name = benchmark[:-3].replace("/", ".") # doesn't really matter
+    bench_mod_name = os.path.basename(benchmark[:-3])
     bench_mod = imp.load_source(bench_mod_name, benchmark)
 
     # The benchmark should provide a function called "run_iter" which
