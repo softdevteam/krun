@@ -30,7 +30,8 @@ def read_config(path):
     try:
         execfile(path, dct)
     except Exception as e:
-        fatal("error importing config file:\n%s" % str(e))
+        error("error importing config file:\n%s" % str(e))
+        raise
 
     return dct
 

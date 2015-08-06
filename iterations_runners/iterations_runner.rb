@@ -29,7 +29,7 @@ if __FILE__ == $0
     param = Integer(param)
 
     assert benchmark.end_with?(".rb")
-    require("#{Dir.pwd}/#{benchmark}")
+    require("#{benchmark}")
 
     STDOUT.write "["
     krun_iter_num = 0
