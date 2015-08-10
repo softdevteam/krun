@@ -235,6 +235,14 @@ class ExecutionScheduler(object):
                 break
 
             tfmt = self.get_overall_time_estimate_formatter()
+
+            if self.eta_avail == self.jobs_done:
+                # We just found out roughly how long the session has left, mail out.
+                msg = "ETA for current session now known: %s" % tfmt.finish_str
+                log_and_mail(self.mailer, info,
+                             "ETA for Current Session Available",
+                             msg, bypass_limiter=True)
+
             info("{:<25s}: {} ({} from now)".format(
                 "Estimated completion", tfmt.finish_str, tfmt.delta_str))
 
