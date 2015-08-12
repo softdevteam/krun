@@ -312,11 +312,7 @@ class TimeEstimateFormatter(object):
             return UNKNOWN_TIME_DELTA
 
 def sanity_checks(config):
-    # per-VM sanity checks
-    for vm_name, vm_info in config["VMS"].items():
-        debug("Running sanity check for VM %s" % vm_name)
-        vm_info["vm_def"].sanity_checks()
-
+    vms_that_will_run = []
     # check all necessary benchmark files exist
     for bench, bench_param in config["BENCHMARKS"].items():
         for vm_name, vm_info in config["VMS"].items():
@@ -329,6 +325,19 @@ def sanity_checks(config):
                     continue  # won't execute, so no check needed
 
                 vm_info["vm_def"].check_benchmark_files(bench, entry_point)
+                vms_that_will_run.append(vm_name)
+
+    # per-VM sanity checks
+    for vm_name, vm_info in config["VMS"].items():
+        if vm_name not in vms_that_will_run:
+            # User's SKIP config directive may mean a defined VM never runs.
+            # This may be deliberate, e.g. the user does not yet have it built.
+            # In this case, sanity checks can't run for this VM, so skip them.
+            debug("VM '%s' is not used, not sanity checking." % vm_name)
+        else:
+            debug("Running sanity check for VM %s" % vm_name)
+            vm_info["vm_def"].sanity_checks()
+
 
 def main():
     try:
