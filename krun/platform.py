@@ -72,6 +72,8 @@ class BasePlatform(object):
         msg_shown = False
         trys = 0
         while True:
+            debug("Temp poll %d/%d" %
+                  (trys + 1, BasePlatform.CPU_TEMP_POLLS_BEFORE_MELTDOWN))
             cool, reason = self.has_cpu_cooled()
             if cool:
                 break
@@ -108,15 +110,18 @@ class BasePlatform(object):
         self.audit["dmesg"] = collect_cmd_output("dmesg")
 
 class LinuxPlatform(BasePlatform):
+    """Deals with aspects generic to all Linux distributions. """
+
     THERMAL_BASE = "/sys/class/thermal/"
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
 
-    # Temperature files under /sys measure in millidegrees
-    # https://www.kernel.org/doc/Documentation/thermal/sysfs-api.txt
-    THRESHOLD = 1000  # therefore one degree
+    # We will wait until the CPU cools to within TEMP_THRESHOLD_PERCENT
+    # percent warmer than where we started.
+    TEMP_THRESHOLD_PERCENT = 10
 
     def __init__(self, mailer):
         self.base_cpu_temps = None
+        self.temp_thresholds = None
         self.zones = self._find_thermal_zones()
         self.num_cpus = self._get_num_cpus()
         BasePlatform.__init__(self, mailer)
@@ -131,6 +136,9 @@ class LinuxPlatform(BasePlatform):
 
     def set_base_cpu_temps(self):
         self.base_cpu_temps = self.take_cpu_temp_readings()
+        self.temp_thresholds = \
+            [int(x + x * (1.0 / LinuxPlatform.TEMP_THRESHOLD_PERCENT))
+             for x in self.base_cpu_temps]
 
     def _read_zone(self, zone):
         fn = os.path.join(LinuxPlatform.THERMAL_BASE, zone, "temp")
@@ -153,10 +161,16 @@ class LinuxPlatform(BasePlatform):
         assert self.base_cpu_temps is not None
 
         readings = self.take_cpu_temp_readings()
-        for i in range(len(self.base_cpu_temps)):
-            if readings[i] - self.base_cpu_temps[i] - self.THRESHOLD > 0:
-                reason = "Zone 1 started at %d but is now %d" % \
-                    (self.base_cpu_temps[i], readings[i])
+        debug("start temps: %s" % self.base_cpu_temps)
+        debug("temp thresholds: %s" % self.temp_thresholds)
+        debug("temp reading: %s" % readings)
+        for i in range(len(self.temp_thresholds)):
+            if readings[i] > self.temp_thresholds[i]:
+                reason = ("Zone %d started at %d but is now %d. " \
+                          "Needs to cool to within %d%% (%d)" % \
+                          (i, self.base_cpu_temps[i],
+                           readings[i], LinuxPlatform.TEMP_THRESHOLD_PERCENT,
+                           self.temp_thresholds[i]))
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
