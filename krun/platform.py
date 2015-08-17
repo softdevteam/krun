@@ -11,8 +11,8 @@ from time import localtime
 
 class BasePlatform(object):
     CPU_TEMP_MANDATORY_WAIT = 1
-    CPU_TEMP_POLL_FREQ = 5
-    CPU_TEMP_POLLS_BEFORE_MELTDOWN = 12  #  * 5 = one minute
+    CPU_TEMP_POLL_FREQ = 10                 # seconds between polls
+    CPU_TEMP_POLLS_BEFORE_MELTDOWN = 60     # times 10 = ten mins
 
     def __init__(self, mailer):
         self.mailer = mailer
