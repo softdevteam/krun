@@ -5,7 +5,7 @@ import os
 import difflib
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
-from krun.util import fatal, collect_cmd_output, log_and_mail
+from krun.util import fatal, run_shell_cmd, log_and_mail
 from logging import warn, info, debug
 from time import localtime
 
@@ -27,7 +27,7 @@ class BasePlatform(object):
         self.dmesg_changes = []
 
     def _collect_dmesg_lines(self):
-        return collect_cmd_output("dmesg").split("\n")
+        return run_shell_cmd("dmesg")[0].split("\n")
 
     def _timestamp_to_str(self, lt):
         return time.strftime(ABS_TIME_FORMAT, lt)
@@ -106,8 +106,8 @@ class BasePlatform(object):
 
     # And you may want to extend this
     def collect_audit(self):
-        self.audit["uname"] = collect_cmd_output("uname")
-        self.audit["dmesg"] = collect_cmd_output("dmesg")
+        self.audit["uname"] = run_shell_cmd("uname")[0]
+        self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
 
 class LinuxPlatform(BasePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -115,6 +115,8 @@ class LinuxPlatform(BasePlatform):
     THERMAL_BASE = "/sys/class/thermal/"
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
+    ROOT_CMD = "sudo"
+    CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
 
     # We will wait until the CPU cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
@@ -133,7 +135,7 @@ class LinuxPlatform(BasePlatform):
 
     def _get_num_cpus(self):
         cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
-        return int(collect_cmd_output(cmd))
+        return int(run_shell_cmd(cmd)[0])
 
     def set_base_cpu_temps(self):
         self.base_cpu_temps = self.take_cpu_temp_readings()
@@ -175,6 +177,21 @@ class LinuxPlatform(BasePlatform):
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
+    def save_power(self):
+        """Called when benchmarking is done, to save power"""
+
+        for cpu_n in xrange(self.num_cpus):
+            debug("Set CPU%d governor to 'ondemand'" % cpu_n)
+            cmd = "%s cpufreq-set -c %d -g ondemand" % \
+                (self.ROOT_CMD, cpu_n)
+            stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+
+            if rc != 0:
+                # Doesn't really matter if this fails, so just warn.
+                warn("Could not set CPU%d governor to 'ondemand' when "
+                     "finished.\nFailing command:\n%s" % (cpu_n, cmd))
+
+
     def check_cpus_throttled(self):
         """Checks the CPU is configured for high performance
 
@@ -182,38 +199,76 @@ class LinuxPlatform(BasePlatform):
         we simply check them all"""
 
         # Check CPU cores are running with the 'performance' governor
+        # And that the correct scaler is in use. We never want the pstate
+        # scaler, as it tends to cause the clock speed to fluctuate, even
+        # when in performance mode. Instead we use standard ACPI.
         for cpu_n in xrange(self.num_cpus):
+            # Check CPU governors
             debug("Checking CPU governor for CPU%d" % cpu_n)
-
             with open(LinuxPlatform.CPU_GOV_FMT % cpu_n, "r") as fh:
                 v = fh.read().strip()
 
             if v != "performance":
-                fatal("Linux CPU%d governor: expected 'performance' got '%s'. "
-                      "Use cpufreq-set from the cpufrequtils package."
-                      % (cpu_n, v))
+                cmd = "%s cpufreq-set -c %d -g performance" % \
+                    (self.ROOT_CMD, cpu_n)
+                stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+
+                if rc != 0:
+                    fatal("Governor for CPU%d governor: is '%s' not "
+                          "performance'.\nKrun attempted to adjust the "
+                          "governor using:\n  '%s'\n"
+                          "however this command failed. Is %s configured "
+                          "and is cpufrequtils installed?"
+                          % (cpu_n, v, cmd, self.ROOT_CMD))
+
+            # Check CPU scaler
+            debug("Checking CPU scaler for CPU%d" % cpu_n)
+            with open(LinuxPlatform.CPU_SCALER_FMT % cpu_n, "r") as fh:
+                v = fh.read().strip()
+
+            if v != "acpi-cpufreq":
+                if v == "intel_pstate":
+                    scaler_files = [ "  * " + LinuxPlatform.CPU_SCALER_FMT % x for
+                                    x in xrange(self.num_cpus)]
+                    fatal("The kernel is 'intel_pstate' for scaling instead of 'acpi-cpufreq.\n"
+                          "To use acpi-cpufreq, add 'intel_pstate=disable' to "
+                          "the kernel arguments.\nOn debian:\n"
+                          "  * Edit /etc/default/grub\n"
+                          "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
+                          "  * Run `sudo update-grub`\n"
+                          "When the system comes up, check the following "
+                          "files contain 'acpi-cpufreq':\n%s"
+                          % "\n".join(scaler_files))
+                else:
+                    fatal("The kernel is using '%s' for CPU scaling instead "
+                          "of using 'acpi-cpufreq'" % v)
 
         # Check "turbo boost" is disabled
-        with open(LinuxPlatform.TURBO_DISABLED) as fh:
-            v = int(fh.read().strip())
-
+        # It really should be, as turbo boost is only available using pstates,
+        # and the code above is ensuring we are not. Let's check anyway.
         debug("Checking 'turbo boost' is disabled")
-        if v != 1:
-            fatal("Machine has 'turbo boost' enabled. "
-                  "Please disabled in the BIOS.")
+        if os.path.exists(LinuxPlatform.TURBO_DISABLED):
+            with open(LinuxPlatform.TURBO_DISABLED) as fh:
+                v = int(fh.read().strip())
+
+            if v != 1:
+                fatal("Machine has 'turbo boost' enabled. "
+                      "This should not happen, as this feature only applies to "
+                      "pstate CPU scaling and Krun just determined that "
+                      "the system is not!")
 
 
     def collect_audit(self):
         BasePlatform.collect_audit(self)
 
         # Extra CPU info, some not in dmesg. E.g. CPU cache size.
-        self.audit["cpuinfo"] = collect_cmd_output("cat /proc/cpuinfo")
+        self.audit["cpuinfo"] = run_shell_cmd("cat /proc/cpuinfo")[0]
 
 class DebianLinuxPlatform(LinuxPlatform):
     def collect_audit(self):
         LinuxPlatform.collect_audit(self)
-        self.audit["packages"] = collect_cmd_output("dpkg-query -l")
-        self.audit["debian_version"] = collect_cmd_output("cat /etc/debian_version")
+        self.audit["packages"] = run_shell_cmd("dpkg-query -l")[0]
+        self.audit["debian_version"] = run_shell_cmd("cat /etc/debian_version")[0]
 
 def platform(mailer):
     if os.path.exists("/etc/debian_version"):

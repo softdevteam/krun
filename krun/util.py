@@ -56,9 +56,10 @@ def log_and_mail(mailer, log_fn, subject, msg, exit=False, bypass_limiter=False)
     if exit:
         sys.exit(1)
 
-def collect_cmd_output(cmd):
-    p = Popen(cmd, shell=True, stdout=PIPE)
+def run_shell_cmd(cmd, failure_fatal=True):
+    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate()
     rc = p.wait()
-    assert rc == 0
-    return stdout.strip()
+    if failure_fatal and rc != 0:
+        fatal("Shell command failed: '%s'" % cmd)
+    return stdout.strip(), stderr.strip(), rc
