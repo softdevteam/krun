@@ -177,6 +177,21 @@ class LinuxPlatform(BasePlatform):
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
+    def save_power(self):
+        """Called when benchmarking is done, to save power"""
+
+        for cpu_n in xrange(self.num_cpus):
+            debug("Set CPU%d governor to 'ondemand'" % cpu_n)
+            cmd = "%s cpufreq-set -c %d -g ondemand" % \
+                (self.ROOT_CMD, cpu_n)
+            stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+
+            if rc != 0:
+                # Doesn't really matter if this fails, so just warn.
+                warn("Could not set CPU%d governor to 'ondemand' when "
+                     "finished.\nFailing command:\n%s" % (cpu_n, cmd))
+
+
     def check_cpus_throttled(self):
         """Checks the CPU is configured for high performance
 

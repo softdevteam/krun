@@ -269,6 +269,7 @@ class ExecutionScheduler(object):
         end_time = time.time() # rough overall timer, not used for actual results
 
         self.platform.print_all_dmesg_changes()
+        self.platform.save_power()
 
         info("Done: Results dumped to %s" % self.out_file)
         if errors:
