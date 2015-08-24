@@ -114,6 +114,7 @@ class LinuxPlatform(BasePlatform):
 
     THERMAL_BASE = "/sys/class/thermal/"
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
+    TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
 
     # We will wait until the CPU cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
@@ -175,11 +176,12 @@ class LinuxPlatform(BasePlatform):
         return (True, None)
 
     def check_cpus_throttled(self):
-        """Checks the Linux CPU governors for the cpus.
+        """Checks the CPU is configured for high performance
 
         Since we do not know which CPU benchmarks will be scheduled on,
         we simply check them all"""
 
+        # Check CPU cores are running with the 'performance' governor
         for cpu_n in xrange(self.num_cpus):
             debug("Checking CPU governor for CPU%d" % cpu_n)
 
@@ -190,6 +192,16 @@ class LinuxPlatform(BasePlatform):
                 fatal("Linux CPU%d governor: expected 'performance' got '%s'. "
                       "Use cpufreq-set from the cpufrequtils package."
                       % (cpu_n, v))
+
+        # Check "turbo boost" is disabled
+        with open(LinuxPlatform.TURBO_DISABLED) as fh:
+            v = int(fh.read().strip())
+
+        debug("Checking 'turbo boost' is disabled")
+        if v != 1:
+            fatal("Machine has 'turbo boost' enabled. "
+                  "Please disabled in the BIOS.")
+
 
     def collect_audit(self):
         BasePlatform.collect_audit(self)
