@@ -9,6 +9,7 @@ import json
 import random
 import statsmodels.api as sm
 import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from statsmodels.tsa.stattools import acf
 from matplotlib.widgets import Slider, Button
