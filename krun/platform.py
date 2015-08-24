@@ -116,6 +116,7 @@ class LinuxPlatform(BasePlatform):
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
     ROOT_CMD = "sudo"
+    CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
 
     # We will wait until the CPU cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
@@ -183,9 +184,12 @@ class LinuxPlatform(BasePlatform):
         we simply check them all"""
 
         # Check CPU cores are running with the 'performance' governor
+        # And that the correct scaler is in use. We never want the pstate
+        # scaler, as it tends to cause the clock speed to fluctuate, even
+        # when in performance mode. Instead we use standard ACPI.
         for cpu_n in xrange(self.num_cpus):
+            # Check CPU governors
             debug("Checking CPU governor for CPU%d" % cpu_n)
-
             with open(LinuxPlatform.CPU_GOV_FMT % cpu_n, "r") as fh:
                 v = fh.read().strip()
 
@@ -202,14 +206,41 @@ class LinuxPlatform(BasePlatform):
                           "and is cpufrequtils installed?"
                           % (cpu_n, v, cmd, self.ROOT_CMD))
 
-        # Check "turbo boost" is disabled
-        with open(LinuxPlatform.TURBO_DISABLED) as fh:
-            v = int(fh.read().strip())
+            # Check CPU scaler
+            debug("Checking CPU scaler for CPU%d" % cpu_n)
+            with open(LinuxPlatform.CPU_SCALER_FMT % cpu_n, "r") as fh:
+                v = fh.read().strip()
 
+            if v != "acpi-cpufreq":
+                if v == "intel_pstate":
+                    scaler_files = [ "  * " + LinuxPlatform.CPU_SCALER_FMT % x for
+                                    x in xrange(self.num_cpus)]
+                    fatal("The kernel is 'intel_pstate' for scaling instead of 'acpi-cpufreq.\n"
+                          "To use acpi-cpufreq, add 'intel_pstate=disable' to "
+                          "the kernel arguments.\nOn debian:\n"
+                          "  * Edit /etc/default/grub\n"
+                          "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
+                          "  * Run `sudo update-grub`\n"
+                          "When the system comes up, check the following "
+                          "files contain 'acpi-cpufreq':\n%s"
+                          % "\n".join(scaler_files))
+                else:
+                    fatal("The kernel is using '%s' for CPU scaling instead "
+                          "of using 'acpi-cpufreq'" % v)
+
+        # Check "turbo boost" is disabled
+        # It really should be, as turbo boost is only available using pstates,
+        # and the code above is ensuring we are not. Let's check anyway.
         debug("Checking 'turbo boost' is disabled")
-        if v != 1:
-            fatal("Machine has 'turbo boost' enabled. "
-                  "Please disabled in the BIOS.")
+        if os.path.exists(LinuxPlatform.TURBO_DISABLED):
+            with open(LinuxPlatform.TURBO_DISABLED) as fh:
+                v = int(fh.read().strip())
+
+            if v != 1:
+                fatal("Machine has 'turbo boost' enabled. "
+                      "This should not happen, as this feature only applies to "
+                      "pstate CPU scaling and Krun just determined that "
+                      "the system is not!")
 
 
     def collect_audit(self):
