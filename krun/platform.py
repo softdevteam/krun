@@ -115,6 +115,7 @@ class LinuxPlatform(BasePlatform):
     THERMAL_BASE = "/sys/class/thermal/"
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
+    ROOT_CMD = "sudo"
 
     # We will wait until the CPU cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
@@ -189,9 +190,17 @@ class LinuxPlatform(BasePlatform):
                 v = fh.read().strip()
 
             if v != "performance":
-                fatal("Linux CPU%d governor: expected 'performance' got '%s'. "
-                      "Use cpufreq-set from the cpufrequtils package."
-                      % (cpu_n, v))
+                cmd = "%s cpufreq-set -c %d -g performance" % \
+                    (self.ROOT_CMD, cpu_n)
+                stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+
+                if rc != 0:
+                    fatal("Governor for CPU%d governor: is '%s' not "
+                          "performance'.\nKrun attempted to adjust the "
+                          "governor using:\n  '%s'\n"
+                          "however this command failed. Is %s configured "
+                          "and is cpufrequtils installed?"
+                          % (cpu_n, v, cmd, self.ROOT_CMD))
 
         # Check "turbo boost" is disabled
         with open(LinuxPlatform.TURBO_DISABLED) as fh:
