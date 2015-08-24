@@ -5,7 +5,7 @@ import os
 import difflib
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
-from krun.util import fatal, collect_cmd_output, log_and_mail
+from krun.util import fatal, run_shell_cmd, log_and_mail
 from logging import warn, info, debug
 from time import localtime
 
@@ -27,7 +27,7 @@ class BasePlatform(object):
         self.dmesg_changes = []
 
     def _collect_dmesg_lines(self):
-        return collect_cmd_output("dmesg").split("\n")
+        return run_shell_cmd("dmesg")[0].split("\n")
 
     def _timestamp_to_str(self, lt):
         return time.strftime(ABS_TIME_FORMAT, lt)
@@ -106,8 +106,8 @@ class BasePlatform(object):
 
     # And you may want to extend this
     def collect_audit(self):
-        self.audit["uname"] = collect_cmd_output("uname")
-        self.audit["dmesg"] = collect_cmd_output("dmesg")
+        self.audit["uname"] = run_shell_cmd("uname")[0]
+        self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
 
 class LinuxPlatform(BasePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -133,7 +133,7 @@ class LinuxPlatform(BasePlatform):
 
     def _get_num_cpus(self):
         cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
-        return int(collect_cmd_output(cmd))
+        return int(run_shell_cmd(cmd)[0])
 
     def set_base_cpu_temps(self):
         self.base_cpu_temps = self.take_cpu_temp_readings()
@@ -207,13 +207,13 @@ class LinuxPlatform(BasePlatform):
         BasePlatform.collect_audit(self)
 
         # Extra CPU info, some not in dmesg. E.g. CPU cache size.
-        self.audit["cpuinfo"] = collect_cmd_output("cat /proc/cpuinfo")
+        self.audit["cpuinfo"] = run_shell_cmd("cat /proc/cpuinfo")[0]
 
 class DebianLinuxPlatform(LinuxPlatform):
     def collect_audit(self):
         LinuxPlatform.collect_audit(self)
-        self.audit["packages"] = collect_cmd_output("dpkg-query -l")
-        self.audit["debian_version"] = collect_cmd_output("cat /etc/debian_version")
+        self.audit["packages"] = run_shell_cmd("dpkg-query -l")[0]
+        self.audit["debian_version"] = run_shell_cmd("cat /etc/debian_version")[0]
 
 def platform(mailer):
     if os.path.exists("/etc/debian_version"):
