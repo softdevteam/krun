@@ -3,6 +3,7 @@
 import time
 import os
 import difflib
+import random
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
 from krun.util import fatal, run_shell_cmd, log_and_mail
@@ -101,7 +102,7 @@ class BasePlatform(object):
     def has_cpu_cooled(self):
         raise NotImplementedError("abstract")
 
-    def check_cpus_throttled(self):
+    def check_preliminaries(self):
         raise NotImplementedError("abstract")
 
     # And you may want to extend this
@@ -117,6 +118,7 @@ class LinuxPlatform(BasePlatform):
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
     ROOT_CMD = "sudo"
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
+    KERNEL_ARGS_FILE = "/proc/cmdline"
 
     # We will wait until the CPU cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
@@ -127,6 +129,7 @@ class LinuxPlatform(BasePlatform):
         self.temp_thresholds = None
         self.zones = self._find_thermal_zones()
         self.num_cpus = self._get_num_cpus()
+        self.isolated_cpu = None  # Detected later
         BasePlatform.__init__(self, mailer)
 
     def _find_thermal_zones(self):
@@ -191,9 +194,57 @@ class LinuxPlatform(BasePlatform):
                 warn("Could not set CPU%d governor to 'ondemand' when "
                      "finished.\nFailing command:\n%s" % (cpu_n, cmd))
 
+    def check_preliminaries(self):
+        """Checks the system is in a suitable state for benchmarking"""
 
-    def check_cpus_throttled(self):
-        """Checks the CPU is configured for high performance
+        self._check_cpu_isolated()
+        self._check_cpu_governor()
+        self._check_cpu_scaler()
+
+    def _check_cpu_isolated(self):
+        """Attempts to detect an isolated CPU to run benchmarks on"""
+
+        with open(LinuxPlatform.KERNEL_ARGS_FILE) as fh:
+            all_args = fh.read().strip()
+
+        args = all_args.split(" ")
+        for arg in args:
+            if '=' not in arg:
+                continue
+
+            k, v = arg.split("=", 1)
+
+            if k != "isolcpus":
+                continue
+            else:
+                if "," in v:
+                    debug("Multiple isolated CPUs detected: %s" % v)
+                    vs = v.split(",")
+                    isol_cpu = int(random.choice(vs))
+                    debug("Chose (at random) to isolate CPU %d" % isol_cpu)
+                else:
+                    isol_cpu = int(v)
+                    debug("Detected sole isolated CPU %d" % isol_cpu)
+                break
+        else:
+            fatal("Krun failed to detect an isolated CPU!\n"
+                  "Did you add `isolcpus=X` to the kernel arguments?\n"
+                  "To do this on Debian:\n"
+                  "  * Edit /etc/default/grub\n"
+                  "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
+                  "  * Run `sudo update-grub`\n"
+                  "When the system comes up, check `ps -Pef`.")
+
+        if isol_cpu == 0:
+            fatal("Krun detected CPU 0 as the isolated CPU.\n"
+                  "We reccommend using another CPU in case the first CPU "
+                  "is ever special-cased in the kernel.")
+
+        self.isolated_cpu = isol_cpu
+
+
+    def _check_cpu_governor(self):
+        """Checks the right CPU governor is in effect
 
         Since we do not know which CPU benchmarks will be scheduled on,
         we simply check them all"""
@@ -221,6 +272,10 @@ class LinuxPlatform(BasePlatform):
                           "and is cpufrequtils installed?"
                           % (cpu_n, v, cmd, self.ROOT_CMD))
 
+    def _check_cpu_scaler(self):
+        """Check the correct CPU scaler is in effect"""
+
+        for cpu_n in xrange(self.num_cpus):
             # Check CPU scaler
             debug("Checking CPU scaler for CPU%d" % cpu_n)
             with open(LinuxPlatform.CPU_SCALER_FMT % cpu_n, "r") as fh:
