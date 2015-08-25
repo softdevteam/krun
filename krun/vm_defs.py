@@ -65,6 +65,11 @@ class BaseVMDef(object):
         # tempting as it is to add a self.vm_path, we don't. If we were to add
         # natively compiled languages, then there is no "VM" to speak of.
 
+        self.platform = None  # Set later
+
+    def set_platform(self, platform):
+        self.platform = platform
+
     def add_env_change(self, change):
         self.common_env_changes.append(change)
 
@@ -91,6 +96,9 @@ class BaseVMDef(object):
             if hasattr(a, "__call__"):  # i.e. a function
                 a = a(heap_lim_k)
             actual_args.append(a)
+
+        # Apply platform specific argument transformations.
+        actual_args = self.platform.bench_cmdline_adjust(actual_args)
 
         debug("cmdline='%s'" % " ".join(actual_args))
         debug("env='%s'" % use_env)

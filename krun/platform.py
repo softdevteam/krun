@@ -110,6 +110,13 @@ class BasePlatform(object):
         self.audit["uname"] = run_shell_cmd("uname")[0]
         self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
 
+    # You may wish to override this if you need to prepend arguments to the
+    # benchmark invocation, e.g. to use a tool to pin a benchmark to a CPU.
+    def bench_cmdline_adjust(self, args):
+        """Accepts a list representing the cmd line invocation of a benchmark.
+        Returns a possibly mutated argument list."""
+        return args  # default does nothing.
+
 class LinuxPlatform(BasePlatform):
     """Deals with aspects generic to all Linux distributions. """
 
@@ -131,6 +138,18 @@ class LinuxPlatform(BasePlatform):
         self.num_cpus = self._get_num_cpus()
         self.isolated_cpu = None  # Detected later
         BasePlatform.__init__(self, mailer)
+
+
+    def bench_cmdline_adjust(self, args):
+        """Adjusts benchmark invocation so as to pin to one CPU core"""
+
+        # The core mask is a bitfield, each bit representing a CPU. When
+        # a bit is set, it means the task may run on the corresponding core.
+        # E.g. a mask of 0x3 (0b11) means the process can run on cores
+        # 1 and 2. We want to pin the process to one CPU, so we only ever
+        # set one bit.
+        coremask = 1 << self.isolated_cpu
+        return  ["taskset", hex(coremask)] + args
 
     def _find_thermal_zones(self):
         return [x for x in os.listdir(LinuxPlatform.THERMAL_BASE) if
@@ -197,9 +216,15 @@ class LinuxPlatform(BasePlatform):
     def check_preliminaries(self):
         """Checks the system is in a suitable state for benchmarking"""
 
+        self._check_taskset_installed()
         self._check_cpu_isolated()
         self._check_cpu_governor()
         self._check_cpu_scaler()
+
+    def _check_taskset_installed(self):
+        from distutils.spawn import find_executable
+        if not find_executable("taskset"):
+            fatal("taskset not installed. Krun needs this to pin the benchmarks to an isolated CPU")
 
     def _check_cpu_isolated(self):
         """Attempts to detect an isolated CPU to run benchmarks on"""

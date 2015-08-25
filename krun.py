@@ -70,6 +70,8 @@ class ExecutionJob(object):
         self.parameter = parameter
         self.config = config
 
+        self.vm_info["vm_def"].set_platform(sched.platform)
+
         # Used in results JSON and ETA dict
         self.key = "%s:%s:%s" % (self.benchmark, self.vm_name, self.variant)
 
