@@ -3,6 +3,7 @@
 import time
 import os
 import difflib
+import random
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
 from krun.util import fatal, run_shell_cmd, log_and_mail
@@ -101,13 +102,20 @@ class BasePlatform(object):
     def has_cpu_cooled(self):
         raise NotImplementedError("abstract")
 
-    def check_cpus_throttled(self):
+    def check_preliminaries(self):
         raise NotImplementedError("abstract")
 
     # And you may want to extend this
     def collect_audit(self):
         self.audit["uname"] = run_shell_cmd("uname")[0]
         self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
+
+    # You may wish to override this if you need to prepend arguments to the
+    # benchmark invocation, e.g. to use a tool to pin a benchmark to a CPU.
+    def bench_cmdline_adjust(self, args):
+        """Accepts a list representing the cmd line invocation of a benchmark.
+        Returns a possibly mutated argument list."""
+        return args  # default does nothing.
 
 class LinuxPlatform(BasePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -117,6 +125,7 @@ class LinuxPlatform(BasePlatform):
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
     ROOT_CMD = "sudo"
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
+    KERNEL_ARGS_FILE = "/proc/cmdline"
 
     # We will wait until the CPU cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
@@ -127,7 +136,38 @@ class LinuxPlatform(BasePlatform):
         self.temp_thresholds = None
         self.zones = self._find_thermal_zones()
         self.num_cpus = self._get_num_cpus()
+        self.isolated_cpu = None  # Detected later
         BasePlatform.__init__(self, mailer)
+
+
+    def _fatal_kernel_arg(self, arg, prefix, suffix):
+        """Bail out and inform user how to add a kernel argument"""
+
+        # This is generic Linux advice.
+        # If you can offer better distribution-specific advice, override this
+        # in a more specific Linux subclass.
+
+        if prefix != "":
+            prefix += "\n"
+
+        if suffix != "":
+            suffix += "\n"
+
+        fatal("%s"
+              "Set `%s` in the kernel arguments.\n"
+              "%s" % (prefix, arg, suffix))
+
+
+    def bench_cmdline_adjust(self, args):
+        """Adjusts benchmark invocation so as to pin to one CPU core"""
+
+        # The core mask is a bitfield, each bit representing a CPU. When
+        # a bit is set, it means the task may run on the corresponding core.
+        # E.g. a mask of 0x3 (0b11) means the process can run on cores
+        # 1 and 2. We want to pin the process to one CPU, so we only ever
+        # set one bit.
+        coremask = 1 << self.isolated_cpu
+        return  ["taskset", hex(coremask)] + args
 
     def _find_thermal_zones(self):
         return [x for x in os.listdir(LinuxPlatform.THERMAL_BASE) if
@@ -191,9 +231,69 @@ class LinuxPlatform(BasePlatform):
                 warn("Could not set CPU%d governor to 'ondemand' when "
                      "finished.\nFailing command:\n%s" % (cpu_n, cmd))
 
+    def check_preliminaries(self):
+        """Checks the system is in a suitable state for benchmarking"""
 
-    def check_cpus_throttled(self):
-        """Checks the CPU is configured for high performance
+        self._check_taskset_installed()
+        self._check_cpu_isolated()
+        self._check_cpu_governor()
+        self._check_cpu_scaler()
+
+    def _check_taskset_installed(self):
+        from distutils.spawn import find_executable
+        if not find_executable("taskset"):
+            fatal("taskset not installed. Krun needs this to pin the benchmarks to an isolated CPU")
+
+    def _check_cpu_isolated(self):
+        """Attempts to detect an isolated CPU to run benchmarks on"""
+
+        # XXX Isolating the CPU will not prevent kernel threads running.
+        # We *may* be able to prevent atleast some kernel threads running,
+        # but it seems cset (the facility to do this on Linux) is currently
+        # broken on Debian (and perhaps elsewhere too). Bug filed at Debian:
+        # http://www.mail-archive.com/debian-bugs-dist%40lists.debian.org/msg1349750.html
+
+        with open(LinuxPlatform.KERNEL_ARGS_FILE) as fh:
+            all_args = fh.read().strip()
+
+        args = all_args.split(" ")
+        for arg in args:
+            if '=' not in arg:
+                continue
+
+            k, v = arg.split("=", 1)
+
+            if k != "isolcpus":
+                continue
+            else:
+                if "," in v:
+                    debug("Multiple isolated CPUs detected: %s" % v)
+                    vs = v.split(",")
+                    isol_cpu = int(random.choice(vs))
+                    debug("Chose (at random) to isolate CPU %d" % isol_cpu)
+                else:
+                    isol_cpu = int(v)
+                    debug("Detected sole isolated CPU %d" % isol_cpu)
+                break
+        else:
+            self._fatal_kernel_arg(
+                "isolcpus=X",
+                "Krun failed to detect an isolated CPU!",
+                "Choose X > 0. When the system comes up, check `ps -Pef`.")
+
+        if isol_cpu == 0:
+            self._fatal_kernel_arg(
+                "isolcpus=X",
+                "Krun detected CPU 0 as the isolated CPU.\n"
+                "We reccommend using another CPU in case the first CPU "
+                "is ever special-cased in the kernel.",
+                "Choose X > 0")
+
+        self.isolated_cpu = isol_cpu
+
+
+    def _check_cpu_governor(self):
+        """Checks the right CPU governor is in effect
 
         Since we do not know which CPU benchmarks will be scheduled on,
         we simply check them all"""
@@ -221,6 +321,10 @@ class LinuxPlatform(BasePlatform):
                           "and is cpufrequtils installed?"
                           % (cpu_n, v, cmd, self.ROOT_CMD))
 
+    def _check_cpu_scaler(self):
+        """Check the correct CPU scaler is in effect"""
+
+        for cpu_n in xrange(self.num_cpus):
             # Check CPU scaler
             debug("Checking CPU scaler for CPU%d" % cpu_n)
             with open(LinuxPlatform.CPU_SCALER_FMT % cpu_n, "r") as fh:
@@ -230,15 +334,12 @@ class LinuxPlatform(BasePlatform):
                 if v == "intel_pstate":
                     scaler_files = [ "  * " + LinuxPlatform.CPU_SCALER_FMT % x for
                                     x in xrange(self.num_cpus)]
-                    fatal("The kernel is 'intel_pstate' for scaling instead of 'acpi-cpufreq.\n"
-                          "To use acpi-cpufreq, add 'intel_pstate=disable' to "
-                          "the kernel arguments.\nOn debian:\n"
-                          "  * Edit /etc/default/grub\n"
-                          "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
-                          "  * Run `sudo update-grub`\n"
-                          "When the system comes up, check the following "
-                          "files contain 'acpi-cpufreq':\n%s"
-                          % "\n".join(scaler_files))
+                    self._fatal_kernel_arg(
+                        "intel_pstate=disable",
+                        "The kernel is using 'intel_pstate' for scaling instead of 'acpi-cpufreq.",
+                        "When the system comes up, check the following "
+                        "files contain 'acpi-cpufreq':\n%s"
+                        % "\n".join(scaler_files))
                 else:
                     fatal("The kernel is using '%s' for CPU scaling instead "
                           "of using 'acpi-cpufreq'" % v)
@@ -269,6 +370,25 @@ class DebianLinuxPlatform(LinuxPlatform):
         LinuxPlatform.collect_audit(self)
         self.audit["packages"] = run_shell_cmd("dpkg-query -l")[0]
         self.audit["debian_version"] = run_shell_cmd("cat /etc/debian_version")[0]
+
+
+    def _fatal_kernel_arg(self, arg, prefix="", suffix=""):
+        """Debian specific advice on adding/changing a kernel arg"""
+
+        if prefix != "":
+            prefix += "\n"
+
+        if suffix != "":
+            suffix += "\n"
+
+        fatal("%s"
+              "Set `%s` in the kernel arguments.\n"
+              "To do this on Debian:\n"
+              "  * Edit /etc/default/grub\n"
+              "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
+              "  * Run `sudo update-grub`\n"
+              "%s" % (prefix, arg, suffix))
+
 
 def platform(mailer):
     if os.path.exists("/etc/debian_version"):

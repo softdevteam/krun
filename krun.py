@@ -70,6 +70,8 @@ class ExecutionJob(object):
         self.parameter = parameter
         self.config = config
 
+        self.vm_info["vm_def"].set_platform(sched.platform)
+
         # Used in results JSON and ETA dict
         self.key = "%s:%s:%s" % (self.benchmark, self.vm_name, self.variant)
 
@@ -152,7 +154,7 @@ class ExecutionScheduler(object):
         self.jobs_done = 0
         self.platform = platform(self.mailer)
 
-        self.platform.check_cpus_throttled()
+        self.platform.check_preliminaries()
         self.platform.set_base_cpu_temps()
         self.platform.collect_audit()
 
