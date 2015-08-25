@@ -140,6 +140,24 @@ class LinuxPlatform(BasePlatform):
         BasePlatform.__init__(self, mailer)
 
 
+    def _fatal_kernel_arg(self, arg, prefix, suffix):
+        """Bail out and inform user how to add a kernel argument"""
+
+        # This is generic Linux advice.
+        # If you can offer better distribution-specific advice, override this
+        # in a more specific Linux subclass.
+
+        if prefix != "":
+            prefix += "\n"
+
+        if suffix != "":
+            suffix += "\n"
+
+        fatal("%s"
+              "Set `%s` in the kernel arguments.\n"
+              "%s" % (prefix, arg, suffix))
+
+
     def bench_cmdline_adjust(self, args):
         """Adjusts benchmark invocation so as to pin to one CPU core"""
 
@@ -258,18 +276,18 @@ class LinuxPlatform(BasePlatform):
                     debug("Detected sole isolated CPU %d" % isol_cpu)
                 break
         else:
-            fatal("Krun failed to detect an isolated CPU!\n"
-                  "Did you add `isolcpus=X` to the kernel arguments?\n"
-                  "To do this on Debian:\n"
-                  "  * Edit /etc/default/grub\n"
-                  "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
-                  "  * Run `sudo update-grub`\n"
-                  "When the system comes up, check `ps -Pef`.")
+            self._fatal_kernel_arg(
+                "isolcpus=X",
+                "Krun failed to detect an isolated CPU!",
+                "Choose X > 0. When the system comes up, check `ps -Pef`.")
 
         if isol_cpu == 0:
-            fatal("Krun detected CPU 0 as the isolated CPU.\n"
-                  "We reccommend using another CPU in case the first CPU "
-                  "is ever special-cased in the kernel.")
+            self._fatal_kernel_arg(
+                "isolcpus=X",
+                "Krun detected CPU 0 as the isolated CPU.\n"
+                "We reccommend using another CPU in case the first CPU "
+                "is ever special-cased in the kernel.",
+                "Choose X > 0")
 
         self.isolated_cpu = isol_cpu
 
@@ -316,15 +334,12 @@ class LinuxPlatform(BasePlatform):
                 if v == "intel_pstate":
                     scaler_files = [ "  * " + LinuxPlatform.CPU_SCALER_FMT % x for
                                     x in xrange(self.num_cpus)]
-                    fatal("The kernel is 'intel_pstate' for scaling instead of 'acpi-cpufreq.\n"
-                          "To use acpi-cpufreq, add 'intel_pstate=disable' to "
-                          "the kernel arguments.\nOn debian:\n"
-                          "  * Edit /etc/default/grub\n"
-                          "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
-                          "  * Run `sudo update-grub`\n"
-                          "When the system comes up, check the following "
-                          "files contain 'acpi-cpufreq':\n%s"
-                          % "\n".join(scaler_files))
+                    self._fatal_kernel_arg(
+                        "intel_pstate=disable",
+                        "The kernel is using 'intel_pstate' for scaling instead of 'acpi-cpufreq.",
+                        "When the system comes up, check the following "
+                        "files contain 'acpi-cpufreq':\n%s"
+                        % "\n".join(scaler_files))
                 else:
                     fatal("The kernel is using '%s' for CPU scaling instead "
                           "of using 'acpi-cpufreq'" % v)
@@ -355,6 +370,25 @@ class DebianLinuxPlatform(LinuxPlatform):
         LinuxPlatform.collect_audit(self)
         self.audit["packages"] = run_shell_cmd("dpkg-query -l")[0]
         self.audit["debian_version"] = run_shell_cmd("cat /etc/debian_version")[0]
+
+
+    def _fatal_kernel_arg(self, arg, prefix="", suffix=""):
+        """Debian specific advice on adding/changing a kernel arg"""
+
+        if prefix != "":
+            prefix += "\n"
+
+        if suffix != "":
+            suffix += "\n"
+
+        fatal("%s"
+              "Set `%s` in the kernel arguments.\n"
+              "To do this on Debian:\n"
+              "  * Edit /etc/default/grub\n"
+              "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
+              "  * Run `sudo update-grub`\n"
+              "%s" % (prefix, arg, suffix))
+
 
 def platform(mailer):
     if os.path.exists("/etc/debian_version"):
