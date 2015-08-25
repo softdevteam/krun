@@ -229,6 +229,12 @@ class LinuxPlatform(BasePlatform):
     def _check_cpu_isolated(self):
         """Attempts to detect an isolated CPU to run benchmarks on"""
 
+        # XXX Isolating the CPU will not prevent kernel threads running.
+        # We *may* be able to prevent atleast some kernel threads running,
+        # but it seems cset (the facility to do this on Linux) is currently
+        # broken on Debian (and perhaps elsewhere too). Bug filed at Debian:
+        # http://www.mail-archive.com/debian-bugs-dist%40lists.debian.org/msg1349750.html
+
         with open(LinuxPlatform.KERNEL_ARGS_FILE) as fh:
             all_args = fh.read().strip()
 
