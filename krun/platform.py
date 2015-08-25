@@ -123,6 +123,7 @@ class LinuxPlatform(BasePlatform):
     THERMAL_BASE = "/sys/class/thermal/"
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
+    PERF_SAMPLE_RATE = "/proc/sys/kernel/perf_event_max_sample_rate"
     ROOT_CMD = "sudo"
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
@@ -238,6 +239,27 @@ class LinuxPlatform(BasePlatform):
         self._check_cpu_isolated()
         self._check_cpu_governor()
         self._check_cpu_scaler()
+        self._check_perf_samplerate()
+
+
+    def _check_perf_samplerate(self):
+        """Attempt to minimise time spent by the Linux perf kernel profiler.
+        You can't disable this, so the best we can do is set the sample
+        rate to the minimum value of one sample per second."""
+
+        with open(LinuxPlatform.PERF_SAMPLE_RATE) as fh:
+            sr = int(fh.read().strip())
+
+        if sr != 1:
+            cmd = "%s sh -c 'echo 1 > %s'" % \
+                (LinuxPlatform.ROOT_CMD, LinuxPlatform.PERF_SAMPLE_RATE)
+            stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+
+            if rc != 0:
+                fatal("perf profiler sample rate >1 p/s. "
+                      "Krun was unable to adjust it.\nFailing command:\n  %s"
+                      % cmd)
+
 
     def _check_taskset_installed(self):
         from distutils.spawn import find_executable
