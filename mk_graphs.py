@@ -75,22 +75,22 @@ def lag_xs(data, lag):
     return [data[x-lag] for x in range(len(data))]
 
 
-def draw_runseq_subplot(axis, data):
+def draw_runseq_subplot(axis, data, extra_title=""):
     axis.plot(data)
-    axis.set_title("Run Sequence")
+    axis.set_title("Run Sequence %s" % extra_title)
     axis.set_xlabel("Iteration")
     axis.set_ylabel("Time(s)")
 
 
-def draw_acr_subplot(axis, data):
+def draw_acr_subplot(axis, data, extra_title=""):
     vals = acf(data, nlags=len(data) / 2, unbiased=True)
     axis.plot(vals)
-    axis.set_title("Unbiased ACR")
+    axis.set_title("Unbiased ACR %s" % extra_title)
     axis.set_xlabel("Lag")
     axis.set_ylabel("Correlation")
 
 
-def draw_decomp_subplot(axis, data, freq, which, with_slider=False):
+def draw_decomp_subplot(axis, data, freq, which, with_slider=False, extra_title=""):
     if with_slider:
         sldr_ax = plt.axes([0.1, 0.02, 0.28, 0.03], axisbg=SLIDER_COLOUR)
         sldr = Slider(sldr_ax, 'Freq', 1, 100, valinit=freq, valfmt='%d')
@@ -111,7 +111,7 @@ def draw_decomp_subplot(axis, data, freq, which, with_slider=False):
             assert False  # unreachable
 
         axis.plot(vals)
-        axis.set_title(title)
+        axis.set_title(title + " " + extra_title)
         axis.set_xlabel("Iteration")
         axis.set_ylabel("Time(s)")
 
@@ -125,7 +125,7 @@ def draw_decomp_subplot(axis, data, freq, which, with_slider=False):
     do_draw(axis, data, freq)
 
 
-def draw_lag_subplot(axis, data, lag, with_slider=False):
+def draw_lag_subplot(axis, data, lag, with_slider=False, extra_title=""):
     if with_slider:
         sldr_ax = plt.axes([0.2, 0.02, 0.3, 0.03], axisbg=SLIDER_COLOUR)
         sldr = Slider(sldr_ax, 'Lag', 1, 100, valinit=lag, valfmt='%d')
@@ -135,7 +135,7 @@ def draw_lag_subplot(axis, data, lag, with_slider=False):
         axis.clear()
         lag = int(lag)
         xs = lag_xs(data, lag)
-        axis.set_title("Lag %d" % lag)
+        axis.set_title("Lag %d %s" % (lag, extra_title))
         axis.plot(xs, data, 'rx')
 
     def update(val):
@@ -148,39 +148,39 @@ def draw_lag_subplot(axis, data, lag, with_slider=False):
     do_draw(axis, data, lag)
 
 
-def zoom_on_runseq(data):
+def zoom_on_runseq(data, extra_title):
     fig, ax = plt.subplots(1, 1, squeeze=False)
-    draw_runseq_subplot(ax[0, 0], data)
+    draw_runseq_subplot(ax[0, 0], data, extra_title)
     fig.show()
 
 
-def zoom_on_lag(data, lag):
+def zoom_on_lag(data, lag, extra_title):
     fig, ax = plt.subplots(1, 1, squeeze=False)
-    draw_lag_subplot(ax[0, 0], data, lag, with_slider=True)
+    draw_lag_subplot(ax[0, 0], data, lag, with_slider=True, extra_title=extra_title)
     fig.show()
 
 
-def zoom_on_acr(data):
+def zoom_on_acr(data, extra_title):
     fig, ax = plt.subplots(1, 1, squeeze=False)
-    draw_acr_subplot(ax[0, 0], data)
+    draw_acr_subplot(ax[0, 0], data, extra_title)
     fig.show()
 
 
-def zoom_on_decomp(data, freq, which):
+def zoom_on_decomp(data, freq, which, extra_title):
     fig, ax = plt.subplots(1, 1, squeeze=False)
-    draw_decomp_subplot(ax[0, 0], data, freq, which, with_slider=True)
+    draw_decomp_subplot(ax[0, 0], data, freq, which, with_slider=True, extra_title=extra_title)
     fig.show()
 
 
-def zoom_on_hist(data):
+def zoom_on_hist(data, extra_title):
     fig, ax = plt.subplots(1, 1, squeeze=False)
-    draw_hist_subplot(ax[0, 0], data)
+    draw_hist_subplot(ax[0, 0], data, extra_title=extra_title)
     fig.show()
 
 
-def draw_hist_subplot(axis, data):
+def draw_hist_subplot(axis, data, extra_title=""):
     axis.hist(data, bins=BINS)
-    axis.set_title("Histogram")
+    axis.set_title("Histogram %s" % extra_title)
     axis.set_xlabel("Time(x)")
     axis.set_ylabel("Frequency")
 
@@ -198,27 +198,27 @@ def interactive(key, executions, chosen_exec_nums): # XXX one exec for now
 
     def mk_runseq_cb(data):
         def f(label):
-            zoom_on_runseq(data)
+            zoom_on_runseq(data, extra_title=key)
         return f
 
     def mk_lag_cb(data, lag):
         def f(label):
-            zoom_on_lag(data, lag)
+            zoom_on_lag(data, lag, extra_title=key)
         return f
 
     def mk_hist_cb(data):
         def f(label):
-            zoom_on_hist(data)
+            zoom_on_hist(data, extra_title=key)
         return f
 
     def mk_acr_cb(data):
         def f(label):
-            zoom_on_acr(data)
+            zoom_on_acr(data, extra_title=key)
         return f
 
     def mk_decomp_cb(data, freq, which):
         def f(label):
-            zoom_on_decomp(data, freq, which)
+            zoom_on_decomp(data, freq, which, extra_title=key)
         return f
 
     # run seq
