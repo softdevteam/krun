@@ -15,7 +15,7 @@ from logging import warn, info, error, debug
 
 import krun.util as util
 from krun.util import log_and_mail, log_name, fatal
-from krun.platform import platform
+from krun.platform import detect_platform
 from krun import ABS_TIME_FORMAT, UNKNOWN_TIME_DELTA, UNKNOWN_ABS_TIME
 from krun.mail import Mailer
 
@@ -69,8 +69,6 @@ class ExecutionJob(object):
         self.variant = variant
         self.parameter = parameter
         self.config = config
-
-        self.vm_info["vm_def"].set_platform(sched.platform)
 
         # Used in results JSON and ETA dict
         self.key = "%s:%s:%s" % (self.benchmark, self.vm_name, self.variant)
@@ -146,17 +144,13 @@ class ScheduleEmpty(Exception):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config_file, out_file, mail_recipients, max_mails):
-        self.mailer = Mailer(mail_recipients, max_mails=max_mails)
+    def __init__(self, config_file, out_file, mailer, platform):
+        self.mailer = mailer
 
         self.work_deque = deque()
         self.eta_avail = None
         self.jobs_done = 0
-        self.platform = platform(self.mailer)
-
-        self.platform.check_preliminaries()
-        self.platform.set_base_cpu_temps()
-        self.platform.collect_audit()
+        self.platform = platform
 
         # Record how long processes are taking so we can make a
         # rough ETA for the user.
@@ -359,6 +353,16 @@ def main():
         fatal("MAIL_TO config should be a list")
 
     max_mails = config.get("MAX_MAILS", 5)
+    mailer = Mailer(mail_recipients, max_mails=max_mails)
+
+    # Initialise platform instance and assign to VM defs.
+    # This needs to be done early, so VM sanity checks can run.
+    platform = detect_platform(mailer)
+    platform.check_preliminaries()
+    platform.set_base_cpu_temps()
+    platform.collect_audit()
+    for vm_name, vm_info in config["VMS"].items():
+        vm_info["vm_def"].set_platform(platform)
 
     attach_log_file(config_file)
 
@@ -366,8 +370,7 @@ def main():
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
-    sched = ExecutionScheduler(config_file, out_file, mail_recipients,
-                               max_mails)
+    sched = ExecutionScheduler(config_file, out_file, mailer, platform)
 
     eta_avail_job = None
     for exec_n in xrange(config["N_EXECUTIONS"]):

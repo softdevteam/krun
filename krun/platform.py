@@ -412,7 +412,7 @@ class DebianLinuxPlatform(LinuxPlatform):
               "%s" % (prefix, arg, suffix))
 
 
-def platform(mailer):
+def detect_platform(mailer):
     if os.path.exists("/etc/debian_version"):
         return DebianLinuxPlatform(mailer)
     else:
