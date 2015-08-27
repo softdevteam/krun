@@ -155,8 +155,6 @@ class GenericScriptingVMDef(BaseVMDef):
             return os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir,
                                 entry_point.target)
         else:
-            print(VM_SANITY_CHECKS_DIR)
-            print(entry_point.target)
             return os.path.join(VM_SANITY_CHECKS_DIR, entry_point.target)
 
     def _generic_scripting_run_exec(self, entry_point, benchmark, iterations,
@@ -304,7 +302,7 @@ class JRubyTruffleVMDef(JRubyVMDef):
     def _check_truffle_enabled(self):
         """Runs fake benchmark crashing if the Truffle is disabled in JRuby"""
 
-        info("Running jruby_check_truffled_enabled sanity check")
+        info("Running jruby_check_truffle_enabled sanity check")
         ep = EntryPoint("jruby_check_graal_enabled.rb")
         self.run_vm_sanity_check(ep)
 
