@@ -33,15 +33,18 @@ if __FILE__ == $0
 
     STDOUT.write "["
     krun_iter_num = 0
-    iters.times do
+    for i in 0..iters - 1 do  # inclusive upper bound
         STDERR.write "[iterations_runner.rb] iteration #{krun_iter_num + 1}/#{iters}\n"
 
-	start_time = clock_gettime_monotonic()
+        start_time = clock_gettime_monotonic()
         run_iter(param)
-	stop_time = clock_gettime_monotonic()
+        stop_time = clock_gettime_monotonic()
 
-	intvl = stop_time - start_time
-        STDOUT.write String(intvl) + ", "
+        intvl = stop_time - start_time
+        STDOUT.write String(intvl)
+        if i < iters - 1 then
+            STDOUT.Write ", "
+        end
     end
     STDOUT.write "]"
 end

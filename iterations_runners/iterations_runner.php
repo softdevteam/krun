@@ -36,7 +36,7 @@ if (!function_exists("run_iter")) {
 
 /* OK, all is well, let's run. */
 
-echo "["; // we are going to print a Python eval-able list.
+echo "["; // we are going to print a JSON list.
 for ($BM_i = 0; $BM_i < $BM_iters; $BM_i++) {
     fprintf(STDERR, "[iterations_runner.php] iteration %d/%d\n", $BM_i + 1, $BM_iters);
 
@@ -45,7 +45,9 @@ for ($BM_i = 0; $BM_i < $BM_iters; $BM_i++) {
 	$stop_time = clock_gettime_monotonic();
 
 	echo $stop_time - $start_time;
-	echo ", ";
+    if ($BM_i < $BM_iters - 1) {
+        echo ", ";
+    }
 }
 echo "]\n";
 

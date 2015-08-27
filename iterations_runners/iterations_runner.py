@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     # OK, all is well, let's run.
 
-    sys.stdout.write("[") # we are going to print a Python eval-able list.
+    sys.stdout.write("[") # we are going to print a JSON list
     for i in xrange(iters):
         sys.stderr.write(
             "[iterations_runner.py] iteration %d/%d\n" % (i + 1, iters))
@@ -45,7 +45,10 @@ if __name__ == "__main__":
         bench_func(param)
         stop_time = clock_gettime_monotonic()
 
-        sys.stdout.write("%f, " % (stop_time - start_time))
+        sys.stdout.write("%f" % (stop_time - start_time))
+        if i < iters - 1:
+            sys.stdout.write(", ")
+
         sys.stdout.flush()
 
     sys.stdout.write("]\n")

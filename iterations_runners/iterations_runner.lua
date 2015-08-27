@@ -29,7 +29,12 @@ for BM_i = 1, BM_iters, 1 do -- inclusive upper bound in lua
     BM_end_time = kruntime.clock_gettime_monotonic()
 
     BM_intvl = BM_end_time - BM_start_time
-    io.stdout:write(BM_intvl .. ", ")
+
+    io.stdout:write(BM_intvl)
+    if BM_i < BM_iters then
+        io.stdout:write(", ")
+    end
+
     io.stdout:flush()
 end
 

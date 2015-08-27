@@ -44,7 +44,11 @@ class IterationsRunner {
             double stopTime = IterationsRunner.JNI_clock_gettime_monotonic();
 
             double intvl = (stopTime - startTime);
-            System.out.print(intvl + ", ");
+            System.out.print(intvl);
+
+            if (i < iterations - 1) {
+                System.out.print(", ");
+            }
         }
         System.out.print("]");
 

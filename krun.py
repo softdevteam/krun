@@ -118,18 +118,17 @@ class ExecutionJob(object):
             self.parameter, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
-        eval_exn = None
+        json_exn = None
         try:
-            iterations_results = eval(stdout) # we should get a list of floats
-        except Exception as e:  # eval can raise any Python exception
-            eval_exn = e
+            iterations_results = json.loads(stdout)  # expect a list of floats
+        except Exception as e:  # docs don't say what can arise, play safe.
+            json_exn = e
 
-        if eval_exn or rc != 0:
+        if json_exn or rc != 0:
             # Something went wrong
             rule = 50 * "-"
-            err_s = ("Benchmark returned non-zero or didn't emit a "
-                     "parsable list on stdout.\n")
-            if eval_exn:
+            err_s = ("Benchmark returned non-zero or didn't emit JSON list")
+            if json_exn:
                 err_s += "Exception string: %s\n" % str(e)
             err_s += "return code: %d\n" % rc
             err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
