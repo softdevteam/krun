@@ -154,7 +154,7 @@ class ScheduleEmpty(Exception):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config_file, out_file, mailer, platform):
+    def __init__(self, config_file, log_filename, out_file, mailer, platform):
         self.mailer = mailer
 
         self.work_deque = deque()
@@ -174,7 +174,7 @@ class ExecutionScheduler(object):
         # file names
         self.config_file = config_file
         self.out_file = out_file
-        self.log_path = os.path.abspath(log_name(self.config_file))
+        self.log_path = log_filename
 
     def set_eta_avail(self):
         """call after adding job before eta should become available"""
@@ -374,13 +374,13 @@ def main():
     for vm_name, vm_info in config["VMS"].items():
         vm_info["vm_def"].set_platform(platform)
 
-    attach_log_file(config_file)
+    log_filename = attach_log_file(config_file)
 
     sanity_checks(config)
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
-    sched = ExecutionScheduler(config_file, out_file, mailer, platform)
+    sched = ExecutionScheduler(config_file, log_filename, out_file, mailer, platform)
 
     eta_avail_job = None
     for exec_n in xrange(config["N_EXECUTIONS"]):
@@ -423,9 +423,11 @@ def setup_logging():
 
 
 def attach_log_file(config_filename):
-    fh = logging.FileHandler(log_name(config_filename), mode='w')
+    log_filename = log_name(config_filename)
+    fh = logging.FileHandler(log_filename, mode='w')
     fh.setFormatter(PLAIN_FORMATTER)
     logging.root.addHandler(fh)
+    return os.path.abspath(log_filename)
 
 if __name__ == "__main__":
     setup_logging()
