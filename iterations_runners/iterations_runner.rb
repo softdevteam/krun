@@ -43,7 +43,7 @@ if __FILE__ == $0
         intvl = stop_time - start_time
         STDOUT.write String(intvl)
         if i < iters - 1 then
-            STDOUT.Write ", "
+            STDOUT.write ", "
         end
     end
     STDOUT.write "]"
