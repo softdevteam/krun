@@ -113,16 +113,25 @@ class ExecutionJob(object):
 
         # Rough ETA execution timer
         exec_start_rough = time.time()
-        stdout, stderr = vm_def.run_exec(entry_point, self.benchmark, self.vm_info["n_iterations"],
-                                         self.parameter, heap_limit_kb)
+        stdout, stderr, rc = vm_def.run_exec(
+            entry_point, self.benchmark, self.vm_info["n_iterations"],
+            self.parameter, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
+        eval_exn = None
         try:
             iterations_results = eval(stdout) # we should get a list of floats
         except Exception as e:  # eval can raise any Python exception
+            eval_exn = e
+
+        if eval_exn or rc != 0:
+            # Something went wrong
             rule = 50 * "-"
-            err_s = "Benchmark didn't emit a parsable list on stdout.\n"
-            err_s += "Exception string: %s\n" % str(e)
+            err_s = ("Benchmark returned non-zero or didn't emit a "
+                     "parsable list on stdout.\n")
+            if eval_exn:
+                err_s += "Exception string: %s\n" % str(e)
+            err_s += "return code: %d\n" % rc
             err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
             err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
             log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, err_s)

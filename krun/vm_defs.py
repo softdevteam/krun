@@ -107,10 +107,12 @@ class BaseVMDef(object):
             info("Dry run. Skipping.")
             return "[]"
 
-        stdout, stderr = subprocess.Popen(
+        p = subprocess.Popen(
             actual_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            env=use_env).communicate()
-        return stdout, stderr
+            env=use_env)
+        stdout, stderr = p.communicate()
+
+        return stdout, stderr, p.returncode
 
     def sanity_checks(self):
         pass
@@ -123,10 +125,11 @@ class BaseVMDef(object):
 
         # Use the same mechanism as the real benchmarks would use.
         iterations, param = 1, 666
-        stdout, stderr = self.run_exec(entry_point, None, iterations, param,
-                                       SANITY_CHECK_HEAP_KB, sanity_check=True)
+        stdout, stderr, rc = self.run_exec(
+            entry_point, None, iterations, param, SANITY_CHECK_HEAP_KB,
+            sanity_check=True)
 
-        err = False
+        err = rc != 0
         try:
             ls = eval(stdout)
         except:
@@ -137,7 +140,8 @@ class BaseVMDef(object):
 
         if err:
             fatal("VM sanity check failed '%s'\n"
-                  "stdout:%s\nstderr: %s" % (entry_point.target, stdout, stderr))
+                  "return code: %s\nstdout:%s\nstderr: %s" %
+                  (entry_point.target, rc, stdout, stderr))
 
 class GenericScriptingVMDef(BaseVMDef):
     def __init__(self, vm_path, iterations_runner, entry_point=None, subdir=None):
