@@ -19,6 +19,8 @@ for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
 
 	var BM_intvl = BM_stop_time - BM_start_time;
 	print(BM_intvl);
-	print(", ")
+    if (BM_i < BM_n_iters - 1) {
+        print(", ")
+    }
 }
 print("]");
