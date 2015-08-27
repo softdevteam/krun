@@ -125,7 +125,7 @@ class ExecutionJob(object):
             err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
             err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
             log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, err_s)
-            return []
+            iterations_results = []
         else:
             # Note that because we buffered stderr, we will be seeing the
             # 'iteration x/y' message from the iterations runner *after*
@@ -133,6 +133,7 @@ class ExecutionJob(object):
             info(stderr)
 
         # Add to ETA estimation figures
+        # Note we still add a time estimate even if the benchmark crashed.
         self.add_exec_time(exec_time_rough)
 
         return iterations_results
