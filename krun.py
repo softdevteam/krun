@@ -119,9 +119,10 @@ class ExecutionJob(object):
 
         try:
             iterations_results = eval(stdout) # we should get a list of floats
-        except SyntaxError:
+        except Exception as e:  # eval can raise any Python exception
             rule = 50 * "-"
             err_s = "Benchmark didn't emit a parsable list on stdout.\n"
+            err_s += "Exception string: %s\n" % str(e)
             err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
             err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
             log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, err_s)
