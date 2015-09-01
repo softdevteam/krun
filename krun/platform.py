@@ -105,6 +105,9 @@ class BasePlatform(object):
     def check_preliminaries(self):
         raise NotImplementedError("abstract")
 
+    def unbuffer_fd(self, fd):
+        raise NotImplementedError("abstract")
+
     # And you may want to extend this
     def collect_audit(self):
         self.audit["uname"] = run_shell_cmd("uname")[0]
@@ -117,7 +120,18 @@ class BasePlatform(object):
         Returns a possibly mutated argument list."""
         return args  # default does nothing.
 
-class LinuxPlatform(BasePlatform):
+
+class UnixLikePlatform(BasePlatform):
+    """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
+
+    def unbuffer_fd(self, fd):
+        import fcntl
+        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fl |= os.O_SYNC
+        fcntl.fcntl(fd, fcntl.F_SETFL, fl)
+
+
+class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
 
     THERMAL_BASE = "/sys/class/thermal/"
