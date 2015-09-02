@@ -32,8 +32,7 @@ if __FILE__ == $0
     require("#{benchmark}")
 
     STDOUT.write "["
-    krun_iter_num = 0
-    for i in 0..iters - 1 do  # inclusive upper bound
+    for krun_iter_num in 0..iters - 1 do  # inclusive upper bound
         STDERR.write "[iterations_runner.rb] iteration #{krun_iter_num + 1}/#{iters}\n"
 
         start_time = clock_gettime_monotonic()
@@ -42,7 +41,7 @@ if __FILE__ == $0
 
         intvl = stop_time - start_time
         STDOUT.write String(intvl)
-        if i < iters - 1 then
+        if krun_iter_num < iters - 1 then
             STDOUT.write ", "
         end
     end
