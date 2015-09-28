@@ -1,6 +1,7 @@
 import subprocess
 import os
 import select
+import fnmatch
 
 from logging import info, debug
 from krun import EntryPoint
@@ -292,6 +293,34 @@ class JavaVMDef(BaseVMDef):
         classfile_path = self._get_classfile_path(benchmark, entry_point)
         if not os.path.exists(classfile_path):
             fatal("Benchmark file non-existent: %s" % classfile_path)
+
+
+def find_internal_jvmci_java_bin(base_dir):
+    """
+    The jvmci internal jdk8 seems to move around depending upon
+    the JVM with which it was built.
+
+    E.g. the java binary could be:
+    jvmci/jdk1.8.0-internal/product/bin/java
+
+    or it could be:
+    jvmci/jdk1.8.0_66-internal/product/bin/java
+
+    This is a helper function to try and find the 'java' binary
+    inside this "moving" directory.
+
+    arguments:
+    base_dir -- base jvmci directory"""
+
+    matches = fnmatch.filter(os.listdir(base_dir), 'jdk1.8.0*internal*')
+
+    if len(matches) == 1:
+        return os.path.join(base_dir, matches[0], "product", "bin", "java")
+    elif len(matches) > 1:
+        raise Exception("Found more than one jvmci internal jdk in %s" % base_dir)
+    else:
+        raise Exception("couldn't locate jvmci internal jdk in %s" % base_dir)
+
 
 class GraalVMDef(JavaVMDef):
     def __init__(self, vm_path, java_home=None):
