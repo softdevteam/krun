@@ -8,7 +8,6 @@ from subprocess import Popen, PIPE
 FROM_USER = "noreply"
 SMTP_HOST = "localhost"
 WRAP_THRESHOLD = 72
-RULE = WRAP_THRESHOLD * "#"
 
 QUOTA_THRESHOLD_TEMPLATE = (
     "Note: krun is configured to send no more than %d mails per-run. "
@@ -42,9 +41,7 @@ class Mailer(object):
 
         if self.n_mails_sent < self.max_mails or bypass_limiter:
             body = "Message from krun running on %s:\n\n" % self.fqdn
-            body += RULE + "\n"
             body += inner_body + "\n"
-            body += RULE + "\n"
 
             if self.n_mails_sent == self.max_mails - 1 and not bypass_limiter:
                 body += "\n\n%s" % self._wrap_para(
