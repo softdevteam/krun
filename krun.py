@@ -24,23 +24,17 @@ BENCH_DRYRUN = os.environ.get("BENCH_DRYRUN", False)
 HERE = os.path.abspath(os.getcwd())
 
 
-try:
-    import colorlog
-    COLOURS = True
-except ImportError:
-    COLOURS = False
-
-COLOUR_FORMATTER = colorlog.ColoredFormatter(
-    "%(log_color)s[%(asctime)s %(levelname)s] %(message)s%(reset)s",
-    ABS_TIME_FORMAT)
-PLAIN_FORMATTER = logging.Formatter(
+CONSOLE_FORMATTER = PLAIN_FORMATTER = logging.Formatter(
     '[%(asctime)s: %(levelname)s] %(message)s',
     ABS_TIME_FORMAT)
+try:
+    import colorlog
+    CONSOLE_FORMATTER = colorlog.ColoredFormatter(
+        "%(log_color)s[%(asctime)s %(levelname)s] %(message)s%(reset)s",
+        ABS_TIME_FORMAT)
+except ImportError:
+    pass
 
-if COLOURS:
-    CONSOLE_FORMATTER = COLOUR_FORMATTER
-else:
-    CONSOLE_FORMATTER = PLAIN_FORMATTER
 
 def usage():
     print(__doc__)
