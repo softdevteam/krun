@@ -66,6 +66,24 @@ class EnvChangeAppend(EnvChange):
             env[self.var] = "%s%s%s" % (cur_val, os.pathsep, self.val)
 
 
+def print_stderr_linewise(info):
+    next_stderr_line = ""
+    while True:
+        d = yield
+        # Take what we just read, and any partial line we had from
+        # a previous read, and see if we can make full lines.
+        # If so, we can print them, otherwise we keep them for
+        # the next time around.
+        next_stderr_line += d
+        while True:
+            try:
+                nl = next_stderr_line.index("\n")
+            except ValueError:
+                break  # no newlines
+            emit = next_stderr_line[:nl]
+            next_stderr_line = next_stderr_line[nl + 1:]
+            info("stderr: " + emit)
+
 class BaseVMDef(object):
     def __init__(self, iterations_runner):
         self.iterations_runner = iterations_runner
@@ -142,7 +160,8 @@ class BaseVMDef(object):
             self.platform.unbuffer_fd(f)
 
         stderr_data, stdout_data = [], []
-        next_stderr_line = ""
+        stderr_consumer = print_stderr_linewise(info)
+        stderr_consumer.next() # start the generator
 
         open_fds = [stderr_fd, stdout_fd]
         while open_fds:
@@ -161,21 +180,7 @@ class BaseVMDef(object):
                     open_fds.remove(stderr_fd)
                 else:
                     stderr_data.append(d)
-
-                    # Take what we just read, and any partial line we had from
-                    # a previous read, and see if we can make full lines.
-                    # If so, we can print them, otherwise we keep them for
-                    # the next time around.
-                    next_stderr_line += d
-                    while True:
-                        try:
-                            nl = next_stderr_line.index("\n")
-                        except ValueError:
-                            break  # no newlines
-                        emit = next_stderr_line[:nl]
-                        next_stderr_line = next_stderr_line[nl + 1:]
-                        info("stderr: " + emit)
-
+                    stderr_consumer.send(d)
         # We know stderr and stdout are closed.
         # Now we are just waiting for the process to exit, which may have
         # already happened of course.
