@@ -67,22 +67,25 @@ class EnvChangeAppend(EnvChange):
 
 
 def print_stderr_linewise(info):
-    next_stderr_line = ""
+    stderr_partial_line = []
     while True:
         d = yield
         # Take what we just read, and any partial line we had from
         # a previous read, and see if we can make full lines.
         # If so, we can print them, otherwise we keep them for
         # the next time around.
-        next_stderr_line += d
+        startindex = 0
         while True:
             try:
-                nl = next_stderr_line.index("\n")
+                nl = d.index("\n", startindex)
             except ValueError:
+                stderr_partial_line.append(d[startindex:])
                 break  # no newlines
-            emit = next_stderr_line[:nl]
-            next_stderr_line = next_stderr_line[nl + 1:]
-            info("stderr: " + emit)
+            emit = d[startindex:nl]
+            info("stderr: " + "".join(stderr_partial_line) + emit)
+            stderr_partial_line = []
+            startindex = nl + 1
+
 
 class BaseVMDef(object):
     def __init__(self, iterations_runner):
