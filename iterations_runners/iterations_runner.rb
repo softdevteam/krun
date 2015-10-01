@@ -34,6 +34,7 @@ if __FILE__ == $0
     STDOUT.write "["
     for krun_iter_num in 0..iters - 1 do  # inclusive upper bound
         STDERR.write "[iterations_runner.rb] iteration #{krun_iter_num + 1}/#{iters}\n"
+	STDERR.flush  # JRuby doesn't flush on newline.
 
         start_time = clock_gettime_monotonic()
         run_iter(param)
