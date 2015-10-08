@@ -40,8 +40,10 @@ def read_config(path):
 
 
 def output_name(config_path):
+    """Makes a result file name based upon the config file name."""
+
     assert config_path.endswith(".krun")
-    return config_path[:-5] + "_results.json"
+    return config_path[:-5] + "_results.json.bz2"
 
 def log_name(config_path):
     assert config_path.endswith(".krun")

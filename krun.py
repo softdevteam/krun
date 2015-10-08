@@ -12,6 +12,7 @@ from collections import deque
 import datetime
 import resource
 from logging import warn, info, error, debug
+import bz2  # decent enough compression with Python 2.7 compatibility.
 
 import krun.util as util
 from krun.util import log_and_mail, log_name, fatal
@@ -43,14 +44,16 @@ def usage():
 def mean(seq):
     return sum(seq) / float(len(seq))
 
-def dump_json(config_file, out_file, all_results, audit):
-    # dump out into json file, incluing contents of the config file
+
+def dump_results(config_file, out_file, all_results, audit):
+    """Dump results (and a few other bits) into a bzip2 json file."""
+
     with open(config_file, "r") as f:
         config_text = f.read()
 
     to_write = {"config": config_text, "data": all_results, "audit": audit}
 
-    with open(out_file, "w") as f:
+    with bz2.BZ2File(out_file, "w") as f:
         f.write(json.dumps(to_write, indent=1, sort_keys=True))
 
 class ExecutionJob(object):
@@ -255,7 +258,7 @@ class ExecutionScheduler(object):
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
-            dump_json(self.config_file, self.out_file, self.results,
+            dump_results(self.config_file, self.out_file, self.results,
                       self.platform.audit)
 
             self.jobs_done += 1
