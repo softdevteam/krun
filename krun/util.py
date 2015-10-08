@@ -4,6 +4,9 @@ from subprocess import Popen, PIPE
 from logging import error
 from krun import LOGFILE_FILENAME_TIME_FORMAT
 
+FLOAT_FORMAT = ".6f"
+
+
 def should_skip(config, this_key):
     skips = config["SKIP"]
 
@@ -37,8 +40,10 @@ def read_config(path):
 
 
 def output_name(config_path):
+    """Makes a result file name based upon the config file name."""
+
     assert config_path.endswith(".krun")
-    return config_path[:-5] + "_results.json"
+    return config_path[:-5] + "_results.json.bz2"
 
 def log_name(config_path):
     assert config_path.endswith(".krun")
@@ -55,6 +60,16 @@ def log_and_mail(mailer, log_fn, subject, msg, exit=False, bypass_limiter=False)
     mailer.send(subject, msg, bypass_limiter)
     if exit:
         sys.exit(1)
+
+
+def format_raw_exec_results(exec_data):
+    """Formats the raw results from an iterations runner.
+    For now, this rounds the results to a fixed number of decimal points.
+    This is needed because every language has its own rules WRT floating point
+    precision."""
+
+    return [float(format(x, FLOAT_FORMAT)) for x in exec_data]
+
 
 def run_shell_cmd(cmd, failure_fatal=True):
     p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
