@@ -245,7 +245,8 @@ class ExecutionScheduler(object):
                 info("Jobs until ETA known: %s" % self.jobs_until_eta_known())
 
             job = self.next_job()
-            exec_result = job.run(self.mailer)
+            raw_exec_result = job.run(self.mailer)
+            exec_result = util.format_raw_exec_results(raw_exec_result)
 
             if not exec_result and not BENCH_DRYRUN:
                 errors = True
