@@ -1,29 +1,25 @@
-HERE != pwd
-ITERATIONS_RUNNERS_DIR = ${HERE}/iterations_runners
+JAVAC ?= javac
+
+PASS_DOWN_ARGS =	ENABLE_JAVA=${ENABLE_JAVA} JAVAC=${JAVAC} \
+			JAVA_CPPFLAGS=${JAVA_CPPFLAGS} \
+			JAVA_CFLAGS=${JAVA_CFLAGS} JAVA_LDFLAGS=${JAVA_LDFLAGS} \
+			CC=${CC} CFLAGS=${CFLAGS} CPPFLAGS=${CPPFLAGS} \
+			LDFLAGS=${LDFLAGS}
+
+.PHONY: libkruntime vm-sanity-checks clean
 
 all: iterations-runners libkruntime vm-sanity-checks
 
-.PHONY: iterations-runners libkruntime clean-iterations-runners
-.PHONY: clean-libkruntime clean-vm-sanity-checks clean
-
-iterations-runners:
-	cd iterations_runners && javac *.java
+iterations-runners: libkruntime
+	cd iterations_runners && ${MAKE} ${PASS_DOWN_ARGS}
 
 libkruntime:
-	cd libkruntime && ${MAKE} JAVA_CPPFLAGS=${JAVA_CPPFLAGS} \
-		JAVA_CFLAGS=${JAVA_CFLAGS} JAVA_LDFLAGS=${JAVA_LDFLAGS}
+	cd libkruntime && ${MAKE} ${PASS_DOWN_ARGS}
 
 vm-sanity-checks:
-	cd vm_sanity_checks && \
-		CLASSPATH=${ITERATIONS_RUNNERS_DIR} javac *.java
+	cd vm_sanity_checks && ${MAKE} ${PASS_DOWN_ARGS}
 
-clean: clean-iterations-runners clean-libkruntime
-
-clean-iterations-runners:
-	cd krun/iteration_runners && rm *.class
-
-clean-vm-sanity-checks:
-	cd krun/vm_sanity_checks && rm *.class
-
-clean-libkruntime:
+clean:
+	cd iterations_runners && ${MAKE} clean
 	cd libkruntime && ${MAKE} clean
+	cd vm_sanity_checks && ${MAKE} clean
