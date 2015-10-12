@@ -1,5 +1,7 @@
 /*
  * C function to get at the monotonic clock.
+ *
+ * Code style is KNF with 4 spaces instead of tabs.
  */
 #include <time.h>
 #include <stdlib.h>
@@ -34,7 +36,8 @@ clock_gettime_monotonic()
 #ifdef WITH_JAVA
 #include <jni.h>
 
-JNIEXPORT jdouble JNICALL Java_IterationsRunner_JNI_1clock_1gettime_1monotonic(JNIEnv *e, jclass c) {
-	return (jdouble) clock_gettime_monotonic();
+JNIEXPORT jdouble JNICALL
+Java_IterationsRunner_JNI_1clock_1gettime_1monotonic(JNIEnv *e, jclass c) {
+    return (jdouble) clock_gettime_monotonic();
 }
 #endif
