@@ -9,8 +9,12 @@ from krun import ABS_TIME_FORMAT
 from krun.util import fatal, run_shell_cmd, log_and_mail
 from logging import warn, info, debug
 from time import localtime
+from abc import ABCMeta, abstractmethod
+
 
 class BasePlatform(object):
+    __metaclass__ = ABCMeta
+
     CPU_TEMP_MANDATORY_WAIT = 1
     CPU_TEMP_POLL_FREQ = 10                 # seconds between polls
     CPU_TEMP_POLLS_BEFORE_MELTDOWN = 60     # times 10 = ten mins
@@ -93,20 +97,25 @@ class BasePlatform(object):
             time.sleep(BasePlatform.CPU_TEMP_POLL_FREQ)
 
     # When porting to a new platform, implement the following:
+    @abstractmethod
     def take_cpu_temp_readings(self):
-        raise NotImplementedError("abstract")
+        pass
 
+    @abstractmethod
     def set_base_cpu_temps(self):
-        raise NotImplementedError("abstract")
+        pass
 
+    @abstractmethod
     def has_cpu_cooled(self):
-        raise NotImplementedError("abstract")
+        pass
 
+    @abstractmethod
     def check_preliminaries(self):
-        raise NotImplementedError("abstract")
+        pass
 
+    @abstractmethod
     def unbuffer_fd(self, fd):
-        raise NotImplementedError("abstract")
+        pass
 
     # And you may want to extend this
     def collect_audit(self):
