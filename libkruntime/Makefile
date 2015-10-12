@@ -1,12 +1,17 @@
-EXTRA_CFLAGS=-Wall
+LIBKRUNTIME_CFLAGS =	-Wall -shared -fPIC
+
+ifeq (${ENABLE_JAVA},1)
+LIBKRUNTIME_CFLAGS += -DWITH_JAVA=1
+endif
+
+.PHONY: clean
 
 all: libkruntime.so
 
 libkruntime.so: libkruntime.c
-	${CC} ${JAVA_CPPFLAGS} ${JAVA_CFLAGS} ${EXTRA_CFLAGS} ${CFLAGS} \
-		${CPPFLAGS} ${JAVA_LDFLAGS} ${LDFLAGS} -shared -fPIC \
-		libkruntime.c -o libkruntime.so
+	${CC} ${JAVA_CPPFLAGS} ${JAVA_CFLAGS} ${LIBKRUNTIME_CFLAGS} ${CFLAGS} \
+		${CPPFLAGS} ${JAVA_LDFLAGS} ${LDFLAGS} libkruntime.c \
+		-o libkruntime.so
 
-.PHONY: clean
 clean:
-	rm libkruntime.so
+	-rm libkruntime.so
