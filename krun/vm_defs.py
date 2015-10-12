@@ -2,6 +2,7 @@ import subprocess
 import os
 import select
 import fnmatch
+from abc import ABCMeta, abstractmethod
 
 from logging import info, debug
 from krun import EntryPoint
@@ -34,6 +35,8 @@ BASE_ENV.update({"LD_LIBRARY_PATH": os.path.join(DIR, "..", "libkruntime")})
 
 
 class EnvChange(object):
+    __metaclass__ = ABCMeta
+
     def __init__(self, var, val):
         self.var, self.val = var, val
 
@@ -44,8 +47,9 @@ class EnvChange(object):
         for change in changes:
             change.apply(env)
 
+    @abstractmethod
     def apply(self, env):
-        raise NotImplementedError("abstract")
+        pass
 
 
 class EnvChangeSet(EnvChange):
@@ -88,6 +92,8 @@ def print_stderr_linewise(info):
 
 
 class BaseVMDef(object):
+    __metaclass__ = ABCMeta
+
     def __init__(self, iterations_runner):
         self.iterations_runner = iterations_runner
 
@@ -114,9 +120,10 @@ class BaseVMDef(object):
     def add_env_change(self, change):
         self.common_env_changes.append(change)
 
+    @abstractmethod
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
                  sanity_check=False):
-        raise NotImplementedError("abstract")
+        pass
 
     def _run_exec(self, args, heap_lim_k, bench_env_changes=None):
         """ Deals with actually shelling out """
@@ -210,8 +217,9 @@ class BaseVMDef(object):
     def sanity_checks(self):
         pass
 
+    @abstractmethod
     def check_benchmark_files(self, benchmark, entry_point):
-        raise NotImplementedError("abstract")
+        pass
 
     def run_vm_sanity_check(self, entry_point):
         """Runs a VM specific sanity check (fake benchmark)."""
