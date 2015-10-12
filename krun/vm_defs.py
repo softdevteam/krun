@@ -101,13 +101,21 @@ class BaseVMDef(object):
 
         self.platform = None  # Set later
 
+    def _get_benchmark_path(self, benchmark, entry_point, sanity_check=False):
+        if not sanity_check:
+            return os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir,
+                                entry_point.target)
+        else:
+            return os.path.join(VM_SANITY_CHECKS_DIR, entry_point.target)
+
     def set_platform(self, platform):
         self.platform = platform
 
     def add_env_change(self, change):
         self.common_env_changes.append(change)
 
-    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k):
+    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
+                 sanity_check=False):
         raise NotImplementedError("abstract")
 
     def _run_exec(self, args, heap_lim_k, bench_env_changes=None):
@@ -202,7 +210,7 @@ class BaseVMDef(object):
     def sanity_checks(self):
         pass
 
-    def check_benchmark_files(self, ep):
+    def check_benchmark_files(self, benchmark, entry_point):
         raise NotImplementedError("abstract")
 
     def run_vm_sanity_check(self, entry_point):
@@ -228,6 +236,29 @@ class BaseVMDef(object):
                   "return code: %s\nstdout:%s\nstderr: %s" %
                   (entry_point.target, rc, stdout, stderr))
 
+
+class NativeCodeVMDef(BaseVMDef):
+    """Not really a "VM definition" at all. Runs native code."""
+
+    def __init__(self):
+        iter_runner = os.path.join(ITERATIONS_RUNNER_DIR,
+                                   "iterations_runner_c")
+        BaseVMDef.__init__(self, iter_runner)
+
+    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
+                 sanity_check=False):
+        benchmark_path = self._get_benchmark_path(benchmark, entry_point,
+                                                  sanity_check=sanity_check)
+        args = [self.iterations_runner,
+                benchmark_path, str(iterations), str(param)]
+        return self._run_exec(args, heap_lim_k)
+
+    def check_benchmark_files(self, benchmark, entry_point):
+        benchmark_path = self._get_benchmark_path(benchmark, entry_point)
+        if not os.path.exists(benchmark_path):
+            fatal("Benchmark object non-existent: %s" % benchmark_path)
+
+
 class GenericScriptingVMDef(BaseVMDef):
     def __init__(self, vm_path, iterations_runner, entry_point=None, subdir=None):
         self.vm_path = vm_path
@@ -235,17 +266,10 @@ class GenericScriptingVMDef(BaseVMDef):
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
         BaseVMDef.__init__(self, fp_iterations_runner)
 
-    def _get_script_path(self, benchmark, entry_point, sanity_check=False):
-        if not sanity_check:
-            return os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir,
-                                entry_point.target)
-        else:
-            return os.path.join(VM_SANITY_CHECKS_DIR, entry_point.target)
-
     def _generic_scripting_run_exec(self, entry_point, benchmark, iterations,
                                     param, heap_lim_k, sanity_check=False):
-        script_path = self._get_script_path(benchmark, entry_point,
-                                            sanity_check=sanity_check)
+        script_path = self._get_benchmark_path(benchmark, entry_point,
+                                               sanity_check=sanity_check)
         args = [self.vm_path] + self.extra_vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
         return self._run_exec(args, heap_lim_k)
 
@@ -256,7 +280,7 @@ class GenericScriptingVMDef(BaseVMDef):
             fatal("VM path non-existent: %s" % self.vm_path)
 
     def check_benchmark_files(self, benchmark, entry_point):
-        script_path = self._get_script_path(benchmark, entry_point)
+        script_path = self._get_benchmark_path(benchmark, entry_point)
         if not os.path.exists(script_path):
             fatal("Benchmark file non-existent: %s" % script_path)
 
