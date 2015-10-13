@@ -68,14 +68,14 @@ main(int argc, char **argv)
 
     krun_dl_handle = dlopen(krun_benchmark, RTLD_NOW | RTLD_LOCAL);
     if (krun_dl_handle == NULL) {
-        errx(EXIT_FAILURE, dlerror());
+        errx(EXIT_FAILURE, "%s", dlerror());
         goto clean;
     }
 
     /* Odd pointer gymnastics are intentional. See Linux dlopen manual */
     *(void **) (&krun_bench_func) = dlsym(krun_dl_handle, BENCH_FUNC_NAME);
     if (krun_bench_func == NULL) {
-        errx(EXIT_FAILURE, dlerror());
+        errx(EXIT_FAILURE, "%s", dlerror());
         goto clean;
     }
 
