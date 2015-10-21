@@ -23,6 +23,8 @@ from krun.mail import Mailer
 BENCH_DRYRUN = os.environ.get("BENCH_DRYRUN", False)
 
 HERE = os.path.abspath(os.getcwd())
+DIR = os.path.abspath(os.path.dirname(__file__))
+MISC_SANITY_CHECK_DIR = os.path.join(DIR, "misc_sanity_checks")
 
 
 CONSOLE_FORMATTER = PLAIN_FORMATTER = logging.Formatter(
@@ -34,6 +36,10 @@ try:
         "%(log_color)s[%(asctime)s %(levelname)s] %(message)s%(reset)s",
         ABS_TIME_FORMAT)
 except ImportError:
+    pass
+
+
+class ExecutionFailed(Exception):
     pass
 
 
@@ -115,22 +121,10 @@ class ExecutionJob(object):
             self.parameter, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
-        json_exn = None
         try:
-            iterations_results = json.loads(stdout)  # expect a list of floats
-        except Exception as e:  # docs don't say what can arise, play safe.
-            json_exn = e
-
-        if json_exn or rc != 0:
-            # Something went wrong
-            rule = 50 * "-"
-            err_s = ("Benchmark returned non-zero or didn't emit JSON list")
-            if json_exn:
-                err_s += "Exception string: %s\n" % str(e)
-            err_s += "return code: %d\n" % rc
-            err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
-            err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
-            log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, err_s)
+            iterations_results = check_and_parse_execution_results(stdout, stderr, rc)
+        except ExecutionFailed as e:
+            log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
             iterations_results = []
 
         # Add to ETA estimation figures
@@ -311,7 +305,8 @@ class TimeEstimateFormatter(object):
         else:
             return UNKNOWN_TIME_DELTA
 
-def sanity_checks(config):
+
+def sanity_checks(config, platform):
     vms_that_will_run = []
     # check all necessary benchmark files exist
     for bench, bench_param in config["BENCHMARKS"].items():
@@ -337,6 +332,57 @@ def sanity_checks(config):
         else:
             debug("Running sanity check for VM %s" % vm_name)
             vm_info["vm_def"].sanity_checks()
+
+    # misc sanity checks
+    sanity_check_user_change(platform)
+
+
+def check_and_parse_execution_results(stdout, stderr, rc):
+    json_exn = None
+    try:
+        iterations_results = json.loads(stdout)  # expect a list of floats
+    except Exception as e:  # docs don't say what can arise, play safe.
+        json_exn = e
+
+    if json_exn or rc != 0:
+        # Something went wrong
+        rule = 50 * "-"
+        err_s = ("Benchmark returned non-zero or didn't emit JSON list. ")
+        if json_exn:
+            err_s += "Exception string: %s\n" % str(e)
+        err_s += "return code: %d\n" % rc
+        err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
+        err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
+        raise ExecutionFailed(err_s)
+
+    return iterations_results
+
+
+# This can be modularised if we add more misc sanity checks
+def sanity_check_user_change(platform):
+    """Run a dummy benchmark which crashes if the it doesn't appear to be
+    running as the krun user"""
+
+    debug("running user change sanity check")
+
+    from krun.vm_defs import PythonVMDef, SANITY_CHECK_HEAP_KB
+    from krun import EntryPoint
+
+    bench_name = "user change"
+    iterations = 1
+    param = 666
+
+    ep = EntryPoint("check_user_change.py", subdir=MISC_SANITY_CHECK_DIR)
+    vd = PythonVMDef(sys.executable)  # run under the VM that runs *this*
+    vd.set_platform(platform)
+
+    stdout, stderr, rc = \
+        vd.run_exec(ep, bench_name, iterations, param, SANITY_CHECK_HEAP_KB)
+
+    try:
+        times = check_and_parse_execution_results(stdout, stderr, rc)
+    except ExecutionFailed as e:
+        fatal("%s sanity check failed: %s" % (bench_name, e.message))
 
 
 def main():
@@ -369,7 +415,7 @@ def main():
 
     log_filename = attach_log_file(config_file)
 
-    sanity_checks(config)
+    sanity_checks(config, platform)
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False

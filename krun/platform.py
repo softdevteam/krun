@@ -11,6 +11,10 @@ from logging import warn, info, debug
 from time import localtime
 from abc import ABCMeta, abstractmethod
 
+NICE_PRIORITY = -20
+BENCHMARK_USER = "krun"  # user is expected to have made this
+DIR = os.path.abspath(os.path.dirname(__file__))
+LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkruntime")
 
 class BasePlatform(object):
     __metaclass__ = ABCMeta
@@ -122,13 +126,35 @@ class BasePlatform(object):
         self.audit["uname"] = run_shell_cmd("uname")[0]
         self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
 
-    # You may wish to override this if you need to prepend arguments to the
-    # benchmark invocation, e.g. to use a tool to pin a benchmark to a CPU.
     def bench_cmdline_adjust(self, args):
-        """Accepts a list representing the cmd line invocation of a benchmark.
-        Returns a possibly mutated argument list."""
-        return args  # default does nothing.
+        """Prepends various arguments to benchmark invocation.
 
+        Currently deals with:
+          * Changing user
+          * CPU pinning (if available)
+          * Adding libkruntime to linker path
+          * Process priority"""
+
+        return self.change_user_args(BENCHMARK_USER) + \
+            self.process_priority_args() + self.isolate_process_args() + \
+            self.link_libkruntime_args() + args
+
+    @abstractmethod
+    def change_user_args(self, user="root"):
+        pass
+
+    @abstractmethod
+    def isolate_process_args(self):
+        pass
+
+    @abstractmethod
+    def process_priority_args(self):
+        pass
+
+    @abstractmethod
+    def link_libkruntime_args(self):
+        """Arguments to add libkruntime into linker path"""
+        pass
 
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
@@ -138,6 +164,13 @@ class UnixLikePlatform(BasePlatform):
         fl = fcntl.fcntl(fd, fcntl.F_GETFL)
         fl |= os.O_SYNC
         fcntl.fcntl(fd, fcntl.F_SETFL, fl)
+
+    def link_libkruntime_args(self):
+        # Assumes no other use of LD_LIBRARY_PATH elsewhere
+        return ["env", "LD_LIBRARY_PATH=%s" % LIBKRUNTIME_DIR]
+
+    def process_priority_args(self):
+        return ["nice", str(NICE_PRIORITY)]
 
 
 class LinuxPlatform(UnixLikePlatform):
@@ -181,9 +214,8 @@ class LinuxPlatform(UnixLikePlatform):
               "Set `%s` in the kernel arguments.\n"
               "%s" % (prefix, arg, suffix))
 
-
-    def bench_cmdline_adjust(self, args):
-        """Adjusts benchmark invocation so as to pin to one CPU core"""
+    def isolate_process_args(self):
+        """Adjusts benchmark invocation to pin to a CPU core with taskset"""
 
         # The core mask is a bitfield, each bit representing a CPU. When
         # a bit is set, it means the task may run on the corresponding core.
@@ -191,7 +223,7 @@ class LinuxPlatform(UnixLikePlatform):
         # 1 and 2. We want to pin the process to one CPU, so we only ever
         # set one bit.
         coremask = 1 << self.isolated_cpu
-        return  ["taskset", hex(coremask)] + args
+        return ["taskset", hex(coremask)]
 
     def _find_thermal_zones(self):
         return [x for x in os.listdir(LinuxPlatform.THERMAL_BASE) if
@@ -409,6 +441,9 @@ class LinuxPlatform(UnixLikePlatform):
 
         # Extra CPU info, some not in dmesg. E.g. CPU cache size.
         self.audit["cpuinfo"] = run_shell_cmd("cat /proc/cpuinfo")[0]
+
+    def change_user_args(self, user="root"):
+        return [self.ROOT_CMD, "-u", user]
 
 class DebianLinuxPlatform(LinuxPlatform):
     def collect_audit(self):

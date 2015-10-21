@@ -13,7 +13,6 @@ ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runn
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
 VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
 SANITY_CHECK_HEAP_KB = 1024 * 1024  # 1GB
-NICE_PRIORITY = -20
 
 # Pipe buffer sizes vary. I've seen reports on the Internet ranging from a
 # page size (Linux pre-2.6.11) to 64K (Linux in 2015). Ideally we would
@@ -31,8 +30,8 @@ SELECT_TIMEOUT = 1.0
 # Don't mutate any lists passed down from the user's config file!
 # !!!
 
-BASE_ENV = os.environ.copy()
-BASE_ENV.update({"LD_LIBRARY_PATH": os.path.join(DIR, "..", "libkruntime")})
+# start empty! Note the the user change command (e.g. sudo/doas) will introduce some.
+BASE_ENV = {}
 
 
 class EnvChange(object):
@@ -141,7 +140,7 @@ class BaseVMDef(object):
 
         # This is kind of awkward. We don't have the heap limit at
         # VMDef construction time, so we have to substitute it in later.
-        actual_args = ["nice", NICE_PRIORITY]
+        actual_args = []
         for a in args:
             if hasattr(a, "__call__"):  # i.e. a function
                 a = a(heap_lim_k)
