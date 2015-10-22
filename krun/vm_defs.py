@@ -7,6 +7,7 @@ from abc import ABCMeta, abstractmethod
 from logging import info, debug
 from krun import EntryPoint
 from krun.util import fatal
+from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
@@ -29,45 +30,6 @@ SELECT_TIMEOUT = 1.0
 # !!!
 # Don't mutate any lists passed down from the user's config file!
 # !!!
-
-# start empty! Note the the user change command (e.g. sudo/doas) will introduce some.
-BASE_ENV = {}
-
-
-class EnvChange(object):
-    __metaclass__ = ABCMeta
-
-    def __init__(self, var, val):
-        self.var, self.val = var, val
-
-
-    @staticmethod
-    def apply_all(changes, env):
-        """Apply a collection of changes"""
-        for change in changes:
-            change.apply(env)
-
-    @abstractmethod
-    def apply(self, env):
-        pass
-
-
-class EnvChangeSet(EnvChange):
-    def apply(self, env):
-        cur_val = env.get(self.var, None)
-        if cur_val is not None:
-            fatal("Environment %s is already defined" % self.var)
-        else:
-            env[self.var] = self.val
-
-
-class EnvChangeAppend(EnvChange):
-    def apply(self, env):
-        cur_val = env.get(self.var, None)
-        if cur_val is None:
-            env[self.var] = self.val
-        else:
-            env[self.var] = "%s%s%s" % (cur_val, os.pathsep, self.val)
 
 
 def print_stderr_linewise(info):
@@ -131,12 +93,15 @@ class BaseVMDef(object):
         if bench_env_changes is None:
             bench_env_changes = []
 
-        use_env = BASE_ENV.copy()
+        # Environment *after* user change.
+        # Starts empty, but user change command (e.g. sudo/doas) may introduce some.
+        new_user_env = {}
+
         # Apply vm specific environment changes
-        EnvChange.apply_all(self.common_env_changes, use_env)
+        EnvChange.apply_all(self.common_env_changes, new_user_env)
 
         # Apply benchmark specific environment changes
-        EnvChange.apply_all(bench_env_changes, use_env)
+        EnvChange.apply_all(bench_env_changes, new_user_env)
 
         # This is kind of awkward. We don't have the heap limit at
         # VMDef construction time, so we have to substitute it in later.
@@ -147,18 +112,23 @@ class BaseVMDef(object):
             actual_args.append(a)
 
         # Apply platform specific argument transformations.
-        actual_args = self.platform.bench_cmdline_adjust(actual_args)
+        actual_args = self.platform.bench_cmdline_adjust(
+            actual_args, new_user_env)
 
         debug("cmdline='%s'" % " ".join(actual_args))
-        debug("env='%s'" % use_env)
 
         if os.environ.get("BENCH_DRYRUN") is not None:
             info("Dry run. Skipping.")
             return "[]"
 
+        # We pass the empty environment dict here.
+        # This is the *outer* environment that the current user will invoke the
+        # command with. Command line arguments will have been appended *inside*
+        # to adjust the new user's environment once the user switch has
+        # occurred.
         p = subprocess.Popen(
             actual_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            env=use_env)
+            env={})
 
         return self._run_exec_capture(p)
 

@@ -10,6 +10,7 @@ from krun.util import fatal, run_shell_cmd, log_and_mail
 from logging import warn, info, debug
 from time import localtime
 from abc import ABCMeta, abstractmethod, abstractproperty
+from krun.env import EnvChangeSet
 
 NICE_PRIORITY = -20
 BENCHMARK_USER = "krun"  # user is expected to have made this
@@ -125,12 +126,20 @@ class BasePlatform(object):
     def unbuffer_fd(self, fd):
         pass
 
+    @abstractmethod
+    def adjust_env_cmd(self, env_dct):
+        pass
+
+    @abstractproperty
+    def FORCE_LIBRARY_PATH_ENV_NAME(self):
+        pass
+
     # And you may want to extend this
     def collect_audit(self):
         self.audit["uname"] = run_shell_cmd("uname")[0]
         self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
 
-    def bench_cmdline_adjust(self, args):
+    def bench_cmdline_adjust(self, args, env_dct):
         """Prepends various arguments to benchmark invocation.
 
         Currently deals with:
@@ -139,9 +148,17 @@ class BasePlatform(object):
           * Adding libkruntime to linker path
           * Process priority"""
 
+        # Force libkruntime into linker path.
+        # We are working on the assumption that no-one else uses
+        # LD_LIBRARY_PATH (or equivalent) elsewhere. EnvChangeSet will check
+        # this and crash out if this assumption is invalid.
+        combine_env = env_dct.copy()
+        chng = EnvChangeSet(self.FORCE_LIBRARY_PATH_ENV_NAME, LIBKRUNTIME_DIR)
+        chng.apply(combine_env)
+
         return self.change_user_args(BENCHMARK_USER) + \
             self.process_priority_args() + self.isolate_process_args() + \
-            self.link_libkruntime_args() + args
+            self.adjust_env_cmd(combine_env) + args
 
     @abstractmethod
     def change_user_args(self, user="root"):
@@ -155,13 +172,10 @@ class BasePlatform(object):
     def process_priority_args(self):
         pass
 
-    @abstractmethod
-    def link_libkruntime_args(self):
-        """Arguments to add libkruntime into linker path"""
-        pass
-
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
+
+    FORCE_LIBRARY_PATH_ENV_NAME = "LD_LIBRARY_PATH"
 
     def unbuffer_fd(self, fd):
         import fcntl
@@ -169,12 +183,16 @@ class UnixLikePlatform(BasePlatform):
         fl |= os.O_SYNC
         fcntl.fcntl(fd, fcntl.F_SETFL, fl)
 
-    def link_libkruntime_args(self):
-        # Assumes no other use of LD_LIBRARY_PATH elsewhere
-        return ["env", "LD_LIBRARY_PATH=%s" % LIBKRUNTIME_DIR]
-
     def process_priority_args(self):
         return ["nice", str(NICE_PRIORITY)]
+
+    def adjust_env_cmd(self, env_dct):
+        """Construct a command prefix with env_dict set using env(1)"""
+
+        args = ["env"]
+        for t in env_dct.iteritems():
+            args.append("%s=%s" % t)
+        return args
 
 
 class LinuxPlatform(UnixLikePlatform):
