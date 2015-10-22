@@ -9,7 +9,7 @@ from krun import ABS_TIME_FORMAT
 from krun.util import fatal, run_shell_cmd, log_and_mail
 from logging import warn, info, debug
 from time import localtime
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, abstractproperty
 
 NICE_PRIORITY = -20
 BENCHMARK_USER = "krun"  # user is expected to have made this
@@ -101,6 +101,10 @@ class BasePlatform(object):
             time.sleep(BasePlatform.CPU_TEMP_POLL_FREQ)
 
     # When porting to a new platform, implement the following:
+    @abstractproperty
+    def CHANGE_USER_CMD(self):
+        pass
+
     @abstractmethod
     def take_cpu_temp_readings(self):
         pass
