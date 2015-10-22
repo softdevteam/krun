@@ -6,6 +6,7 @@ Benchmark, running many fresh processes.
 usage: runner.py <config_file.krun>
 """
 
+import argparse
 import os, sys, json, time
 import logging
 from collections import deque
@@ -43,8 +44,8 @@ class ExecutionFailed(Exception):
     pass
 
 
-def usage():
-    print(__doc__)
+def usage(parser):
+    parser.print_help()
     sys.exit(1)
 
 def mean(seq):
@@ -385,17 +386,37 @@ def sanity_check_user_change(platform):
         fatal("%s sanity check failed: %s" % (bench_name, e.message))
 
 
+def create_arg_parser():
+    """Create a parser to process command-line options.
+    """
+    parser = argparse.ArgumentParser(description='Benchmark, running many fresh processes.')
+    parser.add_argument('--resume', '-r', action='store_true', default=False,
+                        dest='resume', required=False,
+                        help='Resume benchmarking if interrupted')
+    parser.add_argument('--reboot', '-b', action='store_true', default=False,
+                        dest='reboot', required=False,
+                        help='Reboot after every execution')
+    parser.add_argument('config', action="store", # Required by default.
+                        metavar='FILENAME',
+                        help='krun configuration file, e.g. experiment.krun')
+    return parser
+
+
 def main():
+    parser = create_arg_parser()
+    args = parser.parse_args()
+
+    if not args.config.endswith(".krun"):
+        usage(parser)
+
     try:
-        config_file = sys.argv[1]
-    except IndexError:
-        usage()
+        if os.stat(args.config).st_size <= 0:
+            fatal('krun configuration file %s is empty.' % args.config)
+    except OSError:
+        fatal('krun configuration file %s does not exist.' % args.config)
 
-    if not config_file.endswith(".krun"):
-        usage()
-
-    config = util.read_config(config_file)
-    out_file = util.output_name(config_file)
+    config = util.read_config(args.config)
+    out_file = util.output_name(args.config)
 
     mail_recipients = config.get("MAIL_TO", [])
     if type(mail_recipients) is not list:
@@ -413,13 +434,13 @@ def main():
     for vm_name, vm_info in config["VMS"].items():
         vm_info["vm_def"].set_platform(platform)
 
-    log_filename = attach_log_file(config_file)
+    log_filename = attach_log_file(args.config)
 
     sanity_checks(config, platform)
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
-    sched = ExecutionScheduler(config_file, log_filename, out_file, mailer, platform)
+    sched = ExecutionScheduler(args.config, log_filename, out_file, mailer, platform)
 
     eta_avail_job = None
     for exec_n in xrange(config["N_EXECUTIONS"]):
