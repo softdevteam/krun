@@ -180,7 +180,7 @@ class LinuxPlatform(UnixLikePlatform):
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
     PERF_SAMPLE_RATE = "/proc/sys/kernel/perf_event_max_sample_rate"
-    ROOT_CMD = "sudo"
+    CHANGE_USER_CMD = "sudo"
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
 
@@ -279,7 +279,7 @@ class LinuxPlatform(UnixLikePlatform):
         for cpu_n in xrange(self.num_cpus):
             debug("Set CPU%d governor to 'ondemand'" % cpu_n)
             cmd = "%s cpufreq-set -c %d -g ondemand" % \
-                (self.ROOT_CMD, cpu_n)
+                (self.CHANGE_USER_CMD, cpu_n)
             stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
 
             if rc != 0:
@@ -307,7 +307,7 @@ class LinuxPlatform(UnixLikePlatform):
 
         if sr != 1:
             cmd = "%s sh -c 'echo 1 > %s'" % \
-                (LinuxPlatform.ROOT_CMD, LinuxPlatform.PERF_SAMPLE_RATE)
+                (LinuxPlatform.CHANGE_USER_CMD, LinuxPlatform.PERF_SAMPLE_RATE)
             stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
 
             if rc != 0:
@@ -387,7 +387,7 @@ class LinuxPlatform(UnixLikePlatform):
 
             if v != "performance":
                 cmd = "%s cpufreq-set -c %d -g performance" % \
-                    (self.ROOT_CMD, cpu_n)
+                    (self.CHANGE_USER_CMD, cpu_n)
                 stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
 
                 if rc != 0:
@@ -396,7 +396,7 @@ class LinuxPlatform(UnixLikePlatform):
                           "governor using:\n  '%s'\n"
                           "however this command failed. Is %s configured "
                           "and is cpufrequtils installed?"
-                          % (cpu_n, v, cmd, self.ROOT_CMD))
+                          % (cpu_n, v, cmd, self.CHANGE_USER_CMD))
 
     def _check_cpu_scaler(self):
         """Check the correct CPU scaler is in effect"""
@@ -443,7 +443,7 @@ class LinuxPlatform(UnixLikePlatform):
         self.audit["cpuinfo"] = run_shell_cmd("cat /proc/cpuinfo")[0]
 
     def change_user_args(self, user="root"):
-        return [self.ROOT_CMD, "-u", user]
+        return [self.CHANGE_USER_CMD, "-u", user]
 
 class DebianLinuxPlatform(LinuxPlatform):
     def collect_audit(self):
