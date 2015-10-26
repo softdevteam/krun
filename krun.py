@@ -12,6 +12,7 @@ import logging
 from collections import deque
 import datetime
 import resource
+import subprocess
 from logging import warn, info, error, debug
 import bz2  # decent enough compression with Python 2.7 compatibility.
 
@@ -141,13 +142,14 @@ class ScheduleEmpty(Exception):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config_file, log_filename, out_file, mailer, platform):
+    def __init__(self, config_file, log_filename, out_file, mailer, platform, reboot=False):
         self.mailer = mailer
 
         self.work_deque = deque()
         self.eta_avail = None
         self.jobs_done = 0
         self.platform = platform
+        self.reboot = reboot
 
         # Record how long processes are taking so we can make a
         # rough ETA for the user.
@@ -259,6 +261,10 @@ class ExecutionScheduler(object):
             self.jobs_done += 1
             self.platform.wait_until_cpu_cool()
             self.platform.check_dmesg_for_changes()
+
+            # FIX BEFORE MERGE
+            if self.reboot:
+                subprocess.call(['echo'] + self.platform.get_reboot_cmd())
 
         end_time = time.time() # rough overall timer, not used for actual results
 
@@ -440,7 +446,12 @@ def main():
 
     # Build job queue -- each job is an execution
     one_exec_scheduled = False
-    sched = ExecutionScheduler(args.config, log_filename, out_file, mailer, platform)
+    sched = ExecutionScheduler(args.config,
+                               log_filename,
+                               out_file,
+                               mailer,
+                               platform,
+                               reboot=args.reboot)
 
     eta_avail_job = None
     for exec_n in xrange(config["N_EXECUTIONS"]):
