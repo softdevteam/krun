@@ -1,6 +1,5 @@
-
 class KrunEntry implements BaseKrunEntry {
-  public void run_iter(int param) {
-      (new Dummy()).runIter(param);
-  }
+    public void run_iter(int param) {
+        (new Bench()).runIter(param);
+    }
 }

@@ -1,4 +1,7 @@
-public final class Dummy {
+/** Dummy benchmark.
+ * Each iteration sleeps for one second.
+ */
+public final class Bench {
 
     private static final int DELAY = 1000;  // milliseconds.
 
@@ -16,7 +19,7 @@ public final class Dummy {
      * This method is called by krun and runs one iteration of the benchmark.
      */
     public static void runIter(int n) {
-        Dummy.dummy();
+        Bench.dummy();
     }
 
 }
