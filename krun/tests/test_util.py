@@ -2,7 +2,7 @@ from krun import LOGFILE_FILENAME_TIME_FORMAT
 from krun.util import (should_skip, format_raw_exec_results, output_name,
                        log_name, fatal, read_config, run_shell_cmd,
                        dump_results, check_and_parse_execution_results,
-                       ExecutionFailed)
+                       audits_same_platform, ExecutionFailed)
 
 import bz2
 import json
@@ -98,3 +98,20 @@ stderr:
 --------------------------------------------------
 """
     assert excinfo.value.message == expected
+
+def test_audits_same_platform():
+    audit0 = dict([("cpuinfo", u"processor\t: 0\nvendor_id\t: GenuineIntel"),
+                   ("uname", u"Linux"),
+                   ("debian_version", u"jessie/sid"),
+                   ("packages", u"1:1.2.8.dfsg-2ubuntu1"),
+                   ("dmesg", u"")])
+    audit1 = dict([("cpuinfo", u"processor\t: 0\nvendor_id\t: GenuineIntel"),
+                   ("uname", u"Linux"),
+                   ("debian_version", u"jessie/stretch"),
+                   ("packages", u"1:1.2.8.dfsg-2ubuntu1"),
+                   ("dmesg", u"")])
+    assert audits_same_platform(audit0, audit0)
+    assert audits_same_platform(audit1, audit1)
+    assert not audits_same_platform([], [])
+    assert not audits_same_platform(audit0, audit1)
+    assert not audits_same_platform(audit1, audit0)

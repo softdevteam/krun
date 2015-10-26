@@ -115,3 +115,20 @@ def check_and_parse_execution_results(stdout, stderr, rc):
         raise ExecutionFailed(err_s)
 
     return iterations_results
+
+def audits_same_platform(audit0, audit1):
+    """Check whether two platform audits are from identical machines.
+    A machine audit is a dictionary with the following keys:
+        cpuinfo
+        packages
+        debian_version
+        uname
+        dmesg
+    """
+    for key in ["cpuinfo", "packages", "debian_version", "uname"]:
+        if (not key in audit0) or (not key in audit1):
+            return False
+    return ((audit0["cpuinfo"] == audit1["cpuinfo"]) and \
+            (audit0["packages"] == audit1["packages"]) and \
+            (audit0["debian_version"] == audit1["debian_version"]) and \
+            (audit0["uname"] == audit1["uname"]))
