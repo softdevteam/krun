@@ -96,6 +96,13 @@ def dump_results(config_file, out_file, all_results, audit):
         f.write(json.dumps(to_write, indent=1, sort_keys=True))
 
 
+def read_results(results_file):
+    results = None
+    with bz2.BZ2File(results_file, "rb") as f:
+        results = json.loads(f.read())
+    return results
+
+
 def check_and_parse_execution_results(stdout, stderr, rc):
     json_exn = None
     try:
@@ -115,6 +122,7 @@ def check_and_parse_execution_results(stdout, stderr, rc):
         raise ExecutionFailed(err_s)
 
     return iterations_results
+
 
 def audits_same_platform(audit0, audit1):
     """Check whether two platform audits are from identical machines.

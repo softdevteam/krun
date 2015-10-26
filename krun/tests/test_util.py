@@ -1,7 +1,8 @@
 from krun import LOGFILE_FILENAME_TIME_FORMAT
 from krun.util import (should_skip, format_raw_exec_results, output_name,
                        log_name, fatal, read_config, run_shell_cmd,
-                       dump_results, check_and_parse_execution_results,
+                       read_results, dump_results,
+                       check_and_parse_execution_results,
                        audits_same_platform, ExecutionFailed)
 
 import bz2
@@ -63,6 +64,19 @@ def test_run_shell_cmd():
     assert out == msg
     assert err == ""
     assert rc == 0
+
+def test_read_results():
+    results = read_results('krun/tests/quick_results.json.bz2')
+    expected = {u'nbody:CPython:default-python': [[0.022346]],
+                u'dummy:CPython:default-python': [[1.005212]],
+                u'nbody:Java:default-java': [[25.979917]],
+                u'dummy:Java:default-java': [[1.001362]]}
+    with open('krun/tests/quick.krun', 'rb') as config_fp:
+        config = config_fp.read()
+    assert results['config'] == config
+    assert results['audit']['uname'] == u'Linux'
+    assert results['audit']['debian_version'] == u'jessie/sid'
+    assert results['data'] == expected
 
 def test_dump_results():
     config_file = 'krun/tests/example.krun'
