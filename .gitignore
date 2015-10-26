@@ -1,6 +1,6 @@
 examples/*.log
 examples/*.json
-examples/*.bz
+examples/*.bz2
 **/*.pyc
 **/*.swp
 **/__pycache__
