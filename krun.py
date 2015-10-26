@@ -126,13 +126,14 @@ class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
     def __init__(self, config_file, log_filename, out_file, mailer, platform,
-                 reboot=False):
+                 resume=False, reboot=False):
         self.mailer = mailer
 
         self.work_deque = deque()
         self.eta_avail = None
         self.jobs_done = 0
         self.platform = platform
+        self.resume = resume
         self.reboot = reboot
 
         # Record how long processes are taking so we can make a
@@ -191,6 +192,8 @@ class ExecutionScheduler(object):
         self.eta_estimates[key].append(exec_time)
 
     def build_schedule(self, config):
+        if self.resume:  # FIXME
+            pass
         one_exec_scheduled = False
         eta_avail_job = None
         for exec_n in xrange(config["N_EXECUTIONS"]):
@@ -422,6 +425,21 @@ def main():
     for vm_name, vm_info in config["VMS"].items():
         vm_info["vm_def"].set_platform(platform)
 
+    # If the user has asked for resume-mode, the current platform must
+    # be an identical machine to the current one.
+    if args.resume:
+        if os.path.isfile(out_file):
+            current = util.read_results(out_file)
+            if not util.audits_same_platform(platform.audit, current["audit"]):
+                last_platform = current["audit"]["uname"] + ":" + current["audit"]["debian_version"]
+                this_platform = platform.audit["uname"] + ":" + platform.audit["debian_version"]
+                msg = """You have asked krun to resume an interrupted benchmark.
+This is only valid if the machine you are using is identical to the one on
+which the last results were gathered, which is not the case.
+The last platform you used was %s, this one appears to be %s.
+""" % (last_platform, this_platform)
+                util.fatal(msg)
+
     log_filename = attach_log_file(args.config)
 
     sanity_checks(config, platform)
@@ -432,6 +450,7 @@ def main():
                                out_file,
                                mailer,
                                platform,
+                               resume=args.resume,
                                reboot=args.reboot)
     sched.build_schedule(config)
     sched.run() # does the benchmarking

@@ -67,10 +67,10 @@ def test_run_shell_cmd():
 
 def test_read_results():
     results = read_results('krun/tests/quick_results.json.bz2')
-    expected = {u'nbody:CPython:default-python': [[0.022346]],
-                u'dummy:CPython:default-python': [[1.005212]],
-                u'nbody:Java:default-java': [[25.979917]],
-                u'dummy:Java:default-java': [[1.001362]]}
+    expected = {u'nbody:CPython:default-python': [[0.022256]],
+                u'dummy:CPython:default-python': [[1.005115]],
+                u'nbody:Java:default-java': [[26.002632]],
+                u'dummy:Java:default-java': [[1.000941]]}
     with open('krun/tests/quick.krun', 'rb') as config_fp:
         config = config_fp.read()
     assert results['config'] == config
@@ -120,8 +120,7 @@ def test_audits_same_platform():
                    ("packages", u"1:1.2.8.dfsg-2ubuntu1"),
                    ("dmesg", u"")])
     audit1 = dict([("cpuinfo", u"processor\t: 0\nvendor_id\t: GenuineIntel"),
-                   ("uname", u"Linux"),
-                   ("debian_version", u"jessie/stretch"),
+                   ("uname", u"BSD"),
                    ("packages", u"1:1.2.8.dfsg-2ubuntu1"),
                    ("dmesg", u"")])
     assert audits_same_platform(audit0, audit0)
