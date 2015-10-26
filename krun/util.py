@@ -1,3 +1,5 @@
+import bz2  # decent enough compression with Python 2.7 compatibility.
+import json
 import sys
 import time
 from subprocess import Popen, PIPE
@@ -5,6 +7,9 @@ from logging import error
 from krun import LOGFILE_FILENAME_TIME_FORMAT
 
 FLOAT_FORMAT = ".6f"
+
+class ExecutionFailed(Exception):
+    pass
 
 
 def should_skip(config, this_key):
@@ -78,3 +83,35 @@ def run_shell_cmd(cmd, failure_fatal=True):
     if failure_fatal and rc != 0:
         fatal("Shell command failed: '%s'" % cmd)
     return stdout.strip(), stderr.strip(), rc
+
+
+def dump_results(config_file, out_file, all_results, audit):
+    """Dump results (and a few other bits) into a bzip2 json file."""
+    with open(config_file, "r") as f:
+        config_text = f.read()
+
+    to_write = {"config": config_text, "data": all_results, "audit": audit}
+
+    with bz2.BZ2File(out_file, "w") as f:
+        f.write(json.dumps(to_write, indent=1, sort_keys=True))
+
+
+def check_and_parse_execution_results(stdout, stderr, rc):
+    json_exn = None
+    try:
+        iterations_results = json.loads(stdout)  # expect a list of floats
+    except Exception as e:  # docs don't say what can arise, play safe.
+        json_exn = e
+
+    if json_exn or rc != 0:
+        # Something went wrong
+        rule = 50 * "-"
+        err_s = ("Benchmark returned non-zero or didn't emit JSON list. ")
+        if json_exn:
+            err_s += "Exception string: %s\n" % str(e)
+        err_s += "return code: %d\n" % rc
+        err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
+        err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
+        raise ExecutionFailed(err_s)
+
+    return iterations_results

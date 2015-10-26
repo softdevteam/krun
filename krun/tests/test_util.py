@@ -1,7 +1,12 @@
 from krun import LOGFILE_FILENAME_TIME_FORMAT
 from krun.util import (should_skip, format_raw_exec_results, output_name,
-                       log_name, fatal, read_config, run_shell_cmd)
+                       log_name, fatal, read_config, run_shell_cmd,
+                       dump_results, check_and_parse_execution_results,
+                       ExecutionFailed)
 
+import bz2
+import json
+import os
 import pytest
 import time
 
@@ -58,3 +63,38 @@ def test_run_shell_cmd():
     assert out == msg
     assert err == ""
     assert rc == 0
+
+def test_dump_results():
+    config_file = 'krun/tests/example.krun'
+    audit = 'example audit (py.test)'
+    out_file = output_name(config_file)
+    all_results = {'dummy:Java:default-java': [[1.000726]]}
+    dump_results(config_file, out_file, all_results, audit)
+    with open(config_file, 'r') as config_fp:
+        config = config_fp.read()
+        with bz2.BZ2File(out_file, 'rb') as input_file:
+            dumped_results = json.loads(input_file.read())
+            assert dumped_results['audit'] == audit
+            assert dumped_results['config'] == config
+            assert dumped_results['data'] == all_results
+        os.unlink(out_file)  # Clean-up generated file.
+
+def test_check_and_parse_execution_results():
+    stdout = "[0.000403]"
+    stderr = "[iterations_runner.py] iteration 1/1"
+    rc = 1
+    assert check_and_parse_execution_results(stdout, stderr, 0) == json.loads(stdout)
+    with pytest.raises(ExecutionFailed) as excinfo:
+        check_and_parse_execution_results(stdout, stderr, rc)
+    expected = """Benchmark returned non-zero or didn't emit JSON list. return code: 1
+stdout:
+--------------------------------------------------
+[0.000403]
+--------------------------------------------------
+
+stderr:
+--------------------------------------------------
+[iterations_runner.py] iteration 1/1
+--------------------------------------------------
+"""
+    assert excinfo.value.message == expected

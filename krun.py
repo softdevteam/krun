@@ -7,17 +7,15 @@ usage: runner.py <config_file.krun>
 """
 
 import argparse
-import os, sys, json, time
+import os, sys, time
 import logging
 from collections import deque
 import datetime
 import resource
 import subprocess
 from logging import warn, info, error, debug
-import bz2  # decent enough compression with Python 2.7 compatibility.
 
 import krun.util as util
-from krun.util import log_and_mail, log_name, fatal
 from krun.platform import detect_platform
 from krun import ABS_TIME_FORMAT, UNKNOWN_TIME_DELTA, UNKNOWN_ABS_TIME
 from krun.mail import Mailer
@@ -41,10 +39,6 @@ except ImportError:
     pass
 
 
-class ExecutionFailed(Exception):
-    pass
-
-
 def usage(parser):
     parser.print_help()
     sys.exit(1)
@@ -52,17 +46,6 @@ def usage(parser):
 def mean(seq):
     return sum(seq) / float(len(seq))
 
-
-def dump_results(config_file, out_file, all_results, audit):
-    """Dump results (and a few other bits) into a bzip2 json file."""
-
-    with open(config_file, "r") as f:
-        config_text = f.read()
-
-    to_write = {"config": config_text, "data": all_results, "audit": audit}
-
-    with bz2.BZ2File(out_file, "w") as f:
-        f.write(json.dumps(to_write, indent=1, sort_keys=True))
 
 class ExecutionJob(object):
     """Represents a single executions level benchmark run"""
@@ -124,9 +107,9 @@ class ExecutionJob(object):
         exec_time_rough = time.time() - exec_start_rough
 
         try:
-            iterations_results = check_and_parse_execution_results(stdout, stderr, rc)
-        except ExecutionFailed as e:
-            log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
+            iterations_results = util.check_and_parse_execution_results(stdout, stderr, rc)
+        except util.ExecutionFailed as e:
+            util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
             iterations_results = []
 
         # Add to ETA estimation figures
@@ -142,7 +125,8 @@ class ScheduleEmpty(Exception):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config_file, log_filename, out_file, mailer, platform, reboot=False):
+    def __init__(self, config_file, log_filename, out_file, mailer, platform,
+                 reboot=False):
         self.mailer = mailer
 
         self.work_deque = deque()
@@ -206,13 +190,33 @@ class ExecutionScheduler(object):
     def add_eta_info(self, key, exec_time):
         self.eta_estimates[key].append(exec_time)
 
+    def build_schedule(self, config):
+        one_exec_scheduled = False
+        eta_avail_job = None
+        for exec_n in xrange(config["N_EXECUTIONS"]):
+            for vm_name, vm_info in config["VMS"].items():
+                for bmark, param in config["BENCHMARKS"].items():
+                    for variant in vm_info["variants"]:
+                        job = ExecutionJob(self, config, vm_name, vm_info, bmark, variant, param)
+                        if not util.should_skip(config, job.key):
+                            if one_exec_scheduled and not eta_avail_job:
+                                # first job of second executions eta becomes known.
+                                eta_avail_job = job
+                                self.set_eta_avail()
+                            self.add_job(job)
+                        else:
+                            if not one_exec_scheduled:
+                                debug("DEBUG: %s is in skip list. Not scheduling." %
+                                      job.key)
+            one_exec_scheduled = True
+
     def run(self):
         """Benchmark execution starts here"""
 
-        log_and_mail(self.mailer, info,
-                     "Benchmarking started",
-                     "Benchmarking started.\nLogging to %s" % self.log_path,
-                     bypass_limiter=True)
+        util.log_and_mail(self.mailer, info,
+                          "Benchmarking started",
+                          "Benchmarking started.\nLogging to %s" % self.log_path,
+                          bypass_limiter=True)
 
         # scaffold dicts
         for j in self.work_deque:
@@ -234,7 +238,7 @@ class ExecutionScheduler(object):
             if self.eta_avail == self.jobs_done:
                 # We just found out roughly how long the session has left, mail out.
                 msg = "ETA for current session now known: %s" % tfmt.finish_str
-                log_and_mail(self.mailer, info,
+                util.log_and_mail(self.mailer, info,
                              "ETA for Current Session Available",
                              msg, bypass_limiter=True)
 
@@ -255,8 +259,8 @@ class ExecutionScheduler(object):
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
-            dump_results(self.config_file, self.out_file, self.results,
-                      self.platform.audit)
+            util.dump_results(self.config_file, self.out_file, self.results,
+                              self.platform.audit)
 
             self.jobs_done += 1
             self.platform.wait_until_cpu_cool()
@@ -277,8 +281,8 @@ class ExecutionScheduler(object):
 
         msg = "Completed in (roughly) %f seconds.\nLog file at: %s" % \
             ((end_time - start_time), self.log_path)
-        log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
-                     bypass_limiter=True)
+        util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
+                          bypass_limiter=True)
 
 class TimeEstimateFormatter(object):
     def __init__(self, seconds):
@@ -344,27 +348,6 @@ def sanity_checks(config, platform):
     sanity_check_user_change(platform)
 
 
-def check_and_parse_execution_results(stdout, stderr, rc):
-    json_exn = None
-    try:
-        iterations_results = json.loads(stdout)  # expect a list of floats
-    except Exception as e:  # docs don't say what can arise, play safe.
-        json_exn = e
-
-    if json_exn or rc != 0:
-        # Something went wrong
-        rule = 50 * "-"
-        err_s = ("Benchmark returned non-zero or didn't emit JSON list. ")
-        if json_exn:
-            err_s += "Exception string: %s\n" % str(e)
-        err_s += "return code: %d\n" % rc
-        err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
-        err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
-        raise ExecutionFailed(err_s)
-
-    return iterations_results
-
-
 # This can be modularised if we add more misc sanity checks
 def sanity_check_user_change(platform):
     """Run a dummy benchmark which crashes if the it doesn't appear to be
@@ -387,9 +370,9 @@ def sanity_check_user_change(platform):
         vd.run_exec(ep, bench_name, iterations, param, SANITY_CHECK_HEAP_KB)
 
     try:
-        times = check_and_parse_execution_results(stdout, stderr, rc)
-    except ExecutionFailed as e:
-        fatal("%s sanity check failed: %s" % (bench_name, e.message))
+        times = util.check_and_parse_execution_results(stdout, stderr, rc)
+    except util.ExecutionFailed as e:
+        util.fatal("%s sanity check failed: %s" % (bench_name, e.message))
 
 
 def create_arg_parser():
@@ -407,7 +390,6 @@ def create_arg_parser():
                         help='krun configuration file, e.g. experiment.krun')
     return parser
 
-
 def main():
     parser = create_arg_parser()
     args = parser.parse_args()
@@ -417,16 +399,16 @@ def main():
 
     try:
         if os.stat(args.config).st_size <= 0:
-            fatal('krun configuration file %s is empty.' % args.config)
+            util.fatal('krun configuration file %s is empty.' % args.config)
     except OSError:
-        fatal('krun configuration file %s does not exist.' % args.config)
+        util.fatal('krun configuration file %s does not exist.' % args.config)
 
     config = util.read_config(args.config)
     out_file = util.output_name(args.config)
 
     mail_recipients = config.get("MAIL_TO", [])
     if type(mail_recipients) is not list:
-        fatal("MAIL_TO config should be a list")
+        util.fatal("MAIL_TO config should be a list")
 
     max_mails = config.get("MAX_MAILS", 5)
     mailer = Mailer(mail_recipients, max_mails=max_mails)
@@ -445,32 +427,13 @@ def main():
     sanity_checks(config, platform)
 
     # Build job queue -- each job is an execution
-    one_exec_scheduled = False
     sched = ExecutionScheduler(args.config,
                                log_filename,
                                out_file,
                                mailer,
                                platform,
                                reboot=args.reboot)
-
-    eta_avail_job = None
-    for exec_n in xrange(config["N_EXECUTIONS"]):
-        for vm_name, vm_info in config["VMS"].items():
-            for bmark, param in config["BENCHMARKS"].items():
-                for variant in vm_info["variants"]:
-                    job = ExecutionJob(sched, config, vm_name, vm_info, bmark, variant, param)
-
-                    if not util.should_skip(config, job.key):
-                        if one_exec_scheduled and not eta_avail_job:
-                            eta_avail_job = job # first job of second executions eta becomes known.
-                            sched.set_eta_avail()
-                        sched.add_job(job)
-                    else:
-                        if not one_exec_scheduled:
-                            debug("DEBUG: %s is in skip list. Not scheduling." %
-                                  job.key)
-        one_exec_scheduled = True
-
+    sched.build_schedule(config)
     sched.run() # does the benchmarking
 
 def setup_logging():
@@ -482,7 +445,7 @@ def setup_logging():
     # KRUN_DEBUG in the environment.
     level_str = os.environ.get("KRUN_DEBUG", "info").upper()
     if level_str not in ("DEBUG", "INFO", "WARN", "DEBUG", "CRITICAL", "ERROR"):
-        fatal("Bad debug level: %s" % level_str)
+        util.fatal("Bad debug level: %s" % level_str)
 
     level = getattr(logging, level_str.upper())
 
@@ -494,7 +457,7 @@ def setup_logging():
 
 
 def attach_log_file(config_filename):
-    log_filename = log_name(config_filename)
+    log_filename = util.log_name(config_filename)
     fh = logging.FileHandler(log_filename, mode='w')
     fh.setFormatter(PLAIN_FORMATTER)
     logging.root.addHandler(fh)
