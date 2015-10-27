@@ -114,6 +114,22 @@ $ PYTHONPATH=../ ../krun.py example.krun
 You should see a log scroll past, and results will be stored in the file:
 `../krun/examples/example_results.json.bz2`.
 
+## Testing your configurations
+
+It is often useful to test a configuration file, without actually
+running a full benchmark (especially if the benchmark program is
+long).
+krun supports this with the `--dryrun` command line switch:
+
+```bash
+$ PYTHONPATH=../ ../krun.py --dryrun --debug=INFO example.krun
+```
+
+By passing in `--debug=INFO` you will see a full log of krun actions
+printed to STDOUT.
+Valid debug levels are: `DEBUG`, `INFO`, `WARN`, `DEBUG`,
+`CRITICAL`, `ERROR`.
+
 ## Running in reboot and resume modes
 
 krun can resume an interrupted benchmark by passing in the `--resume`
