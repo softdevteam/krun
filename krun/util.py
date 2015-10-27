@@ -1,5 +1,6 @@
 import bz2  # decent enough compression with Python 2.7 compatibility.
 import json
+import os.path
 import sys
 import time
 from subprocess import Popen, PIPE
@@ -50,10 +51,16 @@ def output_name(config_path):
     assert config_path.endswith(".krun")
     return config_path[:-5] + "_results.json.bz2"
 
-def log_name(config_path):
+
+def log_name(config_path, resume=False):
     assert config_path.endswith(".krun")
-    return config_path[:-5] + "_%s.log" % \
-        time.strftime(LOGFILE_FILENAME_TIME_FORMAT)
+    if resume:
+        config_mtime = time.gmtime(os.path.getmtime(config_path))
+        tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT, config_mtime)
+    else:
+        tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT)
+    return config_path[:-5] + "_%s.log" % tstamp
+
 
 def fatal(msg):
     error(msg)

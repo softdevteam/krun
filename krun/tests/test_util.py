@@ -39,10 +39,18 @@ def test_output_name():
     assert output_name(".krun") == "_results.json.bz2"
     assert output_name("example.krun") == "example_results.json.bz2"
 
-def test_log_name():
+
+def test_log_name(monkeypatch):
     tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT)
-    assert log_name("example.krun") == "example" + "_" + tstamp + ".log"
-    assert log_name(".krun") == "_" + tstamp + ".log"
+    assert log_name("example.krun", False) == "example" + "_" + tstamp + ".log"
+    assert log_name(".krun", False) == "_" + tstamp + ".log"
+    def mock_mtime(path):
+        return 1445964109.9363003
+    monkeypatch.setattr(os.path, 'getmtime', mock_mtime)
+    tstamp = '20151027_164149'
+    assert log_name("example.krun", True) == "example" + "_" + tstamp + ".log"
+    assert log_name(".krun", True) == "_" + tstamp + ".log"
+
 
 def test_fatal(capsys):
     msg = "example text"

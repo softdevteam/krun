@@ -45,7 +45,7 @@ def mean(seq):
     return sum(seq) / float(len(seq))
 
 
-class JobMissingFromConfig(Exception):
+class JobMissingError(Exception):
     """This is exception is called by the scheduler, in resume mode.
     This exception should be raised when  the user has asked to
     resume an interrupted benchmark, and the json results contain
@@ -179,7 +179,7 @@ class ExecutionScheduler(object):
                 job_to_remove = job
                 break
         else:
-            raise JobMissingFromConfig(key)
+            raise JobMissingError(key)
         self.work_deque.remove(job_to_remove)
 
     def next_job(self):
@@ -242,7 +242,7 @@ class ExecutionScheduler(object):
                         self.remove_job_by_key(key)
                         debug("DEBUG: %s has already been run. Not scheduling." %
                                key)
-                    except JobMissingFromConfig as excn:
+                    except JobMissingError as excn:
                         tup = (excn.key, self.config_file, self.out_file)
                         msg = ("Failed to resume benchmarking session\n." +
                                "The execution %s appears in results " +
@@ -482,8 +482,15 @@ def main(parser):
             current = util.read_results(out_file)
             if not util.audits_same_platform(platform.audit, current["audit"]):
                 util.fatal(error_msg)
+        else:
+            # Touch the config file to update its mtime. This is required
+            # by resume-mode which uses the mtime to determine the name of
+            # the log file, should this benchmark be resumed.
+            _, _, rc = util.run_shell_cmd("touch " + args.config)
+            if rc > 0:
+                util.fatal("Could not touch config file: " + args.config)
 
-    log_filename = attach_log_file(args.config)
+    log_filename = attach_log_file(args.config, args.resume)
 
     sanity_checks(config, platform)
 
@@ -519,9 +526,10 @@ def setup_logging(parser):
     logging.root.addHandler(stream)
 
 
-def attach_log_file(config_filename):
-    log_filename = util.log_name(config_filename)
-    fh = logging.FileHandler(log_filename, mode='w')
+def attach_log_file(config_filename, resume):
+    log_filename = util.log_name(config_filename, resume)
+    mode = 'a' if resume else 'w'
+    fh = logging.FileHandler(log_filename, mode=mode)
     fh.setFormatter(PLAIN_FORMATTER)
     logging.root.addHandler(fh)
     return os.path.abspath(log_filename)
