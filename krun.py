@@ -47,6 +47,16 @@ def mean(seq):
     return sum(seq) / float(len(seq))
 
 
+class JobMissingFromConfig(Exception):
+    """This is exception is called by the scheduler, in resume mode.
+    This exception should be raised when  the user has asked to
+    resume an interrupted benchmark, and the json results contain
+    an execution that does not appear in the config file.
+    """
+    def __init__(self, key):
+        self.key = key
+
+
 class ExecutionJob(object):
     """Represents a single executions level benchmark run"""
 
@@ -160,6 +170,15 @@ class ExecutionScheduler(object):
     def add_job(self, job):
         self.work_deque.append(job)
 
+    def remove_job_by_key(self, key):
+        for job in self.work_deque:
+            if job.key == key:
+                job_to_remove = job
+                break
+        else:
+            raise JobMissingFromConfig(key)
+        self.work_deque.remove(job_to_remove)
+
     def next_job(self):
         try:
             return self.work_deque.popleft()
@@ -191,9 +210,7 @@ class ExecutionScheduler(object):
     def add_eta_info(self, key, exec_time):
         self.eta_estimates[key].append(exec_time)
 
-    def build_schedule(self, config):
-        if self.resume:  # FIXME
-            pass
+    def build_schedule(self, config, current_result_json):
         one_exec_scheduled = False
         eta_avail_job = None
         for exec_n in xrange(config["N_EXECUTIONS"]):
@@ -212,6 +229,23 @@ class ExecutionScheduler(object):
                                 debug("DEBUG: %s is in skip list. Not scheduling." %
                                       job.key)
             one_exec_scheduled = True
+        # Resume mode: if previous results are available, remove the
+        # jobs from the schedule which have already been executed, and
+        # add the results to this object, ready to be saved to a Json file.
+        if self.resume and current_result_json is not None:
+            for key in current_result_json['data']:
+                if len(current_result_json['data'][key]) > 0:
+                    try:
+                        self.remove_job_by_key(key)
+                        debug("DEBUG: %s has already been run. Not scheduling." %
+                               key)
+                    except JobMissingFromConfig as excn:
+                        tup = (excn.key, self.config_file, self.out_file)
+                        msg = ("Failed to resume benchmarking session\n." +
+                               "The execution %s appears in results " +
+                               "file: %s, but not in config file: %s." % tup)
+                        util.fatal(msg)
+                    self.results[key] = current_result_json['data'][key]
 
     def run(self):
         """Benchmark execution starts here"""
@@ -427,17 +461,15 @@ def main():
 
     # If the user has asked for resume-mode, the current platform must
     # be an identical machine to the current one.
+    current = None
     if args.resume:
         if os.path.isfile(out_file):
             current = util.read_results(out_file)
             if not util.audits_same_platform(platform.audit, current["audit"]):
-                last_platform = current["audit"]["uname"] + ":" + current["audit"]["debian_version"]
-                this_platform = platform.audit["uname"] + ":" + platform.audit["debian_version"]
                 msg = """You have asked krun to resume an interrupted benchmark.
 This is only valid if the machine you are using is identical to the one on
 which the last results were gathered, which is not the case.
-The last platform you used was %s, this one appears to be %s.
-""" % (last_platform, this_platform)
+"""
                 util.fatal(msg)
 
     log_filename = attach_log_file(args.config)
@@ -452,7 +484,7 @@ The last platform you used was %s, this one appears to be %s.
                                platform,
                                resume=args.resume,
                                reboot=args.reboot)
-    sched.build_schedule(config)
+    sched.build_schedule(config, current)
     sched.run() # does the benchmarking
 
 def setup_logging():
