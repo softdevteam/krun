@@ -114,6 +114,34 @@ $ PYTHONPATH=../ ../krun.py example.krun
 You should see a log scroll past, and results will be stored in the file:
 `../krun/examples/example_results.json.bz2`.
 
+## Running in reboot and resume modes
+
+krun can resume an interrupted benchmark by passing in the `--resume`
+flag.
+This will read and re-use results from previous executions of your
+benchmarks, and run the remaining executions detailed in your configuration
+file.
+
+```bash
+$ PYTHONPATH=../ ../krun.py --resume example.krun
+```
+
+You may wish to use this facility to reboot after every execution.
+To do this, you can pass in both the `--resume` and `--reboot` flags when
+you start krun:
+
+```bash
+$ PYTHONPATH=../ ../krun.py --resume --reboot example.krun
+```
+
+You will also need to ensure that krun is restarted once the machine has
+rebooted.
+You can do this by hand, or by using the boot configuration provided by
+your OS.
+The `krun/etc` directory contains an `rc.local.linux` file which goes
+with the examples here.
+This file is compatible with some Linux machines.
+
 ## Creating your own experiments
 
 The configuration file `examples/example.krun` controls the experiment here.
