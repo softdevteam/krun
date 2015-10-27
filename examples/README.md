@@ -20,7 +20,7 @@ using, e.g. on Linux you should be able to run `sudo`.
 
 You need to have the following installed:
 
-  * Python
+  * Python2.7 (other versions of Python are not supported)
   * a Java SDK (version 7)
   * GNU make, a C compiler and libc (e.g. `sudo apt-get install build-essential`)
   * cpufrequtils (e.g. `sudo apt-get install cpufrequtils`)
