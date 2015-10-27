@@ -200,6 +200,7 @@ class UnixLikePlatform(BasePlatform):
             args.append("%s=%s" % t)
         return args
 
+
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
 
@@ -559,6 +560,7 @@ class LinuxPlatform(UnixLikePlatform):
         cmd.append(self.REBOOT)
         return cmd
 
+
 class DebianLinuxPlatform(LinuxPlatform):
     def collect_audit(self):
         LinuxPlatform.collect_audit(self)
@@ -582,6 +584,7 @@ class DebianLinuxPlatform(LinuxPlatform):
               "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
               "  * Run `sudo update-grub`\n"
               "%s" % (prefix, arg, suffix))
+
 
 def detect_platform(mailer):
     if os.path.exists("/etc/debian_version"):

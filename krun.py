@@ -20,8 +20,6 @@ from krun.platform import detect_platform
 from krun import ABS_TIME_FORMAT, UNKNOWN_TIME_DELTA, UNKNOWN_ABS_TIME
 from krun.mail import Mailer
 
-BENCH_DRYRUN = os.environ.get("BENCH_DRYRUN", False)
-
 HERE = os.path.abspath(os.getcwd())
 DIR = os.path.abspath(os.path.dirname(__file__))
 MISC_SANITY_CHECK_DIR = os.path.join(DIR, "misc_sanity_checks")
@@ -86,11 +84,12 @@ class ExecutionJob(object):
         """Feed back a rough execution time for ETA usage"""
         self.sched.add_eta_info(self.key, exec_time)
 
-    def run(self, mailer):
+    def run(self, mailer, dry_run=False):
         """Runs this job (execution)"""
 
         entry_point = self.config["VARIANTS"][self.variant]
         vm_def = self.vm_info["vm_def"]
+        vm_def.set_dry_run(dry_run)
 
         info("Running '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
@@ -116,17 +115,21 @@ class ExecutionJob(object):
             self.parameter, heap_limit_kb)
         exec_time_rough = time.time() - exec_start_rough
 
-        try:
-            iterations_results = util.check_and_parse_execution_results(stdout, stderr, rc)
-        except util.ExecutionFailed as e:
-            util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
-            iterations_results = []
+        if not dry_run:
+            try:
+                iterations_results = util.check_and_parse_execution_results(stdout, stderr, rc)
+            except util.ExecutionFailed as e:
+                util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
+                iterations_results = []
 
-        # Add to ETA estimation figures
-        # Note we still add a time estimate even if the benchmark crashed.
-        self.add_exec_time(exec_time_rough)
+            # Add to ETA estimation figures
+            # Note we still add a time estimate even if the benchmark crashed.
+            self.add_exec_time(exec_time_rough)
 
-        return iterations_results
+            return iterations_results
+
+        else:
+            return []
 
 
 class ScheduleEmpty(Exception):
@@ -247,7 +250,7 @@ class ExecutionScheduler(object):
                         util.fatal(msg)
                     self.results[key] = current_result_json['data'][key]
 
-    def run(self):
+    def run(self, dry_run=False):
         """Benchmark execution starts here"""
 
         util.log_and_mail(self.mailer, info,
@@ -286,10 +289,10 @@ class ExecutionScheduler(object):
                 info("Jobs until ETA known: %s" % self.jobs_until_eta_known())
 
             job = self.next_job()
-            raw_exec_result = job.run(self.mailer)
+            raw_exec_result = job.run(self.mailer, dry_run)
             exec_result = util.format_raw_exec_results(raw_exec_result)
 
-            if not exec_result and not BENCH_DRYRUN:
+            if not exec_result and not dry_run:
                 errors = True
 
             self.results[job.key].append(exec_result)
@@ -303,9 +306,10 @@ class ExecutionScheduler(object):
             self.platform.wait_until_cpu_cool()
             self.platform.check_dmesg_for_changes()
 
-            # FIX BEFORE MERGE
-            if self.reboot:
+            if self.reboot and dry_run:
                 subprocess.call(['echo'] + self.platform.get_reboot_cmd())
+            elif self.reboot:
+                subprocess.call(self.platform.get_reboot_cmd())
 
         end_time = time.time() # rough overall timer, not used for actual results
 
@@ -422,13 +426,20 @@ def create_arg_parser():
     parser.add_argument('--reboot', '-b', action='store_true', default=False,
                         dest='reboot', required=False,
                         help='Reboot after every execution')
+    parser.add_argument('--dryrun', '-d', action='store_true', default=False,
+                        dest='dry_run', required=False,
+                        help=("Don't execute benchmarks. " +
+                              "Useful for verifying configuration files."))
+    parser.add_argument('--debug', '-g', action="store", default='INFO',
+                        dest='debug_level', required=False,
+                        help=('Debug level used by logger. Must be one of: ' +
+                              'DEBUG, INFO, WARN, DEBUG, CRITICAL, ERROR'))
     parser.add_argument('config', action="store", # Required by default.
                         metavar='FILENAME',
                         help='krun configuration file, e.g. experiment.krun')
     return parser
 
-def main():
-    parser = create_arg_parser()
+def main(parser):
     args = parser.parse_args()
 
     if not args.config.endswith(".krun"):
@@ -461,16 +472,16 @@ def main():
 
     # If the user has asked for resume-mode, the current platform must
     # be an identical machine to the current one.
+    error_msg = ("You have asked krun to resume an interrupted benchmark. " +
+                 "This is only valid if the machine you are using is " +
+                 "identical to the one on which the last results were " +
+                 "gathered, which is not the case.")
     current = None
     if args.resume:
         if os.path.isfile(out_file):
             current = util.read_results(out_file)
             if not util.audits_same_platform(platform.audit, current["audit"]):
-                msg = """You have asked krun to resume an interrupted benchmark.
-This is only valid if the machine you are using is identical to the one on
-which the last results were gathered, which is not the case.
-"""
-                util.fatal(msg)
+                util.fatal(error_msg)
 
     log_filename = attach_log_file(args.config)
 
@@ -485,16 +496,17 @@ which the last results were gathered, which is not the case.
                                resume=args.resume,
                                reboot=args.reboot)
     sched.build_schedule(config, current)
-    sched.run() # does the benchmarking
+    sched.run(args.dry_run) # does the benchmarking
 
-def setup_logging():
+def setup_logging(parser):
     # Colours help to distinguish benchmark stderr from messages printed
     # by the runner. We also print warnings and errors in red so that it
     # is quite impossible to miss them.
+    args = parser.parse_args()
 
     # We default to "info" level, user can change by setting
     # KRUN_DEBUG in the environment.
-    level_str = os.environ.get("KRUN_DEBUG", "info").upper()
+    level_str = args.debug_level.upper()
     if level_str not in ("DEBUG", "INFO", "WARN", "DEBUG", "CRITICAL", "ERROR"):
         util.fatal("Bad debug level: %s" % level_str)
 
@@ -515,5 +527,6 @@ def attach_log_file(config_filename):
     return os.path.abspath(log_filename)
 
 if __name__ == "__main__":
-    setup_logging()
-    main()
+    parser = create_arg_parser()
+    setup_logging(parser)
+    main(parser)
