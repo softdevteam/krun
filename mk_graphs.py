@@ -1,13 +1,14 @@
 #!/usr/bin/env python2.7
 """
 usage:
-    mk_graphs.py <config file>
+    mk_graphs.py <json results file>
 """
 
+import bz2
 import sys
 import json
-import random
-import statsmodels.api as sm
+import statsmodels
+import statsmodels.api
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
@@ -45,30 +46,15 @@ def usage():
     print(__doc__)
     sys.exit(1)
 
-def chop_warmups(executions, warmup):
-    chopped = [x[warmup:] for x in executions]
 
-    if len(chopped) == 0:
-        print("no data after warmup")
-        sys.exit(1)
-
-    return chopped
-
-
-def main(config, config_filename, data_dct):
-    n_graphs = config["N_GRAPHS_PER_BENCH"]
-
+def main(data_dct):
     # Iterate over keys in the json file drawing some graphs
     keys = sorted(data_dct["data"].keys())
     for key in keys:
         bench, vm, variant = key.split(":")
-        warmup = config["VMS"][vm]["warm_upon_iter"]
         executions = data_dct["data"][key]
-        executions = chop_warmups(executions, warmup)
         all_exec_nums = range(len(executions))
-        random.shuffle(all_exec_nums)
-        chosen_exec_nums = all_exec_nums[0:n_graphs]
-        interactive(key, executions, chosen_exec_nums)
+        interactive(key, executions, all_exec_nums)
 
 
 def lag_xs(data, lag):
@@ -99,7 +85,7 @@ def draw_decomp_subplot(axis, data, freq, which, with_slider=False, extra_title=
     def do_draw(axis, data, freq):
         freq = int(freq)
         axis.clear()
-        sd = sm.tsa.seasonal_decompose(data, freq=freq)
+        sd = statsmodels.api.tsa.seasonal_decompose(data, freq=freq)
 
         if which == DECOMP_TYPE_SEASONS:
             vals = sd.seasonal
@@ -283,17 +269,23 @@ def interactive(key, executions, chosen_exec_nums): # XXX one exec for now
     mng.resize(*mng.window.maxsize())
     plt.show()
 
+
+def read_results_file(results_file):
+    results = None
+    with bz2.BZ2File(results_file, "rb") as f:
+        results = json.loads(f.read())
+    return results
+
+
 if __name__ == "__main__":
-    from krun.util import read_config, output_name
     try:
-        cfile = sys.argv[1]
+        json_file = sys.argv[1]
     except IndexError:
         usage()
+    if statsmodels.__version__ < 0.6:
+        print 'This script requires statsmodels v0.6 or higher.'
+        sys.exit(1)
 
-    json_file, config = output_name(cfile), read_config(cfile)
-
-    with open(json_file, "r") as fh:
-        data_dct = json.load(fh)
-
+    data_dct = read_results_file(json_file)
     plt.close() # avoid extra blank window
-    main(config, sys.argv[1], data_dct)
+    main(data_dct)
