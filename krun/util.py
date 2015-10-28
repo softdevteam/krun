@@ -148,7 +148,4 @@ def audits_same_platform(audit0, audit1):
             return False
     if not audit0["uname"] == audit1["uname"]:
         return False
-    if ((audit0["uname"] == 'Linux') and
-        (not (audit0["cpuinfo"] == audit1["cpuinfo"]))):
-        return False
     return True

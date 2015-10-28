@@ -56,9 +56,9 @@ def test_fatal(capsys):
     msg = "example text"
     with pytest.raises(SystemExit):
         fatal(msg)
-    out, err = capsys.readouterr()
-    assert out == ""
-    assert err == "ERROR:root:" + msg + "\n"
+        out, err = capsys.readouterr()
+        assert out == ""
+        assert err == "ERROR:root:" + msg + "\n"
 
 def test_format_raw():
     assert format_raw_exec_results([]) == []
