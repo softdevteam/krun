@@ -1,7 +1,7 @@
 #!/usr/bin/env python2.7
 """
 usage:
-    mk_graphs.py <json results file>
+    chart_results.py <json results file>
 """
 
 import bz2
