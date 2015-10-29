@@ -151,11 +151,11 @@ class ExecutionScheduler(object):
 
         # Record how long processes are taking so we can make a
         # rough ETA for the user.
-        # Maps (bmark, vm, variant) -> [t_0, t_1, ...]
+        # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
         self.eta_estimates = {}
 
         # Maps key to results:
-        # (bmark, vm, variant) -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
+        # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
         self.results = {}
 
         # file names
@@ -180,6 +180,7 @@ class ExecutionScheduler(object):
                 break
         else:
             raise JobMissingError(key)
+        debug("DEBUG: Removed %s from schedule" % key)
         self.work_deque.remove(job_to_remove)
 
     def next_job(self):
@@ -237,11 +238,17 @@ class ExecutionScheduler(object):
         # add the results to this object, ready to be saved to a Json file.
         if self.resume and current_result_json is not None:
             for key in current_result_json['data']:
-                if len(current_result_json['data'][key]) > 0:
+                num_completed_jobs = len(current_result_json['data'][key])
+                if num_completed_jobs > 0:
                     try:
-                        self.remove_job_by_key(key)
-                        debug("DEBUG: %s has already been run. Not scheduling." %
-                               key)
+                        debug("DEBUG: %s has already been run %g times." %
+                              (key, num_completed_jobs))
+                        for _ in range(num_completed_jobs):
+                            self.remove_job_by_key(key)
+                        self.eta_estimates[key] = []
+                        for result_set in current_result_json['data'][key]:
+                            total_time = sum(result_set)
+                            self.eta_estimates[key].append(total_time)
                     except JobMissingError as excn:
                         tup = (excn.key, self.config_file, self.out_file)
                         msg = ("Failed to resume benchmarking session\n." +
@@ -250,18 +257,24 @@ class ExecutionScheduler(object):
                         util.fatal(msg)
                     self.results[key] = current_result_json['data'][key]
 
-    def run(self, dry_run=False):
+    def run(self, dry_run=False, resume=False):
         """Benchmark execution starts here"""
 
-        util.log_and_mail(self.mailer, info,
-                          "Benchmarking started",
-                          "Benchmarking started.\nLogging to %s" % self.log_path,
-                          bypass_limiter=True)
+        if len(self) == 0:
+            debug("krun started with an empty queue of jobs")
+
+        if not resume:
+            util.log_and_mail(self.mailer, info,
+                              "Benchmarking started",
+                              "Benchmarking started.\nLogging to %s" % self.log_path,
+                              bypass_limiter=True)
 
         # scaffold dicts
-        for j in self.work_deque:
-            self.eta_estimates[j.key] = []
-            self.results[j.key] = []
+        for job in self.work_deque:
+            if not job.key in self.eta_estimates:
+                self.eta_estimates[job.key] = []
+            if not job.key in self.results:
+                self.results[job.key] = []
 
         errors = False
         start_time = time.time() # rough overall timer, not used for actual results
@@ -269,7 +282,6 @@ class ExecutionScheduler(object):
         while True:
             jobs_left = len(self)
             info("%d jobs left in scheduler queue" % jobs_left)
-
             if jobs_left == 0:
                 break
 
@@ -299,6 +311,7 @@ class ExecutionScheduler(object):
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
+            info("Intermediate results dumped to %s" % self.out_file)
             util.dump_results(self.config_file, self.out_file, self.results,
                               self.platform.audit)
 
@@ -508,7 +521,7 @@ def main(parser):
                                resume=args.resume,
                                reboot=args.reboot)
     sched.build_schedule(config, current)
-    sched.run(args.dry_run) # does the benchmarking
+    sched.run(args.dry_run, args.resume) # does the benchmarking
 
 def setup_logging(parser):
     # Colours help to distinguish benchmark stderr from messages printed
