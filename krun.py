@@ -24,6 +24,8 @@ HERE = os.path.abspath(os.getcwd())
 DIR = os.path.abspath(os.path.dirname(__file__))
 MISC_SANITY_CHECK_DIR = os.path.join(DIR, "misc_sanity_checks")
 
+# Wait this many seconds for the network to come up.
+STARTUP_WAIT_SECONDS = 3 * 60
 
 CONSOLE_FORMATTER = PLAIN_FORMATTER = logging.Formatter(
     '[%(asctime)s: %(levelname)s] %(message)s',
@@ -521,6 +523,12 @@ def main(parser):
                                resume=args.resume,
                                reboot=args.reboot)
     sched.build_schedule(config, current)
+
+    if args.reboot:
+        info("Waiting %sseconds for the network to come up." %
+             str(STARTUP_WAIT_SECONDS))
+        time.sleep(STARTUP_WAIT_SECONDS)
+
     sched.run(args.dry_run, args.resume) # does the benchmarking
 
 def setup_logging(parser):
