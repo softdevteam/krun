@@ -442,6 +442,11 @@ def create_arg_parser():
 def main(parser):
     args = parser.parse_args()
 
+    if args.reboot and not args.resume:
+        print ("\ERROR: --reboot will only ever run one execution " +
+               "of your benchmarks. Please also use --resume.\n")
+        usage(parser)
+
     if not args.config.endswith(".krun"):
         usage(parser)
 
