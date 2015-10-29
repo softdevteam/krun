@@ -34,11 +34,39 @@ If your Linux bootloader is Grub, you can follow these steps:
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
   * Run `sudo update-grub`
 
-Create a new user called `krun`, with minimal permissions:
+Also for a Linux system, krun will insist that the kernel is running in
+"tickless" mode.  Tickless mode is a compile time kernel parameter, so if it is
+not enabled, you will need to build a custom kernel.  You can verify the
+tickless mode of the current kernel with:
+
+```
+cat /boot/config-`uname -r` | grep HZ
+```
+
+`CONFIG_NO_HZ_FULL` should be set to *y*. Krun will check this before
+running benchmarks.
+
+On a Debian machine, the easiest way to build a tickless kernel is to build
+installable deb packages. This process is described
+[here](https://debian-handbook.info/browse/stable/sect.kernel-compilation.html).
+When you run `make menuconfig` to configure the kernel, go into `General
+setup->Timers subsystem->Timer tick handling` and choose `Full dynticks system
+(tickless)`. You can then continue to build and package as usual. Once
+finished, you will find `.deb` files in the parent directory. To install them,
+use `dpkg install`.  This will automatically set the new kernel as the default
+boot kernel.
+
+For more information on tickless mode, see
+[the kernel docs](https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt).
+
+You will need to create a new user called `krun`, with minimal permissions:
 
 ```bash
 sudo useradd krun
 ```
+
+You will want to add this user to the `sudoers` group and make sure that
+the user does not need a password for `sudo` as root.
 
 ## Step 2: Fetch the krun source
 
