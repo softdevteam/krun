@@ -317,7 +317,89 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
+        self._check_tickless_kernel()
 
+    @staticmethod
+    def _tickless_config_info_str(modes):
+        msg = ""
+        for k, v in modes.iteritems():
+            if v:
+                yn = "y"
+            else:
+                yn = "n"
+            msg += "%s=%s " % (k, yn)
+        return msg
+
+    @staticmethod
+    def _open_kernel_config_file():
+        """Open the kernel config file in /boot. Separated for mocking."""
+
+        # get kernel release string, e.g. "3.16.0-4-amd64"
+        stdout, _, _ = run_shell_cmd("uname -r")
+        kern_rel_str = stdout.strip()
+
+        config_basename = "config-%s" % kern_rel_str
+        config_path = os.sep + os.path.join("boot", config_basename)
+
+        return open(config_path, "r")
+
+    def _check_tickless_kernel(self):
+        """Check the Linux kernel was built for full tickless operation."""
+
+        debug("Checking linux kernel is tickless")
+
+        # These are the variables of interest. They are described well here:
+        # http://lwn.net/Articles/549580/
+        # and here:
+        # https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt
+        modes = {
+            # Scheduler ticks always occur. Rare in modern linux.
+            "CONFIG_NO_HZ_PERIODIC": False,
+            # Omit scheduler ticks when CPU is idle.
+            "CONFIG_NO_HZ_IDLE": False,
+            # Omit scheduler ticks when CPU has only one runnable process.
+            # This is the one we want to see enabled.
+            "CONFIG_NO_HZ_FULL": False,
+        }
+
+        # Walk kernel config looking for a lines describing tickless operation
+        fh = LinuxPlatform._open_kernel_config_file()
+        for line in fh:
+            line = line.strip()
+            if line == "" or line.startswith('#'):
+                continue
+
+            k, v = line.split("=")
+
+            if k not in modes:
+                continue
+
+            if v not in ["y", "n"]:
+                fatal("Unexpected value for kernel config key '%s': '%s'" % (k, v))
+
+            if v == "y":
+                modes[k] = True  # else it v was "n", and stays off
+
+        fh.close()
+
+        tickless_info_msg = LinuxPlatform._tickless_config_info_str(modes)
+
+        # These settings should be mutually exclusive.
+        enabled = [x for x in modes.itervalues() if x]
+        if len(enabled) != 1:
+            msg = "Tickless settings in kernel make no sense.\n"
+            msg += tickless_info_msg + "\n"
+            msg += "Only one of the three should be set."
+            fatal(msg)
+
+
+        if not modes["CONFIG_NO_HZ_FULL"]:
+            msg = "Linux kernel is not tickless.\n"
+            msg += tickless_info_msg + "\n"
+            msg += "Please compile and boot a tickless kernel (CONFIG_HZ_FULL=y)"
+            fatal(msg)
+
+        debug(tickless_info_msg)
 
     def _check_perf_samplerate(self):
         """Attempt to minimise time spent by the Linux perf kernel profiler.
