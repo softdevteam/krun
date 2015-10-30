@@ -18,7 +18,7 @@ exec 1>&2
 set -x
 
 cd /home/krun/krun/examples
-PYTHONPATH=../ python ../krun.py --resume --reboot --debug=INFO example.krun
+PYTHONPATH=../ python ../krun.py --resume --reboot --started-by-init --debug=INFO example.krun
 
 # rc.local must always "exit 0" on success or any other value on error.
 exit 0
