@@ -3,7 +3,7 @@
 # /etc/rc.local
 #
 # This script is executed at the end of each multiuser runlevel.
-# This means that once krun has rebooted the machine, you will not
+# This means that once Krun has rebooted the machine, you will not
 # see a login prompt until all benchmarks have finished.
 #
 # Verify this script by running:

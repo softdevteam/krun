@@ -267,7 +267,7 @@ class ExecutionScheduler(object):
         """Benchmark execution starts here"""
         jobs_left = len(self)
         if jobs_left == 0:
-           debug("krun started with an empty queue of jobs")
+           debug("Krun started with an empty queue of jobs")
 
         if not self.started_by_init:
             util.log_and_mail(self.mailer, info,
@@ -291,7 +291,7 @@ class ExecutionScheduler(object):
             util.dump_results(self.config_file, self.out_file,
                               self.results, self.platform.audit)
             # and reboot before first benchmark
-            info("reboot prior to first execution")
+            info("Reboot prior to first execution")
             self._reboot()
 
         if self.reboot and self.started_by_init and jobs_left > 0:
@@ -347,7 +347,7 @@ class ExecutionScheduler(object):
             self.platform.check_dmesg_for_changes()
 
             if self.reboot:
-                info("reboot in preparation for next execution")
+                info("Reboot in preparation for next execution")
                 self._reboot()
 
         end_time = time.time() # rough overall timer, not used for actual results
@@ -366,7 +366,7 @@ class ExecutionScheduler(object):
 
     def _reboot(self):
         if self.dry_run:
-            info("SIMULATED: reboot (restarting krun in-place)")
+            info("SIMULATED: reboot (restarting Krun in-place)")
             args = [sys.executable, sys.argv[0],
                     "--started-by-init", "--resume", "--dryrun",
                     "--reboot", self.config_file]
@@ -495,7 +495,7 @@ def create_arg_parser():
                               'DEBUG, INFO, WARN, DEBUG, CRITICAL, ERROR'))
     parser.add_argument('config', action="store", # Required by default.
                         metavar='FILENAME',
-                        help='krun configuration file, e.g. experiment.krun')
+                        help='Krun configuration file, e.g. experiment.krun')
     return parser
 
 def main(parser):
@@ -506,9 +506,9 @@ def main(parser):
 
     try:
         if os.stat(args.config).st_size <= 0:
-            util.fatal('krun configuration file %s is empty.' % args.config)
+            util.fatal('Krun configuration file %s is empty.' % args.config)
     except OSError:
-        util.fatal('krun configuration file %s does not exist.' % args.config)
+        util.fatal('Krun configuration file %s does not exist.' % args.config)
 
     config = util.read_config(args.config)
     out_file = util.output_name(args.config)
@@ -550,7 +550,7 @@ def main(parser):
 
     # If the user has asked for resume-mode, the current platform must
     # be an identical machine to the current one.
-    error_msg = ("You have asked krun to resume an interrupted benchmark. " +
+    error_msg = ("You have asked Krun to resume an interrupted benchmark. " +
                  "This is only valid if the machine you are using is " +
                  "identical to the one on which the last results were " +
                  "gathered, which is not the case.")

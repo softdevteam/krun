@@ -1,7 +1,7 @@
-# krun example
+# Krun example
 
-This directory contains a simple experiment using krun.
-This is a good starting point for setting up your own krun configuration.
+This directory contains a simple experiment using Krun.
+This is a good starting point for setting up your own Krun configuration.
 
 The example here contains two benchmark programs (*nbody* and *dummy*),
 executed on two VMs (*cPython* and a standard *JVM* such as HotSpot).
@@ -14,9 +14,11 @@ This configuration can be found in the file `examples/example.krun`.
 
 ## Step 1: prepare the benchmarking machine
 
-krun currently only runs on Unix-like environments.
+Krun currently only runs on Unix-like environments.
 To run this example experiment, you need superuser rights to the machine you are
 using, e.g. on Linux you should be able to run `sudo`.
+
+### Dependencies
 
 You need to have the following installed:
 
@@ -26,6 +28,8 @@ You need to have the following installed:
   * cpufrequtils (e.g. `sudo apt-get install cpufrequtils`)
   * cffi (e.g. `sudo apt-get install python-cffi`)
 
+### Kernel arguments
+
 If you are using a Linux system, you will need to set some kernel arguments.
 If your Linux bootloader is Grub, you can follow these steps:
 
@@ -34,7 +38,7 @@ If your Linux bootloader is Grub, you can follow these steps:
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
   * Run `sudo update-grub`
 
-Also for a Linux system, krun will insist that the kernel is running in
+Also for a Linux system, Krun will insist that the kernel is running in
 "tickless" mode.  Tickless mode is a compile time kernel parameter, so if it is
 not enabled, you will need to build a custom kernel.  You can verify the
 tickless mode of the current kernel with:
@@ -59,6 +63,8 @@ boot kernel.
 For more information on tickless mode, see
 [the kernel docs](https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt).
 
+### Create a user called krun
+
 You will need to create a new user called `krun`, with minimal permissions:
 
 ```bash
@@ -68,7 +74,7 @@ sudo useradd krun
 You will want to add this user to the `sudoers` group and make sure that
 the user does not need a password for `sudo` as root.
 
-## Step 2: Fetch the krun source
+## Step 2: Fetch the Krun source
 
 ```bash
 $ git clone https://github.com/softdevteam/krun.git
@@ -80,15 +86,15 @@ $ cd krun
 ```bash
 $ export JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64/
 ```
-## Step 4: Build krun
+## Step 4: Build Krun
 
-The krun Makefile honours the standard variables: `CC`, `CPPFLAGS`, `CFLAGS`
+The Krun Makefile honours the standard variables: `CC`, `CPPFLAGS`, `CFLAGS`
 and `LDFLAGS`. For example, if you wish to use `clang` rather than `gcc` you
 can append `CC=/bin/clang` to the options here:
 
 ```bash
 $ pwd
-.../krun
+.../Krun
 $ make JAVA_CPPFLAGS='"-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"' \
     JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1
 ```
@@ -119,7 +125,7 @@ You should see a log scroll past, and results will be stored in the file:
 It is often useful to test a configuration file, without actually
 running a full benchmark (especially if the benchmark program is
 long).
-krun supports this with the `--dryrun` command line switch:
+Krun supports this with the `--dryrun` command line switch:
 
 ```bash
 $ PYTHONPATH=../ ../krun.py --dryrun --debug=INFO example.krun
@@ -132,7 +138,7 @@ Valid debug levels are: `DEBUG`, `INFO`, `WARN`, `DEBUG`,
 
 ## Running in reboot and resume modes
 
-krun can resume an interrupted benchmark by passing in the `--resume`
+Krun can resume an interrupted benchmark by passing in the `--resume`
 flag.
 This will read and re-use results from previous executions of your
 benchmarks, and run the remaining executions detailed in your configuration
@@ -143,20 +149,31 @@ $ PYTHONPATH=../ ../krun.py --resume example.krun
 ```
 
 You may wish to use this facility to reboot after every execution.
-To do this, you can pass in both the `--resume` and `--reboot` flags when
-you start krun:
+To do this, you can pass in the `--reboot` flag when you start Krun:
 
 ```bash
-$ PYTHONPATH=../ ../krun.py --resume --reboot example.krun
+$ PYTHONPATH=../ ../krun.py --reboot example.krun
 ```
 
-You will also need to ensure that krun is restarted once the machine has
+You will also need to ensure that Krun is restarted once the machine has
 rebooted.
 You can do this by hand, or by using the boot configuration provided by
 your OS.
+A boot configuration file should pass in the `--reboot`, `--resume` and
+`started-by-init` flags to Krun.
+This will suppress some emails that Krun sends out.
+
 The `krun/etc` directory contains an `rc.local.linux` file which goes
 with the examples here.
 This file is compatible with some Linux machines.
+
+### Testing a benchmark run with `--reboot`
+
+If you need to test a benchmark configuration with `--reboot`, you can
+still use the `--dryrun` flag.
+In a dry run, Krun will not reboot your machine (it will simulate
+rebooting by restarting Krun automatically) and will not pause to
+wait for your network interface to come up.
 
 ## Creating your own experiments
 
