@@ -141,7 +141,8 @@ class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
     def __init__(self, config_file, log_filename, out_file, mailer, platform,
-                 resume=False, reboot=False):
+                 resume=False, reboot=False, dry_run=False,
+                 started_by_init=False):
         self.mailer = mailer
 
         self.work_deque = deque()
@@ -150,6 +151,8 @@ class ExecutionScheduler(object):
         self.platform = platform
         self.resume = resume
         self.reboot = reboot
+        self.dry_run = dry_run
+        self.started_by_init = started_by_init
 
         # Record how long processes are taking so we can make a
         # rough ETA for the user.
@@ -247,6 +250,7 @@ class ExecutionScheduler(object):
                               (key, num_completed_jobs))
                         for _ in range(num_completed_jobs):
                             self.remove_job_by_key(key)
+                            self.jobs_done += 1
                         self.eta_estimates[key] = []
                         for result_set in current_result_json['data'][key]:
                             total_time = sum(result_set)
@@ -259,16 +263,17 @@ class ExecutionScheduler(object):
                         util.fatal(msg)
                     self.results[key] = current_result_json['data'][key]
 
-    def run(self, dry_run=False, resume=False):
+    def run(self):
         """Benchmark execution starts here"""
+        jobs_left = len(self)
+        if jobs_left == 0:
+           debug("krun started with an empty queue of jobs")
 
-        if len(self) == 0:
-            debug("krun started with an empty queue of jobs")
-
-        if not resume:
+        if not self.started_by_init:
             util.log_and_mail(self.mailer, info,
                               "Benchmarking started",
-                              "Benchmarking started.\nLogging to %s" % self.log_path,
+                              "Benchmarking started.\nLogging to %s" %
+                              self.log_path,
                               bypass_limiter=True)
 
         # scaffold dicts
@@ -278,7 +283,27 @@ class ExecutionScheduler(object):
             if not job.key in self.results:
                 self.results[job.key] = []
 
-        errors = False
+        if self.reboot and not self.started_by_init:
+            # This has the effect of making a blank results file
+            # if it doesn't yet exist. If it does exist, then
+            # this is actually a no-op. As the same information
+            # will be written back to the results file.
+            util.dump_results(self.config_file, self.out_file,
+                              self.results, self.platform.audit)
+            # and reboot before first benchmark
+            info("reboot prior to first execution")
+            self._reboot()
+
+        if self.reboot and self.started_by_init and jobs_left > 0:
+            info("Waiting %sseconds for the network to come up." %
+                 str(STARTUP_WAIT_SECONDS))
+            if self.dry_run:
+                info("SIMULATED: time.sleep (would have waited %gsecs)." %
+                     STARTUP_WAIT_SECONDS)
+            else:
+                time.sleep(STARTUP_WAIT_SECONDS)
+
+        errors = False # XXX not preserved across reboots!
         start_time = time.time() # rough overall timer, not used for actual results
 
         while True:
@@ -303,10 +328,10 @@ class ExecutionScheduler(object):
                 info("Jobs until ETA known: %s" % self.jobs_until_eta_known())
 
             job = self.next_job()
-            raw_exec_result = job.run(self.mailer, dry_run)
+            raw_exec_result = job.run(self.mailer, self.dry_run)
             exec_result = util.format_raw_exec_results(raw_exec_result)
 
-            if not exec_result and not dry_run:
+            if not exec_result and not self.dry_run:
                 errors = True
 
             self.results[job.key].append(exec_result)
@@ -321,10 +346,9 @@ class ExecutionScheduler(object):
             self.platform.wait_until_cpu_cool()
             self.platform.check_dmesg_for_changes()
 
-            if self.reboot and dry_run:
-                subprocess.call(['echo'] + self.platform.get_reboot_cmd())
-            elif self.reboot:
-                subprocess.call(self.platform.get_reboot_cmd())
+            if self.reboot:
+                info("reboot in preparation for next execution")
+                self._reboot()
 
         end_time = time.time() # rough overall timer, not used for actual results
 
@@ -339,6 +363,18 @@ class ExecutionScheduler(object):
             ((end_time - start_time), self.log_path)
         util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
                           bypass_limiter=True)
+
+    def _reboot(self):
+        if self.dry_run:
+            info("SIMULATED: reboot (restarting krun in-place)")
+            args = [sys.executable, sys.argv[0],
+                    "--started-by-init", "--resume", "--dryrun",
+                    "--reboot", self.config_file]
+            os.execv(args[0], args)  # replace myself
+            assert False  # unreachable
+        else:
+            subprocess.call(self.platform.get_reboot_cmd())
+
 
 class TimeEstimateFormatter(object):
     def __init__(self, seconds):
@@ -435,16 +471,24 @@ def create_arg_parser():
     """Create a parser to process command-line options.
     """
     parser = argparse.ArgumentParser(description='Benchmark, running many fresh processes.')
+
+    # Upper-case '-I' so as to make it harder to use by accident.
+    # Real users should never use -I. Only the OS init system.
+    parser.add_argument('--started-by-init', '-I', action='store_true',
+                        default=False, dest='started_by_init', required=False,
+                        help='Krun is being invoked by OS init system')
     parser.add_argument('--resume', '-r', action='store_true', default=False,
                         dest='resume', required=False,
-                        help='Resume benchmarking if interrupted')
+                        help=("Resume benchmarking if interrupted " +
+                              "and append to an existing results file"))
     parser.add_argument('--reboot', '-b', action='store_true', default=False,
                         dest='reboot', required=False,
-                        help='Reboot after every execution')
+                        help='Reboot before each benchmark is executed')
     parser.add_argument('--dryrun', '-d', action='store_true', default=False,
                         dest='dry_run', required=False,
-                        help=("Don't execute benchmarks. " +
-                              "Useful for verifying configuration files."))
+                        help=("Build and run a benchmarking schedule " +
+                              "But don't execute the benchmarks. " +
+                              "Useful for verifying configuration files"))
     parser.add_argument('--debug', '-g', action="store", default='INFO',
                         dest='debug_level', required=False,
                         help=('Debug level used by logger. Must be one of: ' +
@@ -457,11 +501,6 @@ def create_arg_parser():
 def main(parser):
     args = parser.parse_args()
 
-    if args.reboot and not args.resume:
-        print ("\ERROR: --reboot will only ever run one execution " +
-               "of your benchmarks. Please also use --resume.\n")
-        usage(parser)
-
     if not args.config.endswith(".krun"):
         usage(parser)
 
@@ -473,6 +512,25 @@ def main(parser):
 
     config = util.read_config(args.config)
     out_file = util.output_name(args.config)
+    out_file_exists = os.path.exists(out_file)
+
+    if out_file_exists and not os.path.isfile(out_file):
+        util.fatal(
+            "Output file '%s' exists but is not a regular file" % out_file)
+
+    if out_file_exists and not args.resume:
+        util.fatal("Output file '%s' already exists. "
+                   "Either resume the session (--resume) or "
+                   "move the file away" % out_file)
+
+    if not out_file_exists and args.resume:
+        util.fatal("No results file to resume. Expected '%s'" % out_file)
+
+    if args.started_by_init and not args.reboot:
+        util.fatal("--started-by-init makes no sense without --reboot")
+
+    if args.started_by_init and not args.resume:
+        util.fatal("--started-by-init makes no sense without --resume")
 
     mail_recipients = config.get("MAIL_TO", [])
     if type(mail_recipients) is not list:
@@ -498,17 +556,18 @@ def main(parser):
                  "gathered, which is not the case.")
     current = None
     if args.resume:
-        if os.path.isfile(out_file):
-            current = util.read_results(out_file)
-            if not util.audits_same_platform(platform.audit, current["audit"]):
-                util.fatal(error_msg)
-        else:
-            # Touch the config file to update its mtime. This is required
-            # by resume-mode which uses the mtime to determine the name of
-            # the log file, should this benchmark be resumed.
-            _, _, rc = util.run_shell_cmd("touch " + args.config)
-            if rc > 0:
-                util.fatal("Could not touch config file: " + args.config)
+        # output file must exist, due to check above
+        assert(out_file_exists)
+        current = util.read_results(out_file)
+        if not util.audits_same_platform(platform.audit, current["audit"]):
+            util.fatal(error_msg)
+    else:
+        # Touch the config file to update its mtime. This is required
+        # by resume-mode which uses the mtime to determine the name of
+        # the log file, should this benchmark be resumed.
+        _, _, rc = util.run_shell_cmd("touch " + args.config)
+        if rc > 0:
+            util.fatal("Could not touch config file: " + args.config)
 
     log_filename = attach_log_file(args.config, args.resume)
 
@@ -521,15 +580,13 @@ def main(parser):
                                mailer,
                                platform,
                                resume=args.resume,
-                               reboot=args.reboot)
+                               reboot=args.reboot,
+                               dry_run=args.dry_run,
+                               started_by_init=args.started_by_init)
     sched.build_schedule(config, current)
 
-    if args.reboot:
-        info("Waiting %sseconds for the network to come up." %
-             str(STARTUP_WAIT_SECONDS))
-        time.sleep(STARTUP_WAIT_SECONDS)
-
-    sched.run(args.dry_run, args.resume) # does the benchmarking
+    # does the benchmarking
+    sched.run()
 
 def setup_logging(parser):
     # Colours help to distinguish benchmark stderr from messages printed
@@ -537,8 +594,8 @@ def setup_logging(parser):
     # is quite impossible to miss them.
     args = parser.parse_args()
 
-    # We default to "info" level, user can change by setting
-    # KRUN_DEBUG in the environment.
+    # We default to "info" level, user can change by passing
+    # in a different argument to --debug on the command line.
     level_str = args.debug_level.upper()
     if level_str not in ("DEBUG", "INFO", "WARN", "DEBUG", "CRITICAL", "ERROR"):
         util.fatal("Bad debug level: %s" % level_str)
@@ -559,6 +616,7 @@ def attach_log_file(config_filename, resume):
     fh.setFormatter(PLAIN_FORMATTER)
     logging.root.addHandler(fh)
     return os.path.abspath(log_filename)
+
 
 if __name__ == "__main__":
     parser = create_arg_parser()
