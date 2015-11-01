@@ -346,7 +346,7 @@ class ExecutionScheduler(object):
             self.platform.wait_until_cpu_cool()
             self.platform.check_dmesg_for_changes()
 
-            if self.reboot:
+            if self.reboot and len(self) > 0:
                 info("Reboot in preparation for next execution")
                 self._reboot()
 
