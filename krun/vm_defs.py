@@ -107,7 +107,7 @@ class BaseVMDef(object):
         # VMDef construction time, so we have to substitute it in later.
         actual_args = []
         for a in args:
-            if hasattr(a, "__call__"):  # i.e. a function
+            if callable(a):
                 a = a(heap_lim_k)
             actual_args.append(a)
 
