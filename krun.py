@@ -9,7 +9,7 @@ usage: runner.py <config_file.krun>
 import argparse
 import os, sys
 import logging
-from logging import debug
+from logging import debug, info
 
 import krun.util as util
 from krun.platform import detect_platform
@@ -250,6 +250,8 @@ def attach_log_file(config_filename, resume):
 
 
 if __name__ == "__main__":
+    debug("arguments: %s"  % " ".join(sys.argv[1:]))
     parser = create_arg_parser()
     setup_logging(parser)
+    info("Krun starting...")
     main(parser)

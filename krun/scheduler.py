@@ -161,7 +161,7 @@ class ExecutionScheduler(object):
                 break
         else:
             raise JobMissingError(key)
-        debug("DEBUG: Removed %s from schedule" % key)
+        debug("Removed %s from schedule" % key)
         self.work_deque.remove(job_to_remove)
 
     def next_job(self):
@@ -211,7 +211,7 @@ class ExecutionScheduler(object):
                             self.add_job(job)
                         else:
                             if not one_exec_scheduled:
-                                debug("DEBUG: %s is in skip list. Not scheduling." %
+                                debug("%s is in skip list. Not scheduling." %
                                       job.key)
             one_exec_scheduled = True
         # Resume mode: if previous results are available, remove the
@@ -222,7 +222,7 @@ class ExecutionScheduler(object):
                 num_completed_jobs = len(current_result_json['data'][key])
                 if num_completed_jobs > 0:
                     try:
-                        debug("DEBUG: %s has already been run %g times." %
+                        debug("%s has already been run %d times." %
                               (key, num_completed_jobs))
                         for _ in range(num_completed_jobs):
                             self.remove_job_by_key(key)
@@ -271,10 +271,10 @@ class ExecutionScheduler(object):
             self._reboot()
 
         if self.reboot and self.started_by_init and jobs_left > 0:
-            info("Waiting %sseconds for the network to come up." %
+            info("Waiting %s seconds for the system to come up." %
                  str(STARTUP_WAIT_SECONDS))
             if self.dry_run:
-                info("SIMULATED: time.sleep (would have waited %gsecs)." %
+                info("SIMULATED: time.sleep (would have waited %s seconds)." %
                      STARTUP_WAIT_SECONDS)
             else:
                 time.sleep(STARTUP_WAIT_SECONDS)
@@ -343,9 +343,9 @@ class ExecutionScheduler(object):
     def _reboot(self):
         if self.dry_run:
             info("SIMULATED: reboot (restarting Krun in-place)")
-            args = [sys.executable, sys.argv[0],
-                    "--started-by-init", "--resume", "--dryrun",
-                    "--reboot", self.config_file]
+            args =  sys.argv
+            if not self.started_by_init:
+                args.extend(["--resume", "--started-by-init"])
             os.execv(args[0], args)  # replace myself
             assert False  # unreachable
         else:
