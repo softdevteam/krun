@@ -19,7 +19,7 @@ clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
 if __name__ == "__main__":
 
     if len(sys.argv) != 4:
-        print("usage: iterations_runner.php "
+        print("usage: iterations_runner.py "
         "<benchmark> <# of iterations> <benchmark param>\n")
         sys.exit(1)
 
