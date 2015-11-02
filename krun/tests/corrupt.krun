@@ -1,0 +1,9 @@
+import os
+from krun.vm_defs import (PythonVMDef, JavaVMDef)
+from krun import EntryPoint
+
+# Who to mail
+MAIL_TO = [[
+
+# Maximum number of error emails to send per-run
+MAX_MAILS = 2

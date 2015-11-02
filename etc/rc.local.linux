@@ -1,0 +1,24 @@
+#!/bin/sh -e
+#
+# /etc/rc.local
+#
+# This script is executed at the end of each multiuser runlevel.
+# This means that once Krun has rebooted the machine, you will not
+# see a login prompt until all benchmarks have finished.
+#
+# Verify this script by running:
+#    sudo service rc.local start
+#
+
+# Re-direct STDOUT and STDERR to a log file.
+exec 2>>/var/log/rc.local.log
+exec 1>&2
+
+# Print commands as they are executed.
+set -x
+
+cd /home/krun/krun/examples
+PYTHONPATH=../ python ../krun.py --resume --reboot --started-by-init --debug=INFO example.krun
+
+# rc.local must always "exit 0" on success or any other value on error.
+exit 0
