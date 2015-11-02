@@ -1,0 +1,12 @@
+[run]
+branch = True
+omit = krun/tests/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    # ignore abstract methods/properties mocked with pass
+    pass

@@ -3,4 +3,8 @@ language: python
 python:
   - "2.7"
 
-script: py.test
+install:
+  - pip install cffi
+  - pip install pytest-cov
+
+script: py.test --cov-report term --cov=krun  krun
