@@ -120,6 +120,32 @@ $ PYTHONPATH=../ ../krun.py example.krun
 You should see a log scroll past, and results will be stored in the file:
 `../krun/examples/example_results.json.bz2`.
 
+## Using a Krun results file
+
+Krun generates a bzipped Json file containing results of all executions.
+This directory (`examples/`) contains two Python scripts which show
+how to consume results in Krun format:
+
+  * `results2csv.py` which converts the results data to `.csv` files
+  * `chart_results.py` which shows a number of interactive charts
+
+`results2csv.py` only requires the Python standard library.
+`chart_results.py` requires maptplotlib and statsmodels v0.6 or higher.
+
+The structure of the Json results is as follows:
+
+```python
+{
+    'audit': '',  # A unicode object containing platform information
+    'config': '', # A unicode object containing your Krun configuration
+    'data': {     # A dict object containing timing results
+        u'bmark:VM:variant': [  # A list of lists of timing results
+            [ ... ], ...        # One list per execution
+        ]
+  }
+}
+```
+
 ## Testing your configurations
 
 It is often useful to test a configuration file, without actually
