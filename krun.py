@@ -6,9 +6,7 @@ Benchmark, running many fresh processes.
 usage: runner.py <config_file.krun>
 """
 
-import argparse
-import os, sys
-import logging
+import argparse, json, logging, os, sys
 from logging import debug, info
 
 import krun.util as util
@@ -122,26 +120,53 @@ def create_arg_parser():
                         dest='debug_level', required=False,
                         help=('Debug level used by logger. Must be one of: ' +
                               'DEBUG, INFO, WARN, DEBUG, CRITICAL, ERROR'))
-    parser.add_argument('config', action="store", # Required by default.
+    parser.add_argument('--dump-audit', action="store_true",
+                        dest='dump_audit', required=False,
+                        help=('Print the audit section of a Krun ' +
+                              'results file to STDOUT'))
+    parser.add_argument('--dump-config', action="store_true",
+                        dest='dump_config', required=False,
+                        help=('Print the config section of a Krun ' +
+                              'results file to STDOUT'))
+    filename_help = ('Krun configuration or results file. FILENAME should' +
+                     ' be a configuration file when running benchmarks ' +
+                     '(e.g. experiment.krun) and a results file ' +
+                     '(e.g. experiment_results.json.bz2) when calling ' +
+                     'krun with --dump-config or --dump_audit')
+    parser.add_argument('filename', action="store", # Required by default.
                         metavar='FILENAME',
-                        help='Krun configuration file, e.g. experiment.krun')
+                        help=(filename_help))
     return parser
 
 
 def main(parser):
     args = parser.parse_args()
 
-    if not args.config.endswith(".krun"):
+    if args.dump_config or args.dump_audit:
+        if not args.filename.endswith(".json.bz2"):
+            usage(parser)
+        else:
+            results = util.read_results(args.filename)
+            if args.dump_config:
+                text = results['config']
+            elif args.dump_audit:
+                text = json.dumps(eval(str(results['audit'])),
+                                  ensure_ascii=True, sort_keys=True,
+                                  indent=4, separators=(',\n', ':\t'))
+            print text
+            sys.exit(0)
+
+    if not args.filename.endswith(".krun"):
         usage(parser)
 
     try:
-        if os.stat(args.config).st_size <= 0:
-            util.fatal('Krun configuration file %s is empty.' % args.config)
+        if os.stat(args.filename).st_size <= 0:
+            util.fatal('Krun configuration file %s is empty.' % args.filename)
     except OSError:
-        util.fatal('Krun configuration file %s does not exist.' % args.config)
+        util.fatal('Krun configuration file %s does not exist.' % args.filename)
 
-    config = util.read_config(args.config)
-    out_file = util.output_name(args.config)
+    config = util.read_config(args.filename)
+    out_file = util.output_name(args.filename)
     out_file_exists = os.path.exists(out_file)
 
     if out_file_exists and not os.path.isfile(out_file):
@@ -195,16 +220,16 @@ def main(parser):
         # Touch the config file to update its mtime. This is required
         # by resume-mode which uses the mtime to determine the name of
         # the log file, should this benchmark be resumed.
-        _, _, rc = util.run_shell_cmd("touch " + args.config)
+        _, _, rc = util.run_shell_cmd("touch " + args.filename)
         if rc > 0:
-            util.fatal("Could not touch config file: " + args.config)
+            util.fatal("Could not touch config file: " + args.filename)
 
-    log_filename = attach_log_file(args.config, args.resume)
+    log_filename = attach_log_file(args.filename, args.resume)
 
     sanity_checks(config, platform)
 
     # Build job queue -- each job is an execution
-    sched = ExecutionScheduler(args.config,
+    sched = ExecutionScheduler(args.filename,
                                log_filename,
                                out_file,
                                mailer,
