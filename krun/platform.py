@@ -4,6 +4,7 @@ import time
 import os
 import difflib
 import random
+import sys
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
 from krun.util import fatal, run_shell_cmd, log_and_mail
@@ -200,6 +201,49 @@ class UnixLikePlatform(BasePlatform):
             args.append("%s=%s" % t)
         return args
 
+    def change_user_args(self, user="root"):
+        return [self.CHANGE_USER_CMD, "-u", user]
+
+
+class OpenBSDPlatform(UnixLikePlatform):
+    CHANGE_USER_CMD = "doas"
+
+    def __init__(self, mailer):
+        UnixLikePlatform.__init__(self, mailer)
+
+    def get_reboot_cmd(self):
+        cmd = self.change_user_args()
+        cmd.append(self.REBOOT)
+        return cmd
+
+    def has_cpu_cooled(self):
+        warn("CPU temperature checks not yet implemented on OpenBSD")
+        return True, None  # XXX not implemented
+
+    def check_preliminaries(self):
+        warn("System preliminaries not yet implemented on OpenBSD")
+        pass  # XXX not implemented
+
+    def isolate_process_args(self):
+        warn("CPU isolation not yet implemented on OpenBSD")
+        return []  # XXX not implemented, not sure if possible
+
+    def set_base_cpu_temps(self):
+        warn("CPU temperature checks not yet implemented on OpenBSD")
+        pass  # XXX not implemented
+
+    def take_cpu_temp_readings(self):
+        warn("CPU temperature checks not yet implemented on OpenBSD")
+        return []  # XXX not implemeted
+
+    @abstractmethod
+    def save_power(self):
+        pass
+
+    def save_power(self):
+        warn("power management support not implemented on OpenBSD")
+        pass  # XXX not implemented
+
 
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -222,7 +266,7 @@ class LinuxPlatform(UnixLikePlatform):
         self.zones = self._find_thermal_zones()
         self.num_cpus = self._get_num_cpus()
         self.isolated_cpu = None  # Detected later
-        BasePlatform.__init__(self, mailer)
+        UnixLikePlatform.__init__(self, mailer)
 
 
     def _fatal_kernel_arg(self, arg, prefix, suffix):
@@ -552,9 +596,6 @@ class LinuxPlatform(UnixLikePlatform):
         # Extra CPU info, some not in dmesg. E.g. CPU cache size.
         self.audit["cpuinfo"] = run_shell_cmd("cat /proc/cpuinfo")[0]
 
-    def change_user_args(self, user="root"):
-        return [self.CHANGE_USER_CMD, "-u", user]
-
     def get_reboot_cmd(self):
         cmd = self.change_user_args()
         cmd.append(self.REBOOT)
@@ -587,7 +628,13 @@ class DebianLinuxPlatform(LinuxPlatform):
 
 
 def detect_platform(mailer):
-    if os.path.exists("/etc/debian_version"):
-        return DebianLinuxPlatform(mailer)
+    plat_name = sys.platform
+    if plat_name.startswith("linux"):
+        if os.path.exists("/etc/debian_version"):
+            return DebianLinuxPlatform(mailer)
+        else:
+            fatal("Unknown Linux platform")
+    elif plat_name.startswith("openbsd"):
+        return OpenBSDPlatform(mailer)
     else:
         fatal("I don't have support for your platform")
