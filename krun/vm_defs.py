@@ -69,6 +69,14 @@ class BaseVMDef(object):
 
         self.platform = None  # Set later
 
+        # Do not execute the benchmark program
+        # (useful for testing configurations.).
+        # Set later by set_dry_run().
+        self.dry_run = False
+
+    def set_dry_run(self, dry_run=False):
+        self.dry_run = dry_run
+
     def _get_benchmark_path(self, benchmark, entry_point, sanity_check=False):
         if not sanity_check:
             return os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir,
@@ -117,9 +125,9 @@ class BaseVMDef(object):
 
         debug("cmdline='%s'" % " ".join(actual_args))
 
-        if os.environ.get("BENCH_DRYRUN") is not None:
+        if self.dry_run:
             info("Dry run. Skipping.")
-            return "[]"
+            return ("", "", 0)
 
         # We pass the empty environment dict here.
         # This is the *outer* environment that the current user will invoke the

@@ -172,10 +172,16 @@ class BasePlatform(object):
     def process_priority_args(self):
         pass
 
+    @abstractmethod
+    def get_reboot_cmd(self):
+        pass
+
+
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
 
     FORCE_LIBRARY_PATH_ENV_NAME = "LD_LIBRARY_PATH"
+    REBOOT = "reboot"
 
     def unbuffer_fd(self, fd):
         import fcntl
@@ -548,6 +554,12 @@ class LinuxPlatform(UnixLikePlatform):
 
     def change_user_args(self, user="root"):
         return [self.CHANGE_USER_CMD, "-u", user]
+
+    def get_reboot_cmd(self):
+        cmd = self.change_user_args()
+        cmd.append(self.REBOOT)
+        return cmd
+
 
 class DebianLinuxPlatform(LinuxPlatform):
     def collect_audit(self):
