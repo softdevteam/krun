@@ -262,7 +262,7 @@ def setup_logging(parser):
     stream = logging.StreamHandler()
     stream.setLevel(level)
     stream.setFormatter(CONSOLE_FORMATTER)
-    logging.root.addHandler(stream)
+    logging.root.handlers = [stream]
 
 
 def attach_log_file(config_filename, resume):
