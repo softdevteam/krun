@@ -1,6 +1,17 @@
 import os
 from krun.vm_defs import (PythonVMDef, JavaVMDef)
 from krun import EntryPoint
+from krun.util import fatal
+from distutils.spawn import find_executable
+
+# For a real experiment you would certainly use absolute paths
+PYTHON27_BIN = find_executable("python2.7")
+if PYTHON27_BIN is None:
+    fatal("Python binary not found in path")
+
+JAVA_BIN = find_executable("java")
+if JAVA_BIN is None:
+    fatal("Java binary not found in path")
 
 # Who to mail
 MAIL_TO = []
@@ -23,12 +34,12 @@ ITERATIONS_ALL_VMS = 5  # Small number for testing.
 
 VMS = {
     'Java': {
-        'vm_def': JavaVMDef('/usr/bin/java'),
+        'vm_def': JavaVMDef(JAVA_BIN),
         'variants': ['default-java'],
         'n_iterations': ITERATIONS_ALL_VMS,
     },
     'CPython': {
-        'vm_def': PythonVMDef('/usr/bin/python2'),
+        'vm_def': PythonVMDef(PYTHON27_BIN),
         'variants': ['default-python'],
         'n_iterations': ITERATIONS_ALL_VMS,
     }
