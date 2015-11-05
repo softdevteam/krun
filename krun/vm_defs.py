@@ -71,11 +71,7 @@ class BaseVMDef(object):
 
         # Do not execute the benchmark program
         # (useful for testing configurations.).
-        # Set later by set_dry_run().
         self.dry_run = False
-
-    def set_dry_run(self, dry_run=False):
-        self.dry_run = dry_run
 
     def _get_benchmark_path(self, benchmark, entry_point, sanity_check=False):
         if not sanity_check:
