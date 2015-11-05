@@ -2,6 +2,7 @@ import subprocess
 import os
 import select
 import fnmatch
+import json
 from abc import ABCMeta, abstractmethod
 
 from logging import info, debug
@@ -206,8 +207,8 @@ class BaseVMDef(object):
 
         err = rc != 0
         try:
-            ls = eval(stdout)
-        except:
+            ls = json.loads(stdout)
+        except ValueError:
             err = True
 
         if not err and not isinstance(ls, list):

@@ -156,7 +156,7 @@ def main(parser):
             if args.dump_config:
                 text = results['config']
             elif args.dump_audit:
-                text = json.dumps(eval(str(results['audit'])),
+                text = json.dumps(results['audit'],
                                   ensure_ascii=True, sort_keys=True,
                                   indent=4, separators=(',\n', ':\t'))
             print text
