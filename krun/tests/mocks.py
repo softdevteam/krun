@@ -19,6 +19,7 @@ class MockPlatform(DebianLinuxPlatform):
         self.mailer = mailer
         self.audit = dict()
         self.num_cpus = 0
+        self.developer_mode = False
 
     def check_dmesg_for_changes(self):
         pass

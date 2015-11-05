@@ -26,6 +26,7 @@ class BasePlatform(object):
     CPU_TEMP_POLLS_BEFORE_MELTDOWN = 60     # times 10 = ten mins
 
     def __init__(self, mailer):
+        self.developer_mode = False
         self.mailer = mailer
         self.audit = OrderedDict()
 
@@ -79,6 +80,10 @@ class BasePlatform(object):
         warn(warn_s)
 
     def wait_until_cpu_cool(self):
+        if self.developer_mode:
+            warn("Not waiting for CPU to cool due to developer mode")
+            return
+
         time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
         msg_shown = False
         trys = 0
@@ -162,12 +167,26 @@ class BasePlatform(object):
             self.adjust_env_cmd(combine_env) + args
 
     @abstractmethod
-    def change_user_args(self, user="root"):
+    def _change_user_args(self, user="root"):
         pass
 
+    def change_user_args(self, user="root"):
+        if self.developer_mode:
+            warn("Not switching user due to developer mode")
+            return []
+        else:
+            return self._change_user_args(user)
+
     @abstractmethod
-    def isolate_process_args(self):
+    def _isolate_process_args(self):
         pass
+
+    def isolate_process_args(self):
+        if self.developer_mode:
+            warn("Not forcing onto isolated core due to developer mode")
+            return []  # don't use isolated core at all
+        else:
+            return self._isolate_process_args()
 
     @abstractmethod
     def process_priority_args(self):
@@ -175,6 +194,17 @@ class BasePlatform(object):
 
     @abstractmethod
     def get_reboot_cmd(self):
+        pass
+
+    def save_power(self):
+        if self.developer_mode:
+            warn("Not adjusting CPU governor due to developer mode")
+            return
+        else:
+            self._save_power()
+
+    @abstractmethod
+    def _save_power(self):
         pass
 
 
@@ -201,7 +231,7 @@ class UnixLikePlatform(BasePlatform):
             args.append("%s=%s" % t)
         return args
 
-    def change_user_args(self, user="root"):
+    def _change_user_args(self, user="root"):
         return [self.CHANGE_USER_CMD, "-u", user]
 
 
@@ -224,7 +254,7 @@ class OpenBSDPlatform(UnixLikePlatform):
         warn("System preliminaries not yet implemented on OpenBSD")
         pass  # XXX not implemented
 
-    def isolate_process_args(self):
+    def _isolate_process_args(self):
         warn("CPU isolation not yet implemented on OpenBSD")
         return []  # XXX not implemented, not sure if possible
 
@@ -235,10 +265,6 @@ class OpenBSDPlatform(UnixLikePlatform):
     def take_cpu_temp_readings(self):
         warn("CPU temperature checks not yet implemented on OpenBSD")
         return []  # XXX not implemeted
-
-    @abstractmethod
-    def save_power(self):
-        pass
 
     def save_power(self):
         warn("power management support not implemented on OpenBSD")
@@ -286,7 +312,7 @@ class LinuxPlatform(UnixLikePlatform):
               "Set `%s` in the kernel arguments.\n"
               "%s" % (prefix, arg, suffix))
 
-    def isolate_process_args(self):
+    def _isolate_process_args(self):
         """Adjusts benchmark invocation to pin to a CPU core with taskset"""
 
         # The core mask is a bitfield, each bit representing a CPU. When
@@ -345,7 +371,7 @@ class LinuxPlatform(UnixLikePlatform):
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
-    def save_power(self):
+    def _save_power(self):
         """Called when benchmarking is done, to save power"""
 
         for cpu_n in xrange(self.num_cpus):
