@@ -271,6 +271,23 @@ The following platforms are currently supported:
 
 To add a new platform definition, add a new class to `krun/platform.py`.
 
+## Developer Mode
+
+If you are making changes to Krun itself (for example, to add a new platform or
+virtual machine definition), you may find the `--develop` switch useful. This
+will cause Krun to run with the following modifications:
+
+  * Krun will not run the system prerequisite checks. Checks relating to CPU
+    governers,  CPU scalers, CPU temperatures, tickless kernel, etc.
+  * Krun will not attempt to switch user to run benchmarks.
+  * Krun will not force the benchmark on to an isolated core.
+
+This makes it easier to develop krun on (e.g.) a personal laptop which has not
+been prepared for reliable benchmarking.
+
+Note that you should not collect results intended for publication with
+`--develop`.
+
 ## Licenses
 
 The *nbody* benchmark comes from the Computer Language Benchmarks Game, which

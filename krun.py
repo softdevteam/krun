@@ -7,7 +7,7 @@ usage: runner.py <config_file.krun>
 """
 
 import argparse, json, logging, os, sys
-from logging import debug, info
+from logging import debug, info, warn
 
 import krun.util as util
 from krun.platform import detect_platform
@@ -64,7 +64,10 @@ def sanity_checks(config, platform):
             vm_info["vm_def"].sanity_checks()
 
     # misc sanity checks
-    sanity_check_user_change(platform)
+    if not platform.developer_mode:
+        sanity_check_user_change(platform)
+    else:
+        warn("Not running user change sanity check due to developer mode")
 
 
 # This can be modularised if we add more misc sanity checks
@@ -128,6 +131,9 @@ def create_arg_parser():
                         dest='dump_config', required=False,
                         help=('Print the config section of a Krun ' +
                               'results file to STDOUT'))
+    parser.add_argument('--develop', action="store_true",
+                        dest='develop', required=False,
+                        help=('Enable developer mode'))
     filename_help = ('Krun configuration or results file. FILENAME should' +
                      ' be a configuration file when running benchmarks ' +
                      '(e.g. experiment.krun) and a results file ' +
@@ -187,6 +193,9 @@ def main(parser):
     if args.started_by_init and not args.resume:
         util.fatal("--started-by-init makes no sense without --resume")
 
+    if args.develop:
+        warn("Developer mode enabled. Results will not be reliable.")
+
     mail_recipients = config.get("MAIL_TO", [])
     if type(mail_recipients) is not list:
         util.fatal("MAIL_TO config should be a list")
@@ -197,8 +206,16 @@ def main(parser):
     # Initialise platform instance and assign to VM defs.
     # This needs to be done early, so VM sanity checks can run.
     platform = detect_platform(mailer)
-    platform.check_preliminaries()
-    platform.set_base_cpu_temps()
+
+    if not args.develop:
+        platform.check_preliminaries()
+        platform.set_base_cpu_temps()
+    else:
+        # Needed to skip the use of certain tools and techniques.
+        # E.g. taskset on Linux, and switching user.
+        warn("Not checking platform prerequisites due to developer mode")
+        platform.developer_mode = True
+
     platform.collect_audit()
     for vm_name, vm_info in config["VMS"].items():
         vm_info["vm_def"].set_platform(platform)
