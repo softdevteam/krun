@@ -26,6 +26,7 @@ class BasePlatform(object):
     CPU_TEMP_POLLS_BEFORE_MELTDOWN = 60     # times 10 = ten mins
 
     def __init__(self, mailer):
+        self.developer_mode = False
         self.mailer = mailer
         self.audit = OrderedDict()
 
@@ -79,6 +80,10 @@ class BasePlatform(object):
         warn(warn_s)
 
     def wait_until_cpu_cool(self):
+        if self.developer_mode:
+            warn("Not waiting for CPU to cool due to developer mode")
+            return
+
         time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
         msg_shown = False
         trys = 0
@@ -202,7 +207,11 @@ class UnixLikePlatform(BasePlatform):
         return args
 
     def change_user_args(self, user="root"):
-        return [self.CHANGE_USER_CMD, "-u", user]
+        if self.developer_mode:
+            warn("Not switching user due to developer mode")
+            return []
+        else:
+            return [self.CHANGE_USER_CMD, "-u", user]
 
 
 class OpenBSDPlatform(UnixLikePlatform):
@@ -289,6 +298,10 @@ class LinuxPlatform(UnixLikePlatform):
     def isolate_process_args(self):
         """Adjusts benchmark invocation to pin to a CPU core with taskset"""
 
+        if self.developer_mode:
+            warn("Not forcing onto isolated core due to developer mode")
+            return []  # don't use taskset at all
+
         # The core mask is a bitfield, each bit representing a CPU. When
         # a bit is set, it means the task may run on the corresponding core.
         # E.g. a mask of 0x3 (0b11) means the process can run on cores
@@ -347,6 +360,10 @@ class LinuxPlatform(UnixLikePlatform):
 
     def save_power(self):
         """Called when benchmarking is done, to save power"""
+
+        if self.developer_mode:
+            warn("Not adjusting CPU governor due to developer mode")
+            return
 
         for cpu_n in xrange(self.num_cpus):
             debug("Set CPU%d governor to 'ondemand'" % cpu_n)
