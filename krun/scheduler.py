@@ -70,7 +70,7 @@ class ExecutionJob(object):
 
         entry_point = self.config["VARIANTS"][self.variant]
         vm_def = self.vm_info["vm_def"]
-        vm_def.set_dry_run(dry_run)
+        vm_def.dry_run = dry_run
 
         info("Running '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
