@@ -286,6 +286,8 @@ class ExecutionScheduler(object):
         start_time = time.time() # rough overall timer, not used for actual results
 
         while True:
+            self.platform.wait_until_cool()
+
             jobs_left = len(self)
             info("%d jobs left in scheduler queue" % jobs_left)
             if jobs_left == 0:
@@ -322,7 +324,6 @@ class ExecutionScheduler(object):
                               self.platform, self.nreboots)
 
             self.jobs_done += 1
-            self.platform.wait_until_cool()
             self.platform.check_dmesg_for_changes()
 
             if self.reboot and len(self) > 0:
