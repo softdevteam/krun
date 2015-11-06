@@ -131,6 +131,10 @@ def create_arg_parser():
                         dest='dump_config', required=False,
                         help=('Print the config section of a Krun ' +
                               'results file to STDOUT'))
+    parser.add_argument('--dump-reboots', action="store_true",
+                        dest='dump_reboots', required=False,
+                        help=('Print the reboots section of a Krun ' +
+                              'results file to STDOUT'))
     parser.add_argument('--develop', action="store_true",
                         dest='develop', required=False,
                         help=('Enable developer mode'))
@@ -138,7 +142,8 @@ def create_arg_parser():
                      ' be a configuration file when running benchmarks ' +
                      '(e.g. experiment.krun) and a results file ' +
                      '(e.g. experiment_results.json.bz2) when calling ' +
-                     'krun with --dump-config or --dump_audit')
+                     'krun with --dump-config, --dump_audit or ' +
+                     '--dump-reboots')
     parser.add_argument('filename', action="store", # Required by default.
                         metavar='FILENAME',
                         help=(filename_help))
@@ -148,7 +153,7 @@ def create_arg_parser():
 def main(parser):
     args = parser.parse_args()
 
-    if args.dump_config or args.dump_audit:
+    if args.dump_config or args.dump_audit or args.dump_reboots:
         if not args.filename.endswith(".json.bz2"):
             usage(parser)
         else:
@@ -159,6 +164,8 @@ def main(parser):
                 text = json.dumps(results['audit'],
                                   ensure_ascii=True, sort_keys=True,
                                   indent=4, separators=(',\n', ':\t'))
+            elif args.dump_reboots:
+                text = str(results['reboots'])
             print text
             sys.exit(0)
 

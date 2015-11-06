@@ -6,7 +6,7 @@ from krun.util import (should_skip, format_raw_exec_results, output_name,
                        audits_same_platform, ExecutionFailed)
 from krun.tests.mocks import MockMailer
 
-import bz2, json, logging, os, pytest, time
+import bz2, json, os, pytest, time
 
 
 def test_should_skip():
@@ -120,7 +120,8 @@ def test_dump_results():
     audit = 'example audit (py.test)'
     out_file = output_name(config_file)
     all_results = {'dummy:Java:default-java': [[1.000726]]}
-    dump_results(config_file, out_file, all_results, audit)
+    reboots = 5
+    dump_results(config_file, out_file, all_results, audit, reboots)
     with open(config_file, 'r') as config_fp:
         config = config_fp.read()
         with bz2.BZ2File(out_file, 'rb') as input_file:
@@ -128,6 +129,7 @@ def test_dump_results():
             assert dumped_results['audit'] == audit
             assert dumped_results['config'] == config
             assert dumped_results['data'] == all_results
+            assert dumped_results['reboots'] == reboots
         os.unlink(out_file)  # Clean-up generated file.
 
 

@@ -135,13 +135,19 @@ The structure of the JSON results is as follows:
         u'bmark:VM:variant': [  # A list of lists of timing results
             [ ... ], ...        # One list per execution
         ]
-  }
+  },
+    'reboots': N, # An int containing the number of reboots that have
+                  # already taken place. Only used when Krun is started
+                  # with --reboot. This field used to check that the
+                  # benchmarking machine has rebooted the correct number
+                  # of times. It can be safely ignored by users.
 }
 ```
 
 Often it is useful to check the audit or configuration that a result
 file was generated with.
-To do this, call Krun with the `--dump-audit` or `--dump-config` options:
+To do this, call Krun with the `--dump-audit`, `--dump-config` or
+`--dump-reboots` options:
 
 ```bash
 $ python krun.py --dump-config examples/example_results.json.bz2
@@ -159,6 +165,10 @@ $ python krun.py --dump-audit examples/example_results.json.bz2
 {
     "cpuinfo":  "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t:
 ...
+
+$ python krun.py --dump-reboots examples/example_results.json.bz2
+[2015-11-06 13:14:35: INFO] Krun starting...
+8
 ```
 
 This directory (`examples/`) contains two Python scripts which show

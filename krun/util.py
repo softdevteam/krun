@@ -92,12 +92,13 @@ def run_shell_cmd(cmd, failure_fatal=True):
     return stdout.strip(), stderr.strip(), rc
 
 
-def dump_results(config_file, out_file, all_results, audit):
+def dump_results(config_file, out_file, all_results, audit, reboots):
     """Dump results (and a few other bits) into a bzip2 json file."""
     with open(config_file, "r") as f:
         config_text = f.read()
 
-    to_write = {"config": config_text, "data": all_results, "audit": audit}
+    to_write = {"config": config_text, "data": all_results,
+                "audit": audit, "reboots": reboots}
 
     with bz2.BZ2File(out_file, "w") as f:
         f.write(json.dumps(to_write, indent=1, sort_keys=True))
