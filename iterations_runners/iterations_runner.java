@@ -14,7 +14,7 @@ class IterationsRunner {
         System.loadLibrary("kruntime");
     }
 
-    private static native double JNI_clock_gettime_monotonic();
+    public static native double JNI_clock_gettime_monotonic();
 
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
