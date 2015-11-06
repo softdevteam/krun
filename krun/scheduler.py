@@ -139,6 +139,10 @@ class ExecutionScheduler(object):
         # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
         self.results = {}
 
+        # Reboot mode.
+        self.nreboots = 0
+        self.expected_reboots = 0
+
         # file names
         self.config_file = config_file
         self.out_file = out_file
@@ -214,10 +218,15 @@ class ExecutionScheduler(object):
                                 debug("%s is in skip list. Not scheduling." %
                                       job.key)
             one_exec_scheduled = True
+        self.expected_reboots = len(self)
         # Resume mode: if previous results are available, remove the
         # jobs from the schedule which have already been executed, and
         # add the results to this object, ready to be saved to a Json file.
         if self.resume and current_result_json is not None:
+            self._remove_previous_execs_from_schedule(current_result_json)
+
+    def _remove_previous_execs_from_schedule(self, current_result_json):
+            self.nreboots = current_result_json['reboots']
             for key in current_result_json['data']:
                 num_completed_jobs = len(current_result_json['data'][key])
                 if num_completed_jobs > 0:
@@ -260,13 +269,7 @@ class ExecutionScheduler(object):
                 self.results[job.key] = []
 
         if self.reboot and not self.started_by_init:
-            # This has the effect of making a blank results file
-            # if it doesn't yet exist. If it does exist, then
-            # this is actually a no-op. As the same information
-            # will be written back to the results file.
-            util.dump_results(self.config_file, self.out_file,
-                              self.results, self.platform.audit)
-            # and reboot before first benchmark
+            # Reboot before first benchmark (dumps results file).
             info("Reboot prior to first execution")
             self._reboot()
 
@@ -316,7 +319,7 @@ class ExecutionScheduler(object):
             # json file mid-run. It is overwritten each time.
             info("Intermediate results dumped to %s" % self.out_file)
             util.dump_results(self.config_file, self.out_file, self.results,
-                              self.platform.audit)
+                              self.platform.audit, self.nreboots)
 
             self.jobs_done += 1
             self.platform.wait_until_cpu_cool()
@@ -341,6 +344,19 @@ class ExecutionScheduler(object):
                           bypass_limiter=True)
 
     def _reboot(self):
+        self.nreboots += 1
+        debug("About to execute reboot: %g, expecting %g in total." %
+              (self.nreboots, self.expected_reboots))
+        # Dump the results file. This may already have been done, but we
+        # have changed self.nreboots, which needs to be written out.
+        util.dump_results(self.config_file, self.out_file, self.results,
+                  self.platform.audit, self.nreboots)
+        if self.nreboots > self.expected_reboots:
+            util.fatal(("HALTING now to prevent an infinite reboot loop: " +
+                        "INVARIANT num_reboots <= num_jobs violated. " +
+                        "Krun was about to execute reboot number: %g. " +
+                        "%g jobs have been completed, %g are left to go.") %
+                       (self.nreboots, self.jobs_done, len(self)))
         if self.dry_run:
             info("SIMULATED: reboot (restarting Krun in-place)")
             args =  sys.argv
