@@ -135,12 +135,19 @@ The structure of the JSON results is as follows:
         u'bmark:VM:variant': [  # A list of lists of timing results
             [ ... ], ...        # One list per execution
         ]
-  },
+    },
     'reboots': N, # An int containing the number of reboots that have
                   # already taken place. Only used when Krun is started
                   # with --reboot. This field used to check that the
                   # benchmarking machine has rebooted the correct number
                   # of times. It can be safely ignored by users.
+    'starting_temperatures': [ ... ], # Temperatures recorded at the beginning
+                  # of the experiment. Used before each execution to decide if
+                  # the system is running much hotter than before. In this
+                  # case we wait to allow the system to cool. The ordering
+                  # and meanings of the temperatures in the list are platform
+                  # and system specific. This information can be safely
+                  # ignored by users.
 }
 ```
 
