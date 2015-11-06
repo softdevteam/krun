@@ -247,7 +247,7 @@ def main(parser):
         # by resume-mode which uses the mtime to determine the name of
         # the log file, should this benchmark be resumed.
         _, _, rc = util.run_shell_cmd("touch " + args.filename)
-        if rc > 0:
+        if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)
 
         debug("Taking fresh initial temperature readings")
