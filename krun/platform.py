@@ -1,4 +1,4 @@
-# Various CPU related abstrations
+# Various platform related abstrations
 
 import time
 import os
@@ -21,9 +21,9 @@ LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkruntime")
 class BasePlatform(object):
     __metaclass__ = ABCMeta
 
-    CPU_TEMP_MANDATORY_WAIT = 1
-    CPU_TEMP_POLL_FREQ = 10                 # seconds between polls
-    CPU_TEMP_POLLS_BEFORE_MELTDOWN = 60     # times 10 = ten mins
+    TEMP_MANDATORY_WAIT = 1
+    TEMP_POLL_FREQ = 10                 # seconds between polls
+    TEMP_POLLS_BEFORE_MELTDOWN = 60     # times 10 = ten mins
 
     def __init__(self, mailer):
         self.developer_mode = False
@@ -79,33 +79,33 @@ class BasePlatform(object):
 
         warn(warn_s)
 
-    def wait_until_cpu_cool(self):
+    def wait_until_cool(self):
         if self.developer_mode:
-            warn("Not waiting for CPU to cool due to developer mode")
+            warn("Not waiting for cooling due to developer mode")
             return
 
-        time.sleep(BasePlatform.CPU_TEMP_MANDATORY_WAIT)
+        time.sleep(BasePlatform.TEMP_MANDATORY_WAIT)
         msg_shown = False
         trys = 0
         while True:
             debug("Temp poll %d/%d" %
-                  (trys + 1, BasePlatform.CPU_TEMP_POLLS_BEFORE_MELTDOWN))
-            cool, reason = self.has_cpu_cooled()
+                  (trys + 1, BasePlatform.TEMP_POLLS_BEFORE_MELTDOWN))
+            cool, reason = self.has_cooled()
             if cool:
                 break
 
-            # if we get here, CPU is too hot!
+            # if we get here, too hot!
             if not msg_shown:
-                info("CPU is running hot.")
+                info("System is running hot.")
                 info(reason)
                 info("Waiting to cool")
                 msg_shown = True
 
             trys += 1
-            if trys >= BasePlatform.CPU_TEMP_POLLS_BEFORE_MELTDOWN:
-                fatal("CPU didn't cool down")
+            if trys >= BasePlatform.TEMP_POLLS_BEFORE_MELTDOWN:
+                fatal("System didn't cool down")
 
-            time.sleep(BasePlatform.CPU_TEMP_POLL_FREQ)
+            time.sleep(BasePlatform.TEMP_POLL_FREQ)
 
     # When porting to a new platform, implement the following:
     @abstractproperty
@@ -113,15 +113,23 @@ class BasePlatform(object):
         pass
 
     @abstractmethod
-    def take_cpu_temp_readings(self):
+    def take_temperature_readings(self):
         pass
 
     @abstractmethod
-    def set_base_cpu_temps(self):
+    def set_starting_temperatures(self, readings=None):
+        """Populate starting temperature data.
+
+        If a non-None 'readings' argument is passed, these readings are used,
+        otherwise readings are taken from the actual hardware temperatures."""
+        pass
+
+    @abstractproperty
+    def starting_temperatures(self):
         pass
 
     @abstractmethod
-    def has_cpu_cooled(self):
+    def has_cooled(self):
         pass
 
     @abstractmethod
@@ -246,8 +254,8 @@ class OpenBSDPlatform(UnixLikePlatform):
         cmd.append(self.REBOOT)
         return cmd
 
-    def has_cpu_cooled(self):
-        warn("CPU temperature checks not yet implemented on OpenBSD")
+    def has_cooled(self):
+        warn("Temperature checks not yet implemented on OpenBSD")
         return True, None  # XXX not implemented
 
     def check_preliminaries(self):
@@ -258,12 +266,17 @@ class OpenBSDPlatform(UnixLikePlatform):
         warn("CPU isolation not yet implemented on OpenBSD")
         return []  # XXX not implemented, not sure if possible
 
-    def set_base_cpu_temps(self):
-        warn("CPU temperature checks not yet implemented on OpenBSD")
+    def set_starting_temperatures(self, readings=None):
+        warn("Temperature checks not yet implemented on OpenBSD")
         pass  # XXX not implemented
 
-    def take_cpu_temp_readings(self):
-        warn("CPU temperature checks not yet implemented on OpenBSD")
+    @property
+    def starting_temperatures(self):
+        warn("Temperature checks not yet implemented on OpenBSD")
+        pass  # XXX not implemented
+
+    def take_temperature_readings(self):
+        warn("Temperature checks not yet implemented on OpenBSD")
         return []  # XXX not implemeted
 
     def save_power(self):
@@ -282,13 +295,13 @@ class LinuxPlatform(UnixLikePlatform):
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
 
-    # We will wait until the CPU cools to within TEMP_THRESHOLD_PERCENT
+    # We will wait until the zones cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
     TEMP_THRESHOLD_PERCENT = 10
 
     def __init__(self, mailer):
-        self.base_cpu_temps = None
-        self.temp_thresholds = None
+        self._starting_temperatures = None
+        self.temperature_thresholds = None
         self.zones = self._find_thermal_zones()
         self.num_cpus = self._get_num_cpus()
         self.isolated_cpu = None  # Detected later
@@ -331,43 +344,51 @@ class LinuxPlatform(UnixLikePlatform):
         cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
         return int(run_shell_cmd(cmd)[0])
 
-    def set_base_cpu_temps(self):
-        self.base_cpu_temps = self.take_cpu_temp_readings()
-        self.temp_thresholds = \
+    def set_starting_temperatures(self, readings=None):
+        if readings is None:
+            self._starting_temperatures = self.take_temperature_readings()
+        else:
+            self._starting_temperatures = readings
+
+        self.temperature_thresholds = \
             [int(x + x * (1.0 / LinuxPlatform.TEMP_THRESHOLD_PERCENT))
-             for x in self.base_cpu_temps]
+             for x in self._starting_temperatures]
+
+    @property
+    def starting_temperatures(self):
+        return self._starting_temperatures
 
     def _read_zone(self, zone):
         fn = os.path.join(LinuxPlatform.THERMAL_BASE, zone, "temp")
         with open(fn, "r") as fh:
             return int(fh.read())
 
-    def take_cpu_temp_readings(self):
+    def take_temperature_readings(self):
         return [self._read_zone(z) for z in self.zones]
 
-    def has_cpu_cooled(self):
+    def has_cooled(self):
         """returns tuple: (bool_cool, str_reason_if_false)
 
-        'bool_cool' is True if the CPU has cooled (or was never hot).
+        'bool_cool' is True if the system has cooled (or was never hot).
 
-        'str_reason_if_false' is None if the CPU cooled down
+        'str_reason_if_false' is None if the system cooled down.
         (bool_cool=True) , otherwise it is a string indicating the reason
-        the CPU failed to cool.
+        the system failed to cool.
         """
 
-        assert self.base_cpu_temps is not None
+        assert self._starting_temperatures is not None
 
-        readings = self.take_cpu_temp_readings()
-        debug("start temps: %s" % self.base_cpu_temps)
-        debug("temp thresholds: %s" % self.temp_thresholds)
+        readings = self.take_temperature_readings()
+        debug("start temperatures: %s" % self._starting_temperatures)
+        debug("temp thresholds: %s" % self.temperature_thresholds)
         debug("temp reading: %s" % readings)
-        for i in range(len(self.temp_thresholds)):
-            if readings[i] > self.temp_thresholds[i]:
+        for i in range(len(self.temperature_thresholds)):
+            if readings[i] > self.temperature_thresholds[i]:
                 reason = ("Zone %d started at %d but is now %d. " \
                           "Needs to cool to within %d%% (%d)" % \
-                          (i, self.base_cpu_temps[i],
+                          (i, self._starting_temperatures[i],
                            readings[i], LinuxPlatform.TEMP_THRESHOLD_PERCENT,
-                           self.temp_thresholds[i]))
+                           self.temperature_thresholds[i]))
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 

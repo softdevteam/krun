@@ -216,7 +216,6 @@ def main(parser):
 
     if not args.develop:
         platform.check_preliminaries()
-        platform.set_base_cpu_temps()
     else:
         # Needed to skip the use of certain tools and techniques.
         # E.g. taskset on Linux, and switching user.
@@ -240,13 +239,19 @@ def main(parser):
         current = util.read_results(out_file)
         if not util.audits_same_platform(platform.audit, current["audit"]):
             util.fatal(error_msg)
+
+        debug("Using pre-recorded initial temperature readings")
+        platform.set_starting_temperatures(current["starting_temperatures"])
     else:
         # Touch the config file to update its mtime. This is required
         # by resume-mode which uses the mtime to determine the name of
         # the log file, should this benchmark be resumed.
         _, _, rc = util.run_shell_cmd("touch " + args.filename)
-        if rc > 0:
+        if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)
+
+        debug("Taking fresh initial temperature readings")
+        platform.set_starting_temperatures()
 
     log_filename = attach_log_file(args.filename, args.resume)
 

@@ -33,14 +33,15 @@ class MockPlatform(DebianLinuxPlatform):
     def CHANGE_USER_CMD(self):
         pass
 
-    def take_cpu_temp_readings(self):
+    def take_temperature_readings(self):
         pass
 
-    def set_base_cpu_temps(self):
-        pass
+    @property
+    def starting_temperatures(self):
+        return [666, 1337]
 
-    def has_cpu_cooled(self):
-        pass
+    def has_cooled(self):
+        return True, None  # pretend we cooled down OK
 
     def check_preliminaries(self):
         pass
