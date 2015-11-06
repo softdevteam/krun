@@ -319,10 +319,10 @@ class ExecutionScheduler(object):
             # json file mid-run. It is overwritten each time.
             info("Intermediate results dumped to %s" % self.out_file)
             util.dump_results(self.config_file, self.out_file, self.results,
-                              self.platform.audit, self.nreboots)
+                              self.platform, self.nreboots)
 
             self.jobs_done += 1
-            self.platform.wait_until_cpu_cool()
+            self.platform.wait_until_cool()
             self.platform.check_dmesg_for_changes()
 
             if self.reboot and len(self) > 0:
@@ -350,7 +350,7 @@ class ExecutionScheduler(object):
         # Dump the results file. This may already have been done, but we
         # have changed self.nreboots, which needs to be written out.
         util.dump_results(self.config_file, self.out_file, self.results,
-                  self.platform.audit, self.nreboots)
+                  self.platform, self.nreboots)
         if self.nreboots > self.expected_reboots:
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
                         "INVARIANT num_reboots <= num_jobs violated. " +
