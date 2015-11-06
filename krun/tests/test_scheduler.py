@@ -90,6 +90,7 @@ def test_run_schedule(monkeypatch):
     assert len(sched) == 8
     sched.run()
     assert len(sched) == 0
+    os.unlink("example_test.json.bz2")
 
 
 def test_run_schedule_reboot(monkeypatch):
@@ -115,3 +116,4 @@ def test_run_schedule_reboot(monkeypatch):
     with pytest.raises(AssertionError):
         sched.run()
     assert len(sched) == 7
+    os.unlink("example_test.json.bz2")
