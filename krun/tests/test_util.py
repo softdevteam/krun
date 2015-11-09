@@ -127,7 +127,9 @@ def test_dump_results():
     out_file = output_name(config_file)
     all_results = {'dummy:Java:default-java': [[1.000726]]}
     reboots = 5
-    dump_results(config_file, out_file, all_results, platform, reboots)
+    dummy_etas = {'dummy:Java:default-java': [1.1]}
+    dump_results(config_file, out_file, all_results, platform,
+                 reboots, dummy_etas)
     with open(config_file, 'r') as config_fp:
         config = config_fp.read()
         with bz2.BZ2File(out_file, 'rb') as input_file:
@@ -137,6 +139,7 @@ def test_dump_results():
             assert dumped_results['config'] == config
             assert dumped_results['data'] == all_results
             assert dumped_results['reboots'] == reboots
+            assert dumped_results['eta_estimates'] == dummy_etas
         os.unlink(out_file)  # Clean-up generated file.
 
 
