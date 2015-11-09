@@ -1,14 +1,13 @@
-if /linux/ =~ RUBY_PLATFORM
-    MONOTONIC_CLOCK = Process::CLOCK_MONOTONIC_RAW
-else
-    MONOTONIC_CLOCK = Process::CLOCK_MONOTONIC
-end
-
-def clock_gettime_monotonic
-    Process.clock_gettime(MONOTONIC_CLOCK)
-end
-
 class AssertionError < RuntimeError
+end
+
+def clock_gettime_monotonic()
+    # XXX this is for a patched JRuby/truffle only for now! 
+    #
+    # JRuby does not yet provide access to the (raw) monotonic clock, and
+    # adding support is non-trivial (not as simple as adding the C constant).
+    # For now we patch JRuby/Truffle to expose our libkruntime function.
+    Truffle::Primitive.clock_gettime_monotonic()
 end
 
 def assert(cond)
