@@ -279,7 +279,7 @@ class OpenBSDPlatform(UnixLikePlatform):
         warn("Temperature checks not yet implemented on OpenBSD")
         return []  # XXX not implemeted
 
-    def save_power(self):
+    def _save_power(self):
         warn("power management support not implemented on OpenBSD")
         pass  # XXX not implemented
 
