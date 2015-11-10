@@ -140,6 +140,14 @@ def create_arg_parser():
                         dest='dump_etas', required=False,
                         help=('Print the eta_estimates section of a Krun ' +
                               'results file to STDOUT'))
+    parser.add_argument('--dump-temps', action="store_true",
+                        dest='dump_temps', required=False,
+                        help=('Print the starting_temperatures section of ' +
+                              'a Krun results file to STDOUT'))
+    parser.add_argument('--dump-data', action="store_true",
+                        dest='dump_data', required=False,
+                        help=('Print the data section of ' +
+                              'a Krun results file to STDOUT'))
     parser.add_argument('--develop', action="store_true",
                         dest='develop', required=False,
                         help=('Enable developer mode'))
@@ -154,36 +162,49 @@ def create_arg_parser():
                         help=(filename_help))
     return parser
 
+def dump_section(args):
+    results = util.read_results(args.filename)
+    if args.dump_config:
+        text = results['config']
+    elif args.dump_audit:
+        text = util.dump_audit(results['audit'])
+    elif args.dump_reboots:
+        text = str(results['reboots'])
+    elif args.dump_etas:
+        text = json.dumps(results['eta_estimates'],
+                          sort_keys=True, indent=2)
+    elif args.dump_temps:
+        text = json.dumps(results['starting_temperatures'],
+                          sort_keys=True, indent=2)
+    elif args.dump_data:
+        text = json.dumps(results['data'],
+                          sort_keys=True, indent=2)
+    else:
+        assert False  # unreachable
+
+    # JSON is UTF-8 encoded. Some of the audit may not be ACSCII.
+    # You can't load JSON in another encoding, so instead we decode the
+    # unicode to the user's preferred locale when we output. Annoyingly
+    # the decode function in Python is call "encode".
+    #
+    # Note that if you use less(1) or redirect the output (anything
+    # that uses a pipe) then you implicitly opt for an ASCII locale.
+    print(text.encode(locale.getpreferredencoding()))
+
 
 def main(parser):
     args = parser.parse_args()
 
-    if args.dump_config or args.dump_audit or args.dump_reboots or args.dump_etas:
+    if (args.dump_config or
+            args.dump_audit or
+            args.dump_reboots or
+            args.dump_etas or
+            args.dump_temps or
+            args.dump_data):
         if not args.filename.endswith(".json.bz2"):
             usage(parser)
         else:
-            results = util.read_results(args.filename)
-            if args.dump_config:
-                text = results['config']
-            elif args.dump_audit:
-                text = util.dump_audit(results['audit'])
-            elif args.dump_reboots:
-                text = str(results['reboots'])
-            elif args.dump_etas:
-                text = json.dumps(results['eta_estimates'],
-                                  ensure_ascii=True, sort_keys=True,
-                                  indent=2)
-            else:
-                assert False  # unreachable
-
-            # JSON is UTF-8 encoded.
-            # You can't load JSON in another encoding, so instead we decode the
-            # unicode to the user's preferred locale when we output. Annoyingly
-            # the decode function in Python is call "encode".
-            #
-            # Note that if you use less(1) or redirect the output (anything
-            # that uses a pipe) then you implicitely opt for an ASCII locale.
-            print(text.encode(locale.getpreferredencoding()))
+            dump_section(args)
             sys.exit(0)
 
     if not args.filename.endswith(".krun"):
