@@ -71,6 +71,25 @@ def test_part_complete_schedule():
     assert len(sched) == 0
 
 
+def test_eta_dont_agree_with_schedule():
+    """ETAs don't exist for all jobs for which there is iterations data"""
+
+    mailer = MockMailer()
+    config = krun.util.read_config('krun/tests/broken_etas.krun')
+    results_json = krun.util.read_results('krun/tests/broken_etas_results.json.bz2')
+    sched = ExecutionScheduler("broken_etas.krun", "broken_etas.log",
+                               "broken_etas_results.json.bz2", mailer,
+                               MockPlatform(mailer), resume=True,
+                               reboot=False, dry_run=True,
+                               started_by_init=False)
+    try:
+        sched.build_schedule(config, results_json)
+    except SystemExit:
+        pass
+    else:
+        assert(False)  # did not exit!
+
+
 def test_run_schedule(monkeypatch):
     def dummy_shell_cmd(text):
         pass
