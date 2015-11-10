@@ -129,7 +129,7 @@ The structure of the JSON results is as follows:
 
 ```python
 {
-    'audit': '',  # A unicode object containing platform information
+    'audit': '',  # A dict containing platform information
     'config': '', # A unicode object containing your Krun configuration
     'data': {     # A dict object containing timing results
         u'bmark:VM:variant': [  # A list of lists of timing results
