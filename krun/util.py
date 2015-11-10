@@ -3,6 +3,7 @@ import json
 import os.path
 import sys
 import time
+from collections import OrderedDict
 from subprocess import Popen, PIPE
 from logging import error
 from krun import LOGFILE_FILENAME_TIME_FORMAT
@@ -154,3 +155,12 @@ def audits_same_platform(audit0, audit1):
     if ("uname" not in audit0) or ("uname" not in audit1):
         return False
     return audit0["uname"] == audit1["uname"]
+
+def dump_audit(audit):
+    s = ""
+    # important that the sections are sorted, for diffing
+    for key, text in OrderedDict(sorted(audit.iteritems())).iteritems():
+        s += "Audit Section: %s" % key + "\n"
+        s += "#" * 78 + "\n\n"
+        s += text + "\n\n"
+    return s

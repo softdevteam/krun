@@ -8,6 +8,7 @@ usage: runner.py <config_file.krun>
 
 import argparse, json, logging, os, sys
 from logging import debug, info, warn
+import locale
 
 import krun.util as util
 from krun.platform import detect_platform
@@ -165,9 +166,7 @@ def main(parser):
             if args.dump_config:
                 text = results['config']
             elif args.dump_audit:
-                text = json.dumps(results['audit'],
-                                  ensure_ascii=True, sort_keys=True,
-                                  indent=4, separators=(',\n', ':\t'))
+                text = util.dump_audit(results['audit'])
             elif args.dump_reboots:
                 text = str(results['reboots'])
             elif args.dump_etas:
@@ -177,7 +176,14 @@ def main(parser):
             else:
                 assert False  # unreachable
 
-            print(text)
+            # JSON is UTF-8 encoded.
+            # You can't load JSON in another encoding, so instead we decode the
+            # unicode to the user's preferred locale when we output. Annoyingly
+            # the decode function in Python is call "encode".
+            #
+            # Note that if you use less(1) or redirect the output (anything
+            # that uses a pipe) then you implicitely opt for an ASCII locale.
+            print(text.encode(locale.getpreferredencoding()))
             sys.exit(0)
 
     if not args.filename.endswith(".krun"):
