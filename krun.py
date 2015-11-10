@@ -135,6 +135,10 @@ def create_arg_parser():
                         dest='dump_reboots', required=False,
                         help=('Print the reboots section of a Krun ' +
                               'results file to STDOUT'))
+    parser.add_argument('--dump-etas', action="store_true",
+                        dest='dump_etas', required=False,
+                        help=('Print the eta_estimates section of a Krun ' +
+                              'results file to STDOUT'))
     parser.add_argument('--develop', action="store_true",
                         dest='develop', required=False,
                         help=('Enable developer mode'))
@@ -153,7 +157,7 @@ def create_arg_parser():
 def main(parser):
     args = parser.parse_args()
 
-    if args.dump_config or args.dump_audit or args.dump_reboots:
+    if args.dump_config or args.dump_audit or args.dump_reboots or args.dump_etas:
         if not args.filename.endswith(".json.bz2"):
             usage(parser)
         else:
@@ -166,7 +170,14 @@ def main(parser):
                                   indent=4, separators=(',\n', ':\t'))
             elif args.dump_reboots:
                 text = str(results['reboots'])
-            print text
+            elif args.dump_etas:
+                text = json.dumps(results['eta_estimates'],
+                                  ensure_ascii=True, sort_keys=True,
+                                  indent=2)
+            else:
+                assert False  # unreachable
+
+            print(text)
             sys.exit(0)
 
     if not args.filename.endswith(".krun"):

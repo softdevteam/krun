@@ -114,6 +114,13 @@ def test_read_results():
     assert results['audit']['debian_version'] == u'jessie/sid'
     assert results['data'] == expected
     assert results['starting_temperatures'] == [4355, 9879]
+    assert results['eta_estimates'] == \
+        {
+            u'nbody:CPython:default-python': [0.022256],
+            u'dummy:CPython:default-python': [1.005115],
+            u'nbody:Java:default-java': [26.002632],
+            u'dummy:Java:default-java': [1.000941]
+        }
 
 
 def test_dump_results():
@@ -127,7 +134,9 @@ def test_dump_results():
     out_file = output_name(config_file)
     all_results = {'dummy:Java:default-java': [[1.000726]]}
     reboots = 5
-    dump_results(config_file, out_file, all_results, platform, reboots)
+    dummy_etas = {'dummy:Java:default-java': [1.1]}
+    dump_results(config_file, out_file, all_results, platform,
+                 reboots, dummy_etas)
     with open(config_file, 'r') as config_fp:
         config = config_fp.read()
         with bz2.BZ2File(out_file, 'rb') as input_file:
@@ -137,6 +146,7 @@ def test_dump_results():
             assert dumped_results['config'] == config
             assert dumped_results['data'] == all_results
             assert dumped_results['reboots'] == reboots
+            assert dumped_results['eta_estimates'] == dummy_etas
         os.unlink(out_file)  # Clean-up generated file.
 
 

@@ -89,12 +89,9 @@ class ExecutionJob(object):
         resource.setrlimit(resource.RLIMIT_DATA, heap_t)
         assert resource.getrlimit(resource.RLIMIT_DATA) == heap_t
 
-        # Rough ETA execution timer
-        exec_start_rough = time.time()
         stdout, stderr, rc = vm_def.run_exec(
             entry_point, self.benchmark, self.vm_info["n_iterations"],
             self.parameter, heap_limit_kb)
-        exec_time_rough = time.time() - exec_start_rough
 
         if not dry_run:
             try:
@@ -102,11 +99,6 @@ class ExecutionJob(object):
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
                 iterations_results = []
-
-            # Add to ETA estimation figures
-            # Note we still add a time estimate even if the benchmark crashed.
-            self.add_exec_time(exec_time_rough)
-
             return iterations_results
 
         else:
@@ -225,6 +217,19 @@ class ExecutionScheduler(object):
         if self.resume and current_result_json is not None:
             self._remove_previous_execs_from_schedule(current_result_json)
 
+            # Load back (and sanity check) ETA estimates
+            self.eta_estimates = current_result_json["eta_estimates"]
+            for key, exec_data in current_result_json["data"].iteritems():
+                got_len = len(current_result_json["eta_estimates"][key])
+                expect_len = len(exec_data)
+                if expect_len != got_len:
+                    msg = "ETA estimates didn't tally with results: "
+                    msg += "key=%s, expect_len=%d, got_len=%d" % \
+                        (key, expect_len, got_len)
+                    util.log_and_mail(self.mailer, error,
+                                      "Fatal Krun Error",
+                                      msg, bypass_limiter=True, exit=True)
+
     def _remove_previous_execs_from_schedule(self, current_result_json):
             self.nreboots = current_result_json['reboots']
             for key in current_result_json['data']:
@@ -236,10 +241,6 @@ class ExecutionScheduler(object):
                         for _ in range(num_completed_jobs):
                             self.remove_job_by_key(key)
                             self.jobs_done += 1
-                        self.eta_estimates[key] = []
-                        for result_set in current_result_json['data'][key]:
-                            total_time = sum(result_set)
-                            self.eta_estimates[key].append(total_time)
                     except JobMissingError as excn:
                         tup = (excn.key, self.config_file, self.out_file)
                         msg = ("Failed to resume benchmarking session\n." +
@@ -309,19 +310,29 @@ class ExecutionScheduler(object):
                 info("Jobs until ETA known: %s" % self.jobs_until_eta_known())
 
             job = self.next_job()
+
+            # We collect rough execution times separate from real results. The
+            # reason for this is that, even if a benchmark crashes it takes
+            # time and we need to account for this when making estimates. A
+            # crashing benchmark will give an empty list of iteration times,
+            # meaning we can't use 'raw_exec_result' below for estimates.
+            exec_start_time = time.time()
             raw_exec_result = job.run(self.mailer, self.dry_run)
+            exec_end_time = time.time()
+
             exec_result = util.format_raw_exec_results(raw_exec_result)
 
             if not exec_result and not self.dry_run:
                 errors = True
 
             self.results[job.key].append(exec_result)
+            self.add_eta_info(job.key, exec_end_time - exec_start_time)
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
             info("Intermediate results dumped to %s" % self.out_file)
             util.dump_results(self.config_file, self.out_file, self.results,
-                              self.platform, self.nreboots)
+                              self.platform, self.nreboots, self.eta_estimates)
 
             self.jobs_done += 1
             self.platform.check_dmesg_for_changes()
@@ -351,7 +362,7 @@ class ExecutionScheduler(object):
         # Dump the results file. This may already have been done, but we
         # have changed self.nreboots, which needs to be written out.
         util.dump_results(self.config_file, self.out_file, self.results,
-                  self.platform, self.nreboots)
+                  self.platform, self.nreboots, self.eta_estimates)
         if self.nreboots > self.expected_reboots:
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
                         "INVARIANT num_reboots <= num_jobs violated. " +

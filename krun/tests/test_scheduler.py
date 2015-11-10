@@ -3,6 +3,8 @@ from krun.scheduler import mean, ExecutionJob, ExecutionScheduler, JobMissingErr
 import krun.util
 
 import os, pytest, subprocess
+import bz2
+import json
 
 
 def test_mean_empty():
@@ -71,7 +73,27 @@ def test_part_complete_schedule():
     assert len(sched) == 0
 
 
+def test_eta_dont_agree_with_schedule():
+    """ETAs don't exist for all jobs for which there is iterations data"""
+
+    mailer = MockMailer()
+    config = krun.util.read_config('krun/tests/broken_etas.krun')
+    results_json = krun.util.read_results('krun/tests/broken_etas_results.json.bz2')
+    sched = ExecutionScheduler("broken_etas.krun", "broken_etas.log",
+                               "broken_etas_results.json.bz2", mailer,
+                               MockPlatform(mailer), resume=True,
+                               reboot=False, dry_run=True,
+                               started_by_init=False)
+    try:
+        sched.build_schedule(config, results_json)
+    except SystemExit:
+        pass
+    else:
+        assert(False)  # did not exit!
+
+
 def test_run_schedule(monkeypatch):
+    jso_file = "example_test.json.bz2"
     def dummy_shell_cmd(text):
         pass
     monkeypatch.setattr(subprocess, 'call', dummy_shell_cmd)
@@ -82,7 +104,7 @@ def test_run_schedule(monkeypatch):
     for vm_name, vm_info in config["VMS"].items():
         vm_info["vm_def"].set_platform(platform)
     sched = ExecutionScheduler("krun/tests/example.krun", "example_test.log",
-                               "example_test.json.bz2", mailer,
+                               jso_file, mailer,
                                platform, resume=False,
                                reboot=False, dry_run=True,
                                started_by_init=False)
@@ -90,7 +112,27 @@ def test_run_schedule(monkeypatch):
     assert len(sched) == 8
     sched.run()
     assert len(sched) == 0
-    os.unlink("example_test.json.bz2")
+
+    # Type checks on what the scheduler dumped
+    with bz2.BZ2File(jso_file, 'rb') as input_file:
+        jso = json.loads(input_file.read())
+
+        for k, execs in jso["data"].iteritems():
+            assert type(execs) is list
+            for one_exec in execs:
+                assert type(one_exec) is list
+                assert all([type(x) is float for x in one_exec])
+
+        for k, execs in jso["eta_estimates"].iteritems():
+            assert type(execs) is list
+            assert all([type(x) is float for x in execs])
+
+        assert type(jso["starting_temperatures"]) is list
+        assert type(jso["reboots"]) is int
+        assert type(jso["audit"]) is dict
+        assert type(jso["config"]) is unicode
+
+    os.unlink(jso_file)
 
 
 def test_run_schedule_reboot(monkeypatch):

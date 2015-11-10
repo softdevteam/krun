@@ -129,7 +129,7 @@ The structure of the JSON results is as follows:
 
 ```python
 {
-    'audit': '',  # A unicode object containing platform information
+    'audit': '',  # A dict containing platform information
     'config': '', # A unicode object containing your Krun configuration
     'data': {     # A dict object containing timing results
         u'bmark:VM:variant': [  # A list of lists of timing results
@@ -148,13 +148,18 @@ The structure of the JSON results is as follows:
                   # and meanings of the temperatures in the list are platform
                   # and system specific. This information can be safely
                   # ignored by users.
+    'eta_estimates': {u"bmark:VM:variant": [t_0, t_1, ...], ...} # A dict mapping
+                  # benchmark keys to rough execution times. Used internally,
+                  # users can ignore this.
 }
 ```
 
-Often it is useful to check the audit or configuration that a result
-file was generated with.
-To do this, call Krun with the `--dump-audit`, `--dump-config` or
-`--dump-reboots` options:
+Some options exist to help inspect the results file:
+
+  * `--dump-reboots`
+  * `--dump-etas`
+  * `--dump-config`
+  * `--dump-audits`
 
 ```bash
 $ python krun.py --dump-config examples/example_results.json.bz2
