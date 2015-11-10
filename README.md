@@ -154,10 +154,12 @@ The structure of the JSON results is as follows:
 }
 ```
 
-Often it is useful to check the audit or configuration that a result
-file was generated with.
-To do this, call Krun with the `--dump-audit`, `--dump-config` or
-`--dump-reboots` options:
+Some options exist to help inspect the results file:
+
+  * `--dump-reboots`
+  * `--dump-etas`
+  * `--dump-config`
+  * `--dump-audits`
 
 ```bash
 $ python krun.py --dump-config examples/example_results.json.bz2
