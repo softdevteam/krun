@@ -149,9 +149,6 @@ def audits_same_platform(audit0, audit1):
 
     Platform information may be Unicode.
     """
-    for key in ["cpuinfo", "dmesg", "uname"]:
-        if (not key in audit0) or (not key in audit1):
-            return False
-    if not audit0["uname"] == audit1["uname"]:
+    if ("uname" not in audit0) or ("uname" not in audit1):
         return False
-    return True
+    return audit0["uname"] == audit1["uname"]
