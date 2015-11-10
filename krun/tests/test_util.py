@@ -114,6 +114,13 @@ def test_read_results():
     assert results['audit']['debian_version'] == u'jessie/sid'
     assert results['data'] == expected
     assert results['starting_temperatures'] == [4355, 9879]
+    assert results['eta_estimates'] == \
+        {
+            u'nbody:CPython:default-python': [0.022256],
+            u'dummy:CPython:default-python': [1.005115],
+            u'nbody:Java:default-java': [26.002632],
+            u'dummy:Java:default-java': [1.000941]
+        }
 
 
 def test_dump_results():
