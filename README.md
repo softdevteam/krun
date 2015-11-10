@@ -151,6 +151,7 @@ The structure of the JSON results is as follows:
     'eta_estimates': {u"bmark:VM:variant": [t_0, t_1, ...], ...} # A dict mapping
                   # benchmark keys to rough execution times. Used internally,
                   # users can ignore this.
+}
 ```
 
 Often it is useful to check the audit or configuration that a result
