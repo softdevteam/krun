@@ -336,9 +336,7 @@ class ExecutionScheduler(object):
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
             info("Intermediate results dumped to %s" % self.out_file)
-            util.dump_results(self.config_file, self.out_file, self.results,
-                              self.platform, self.nreboots,
-                              self.eta_estimates, self.error_flag)
+            util.dump_results(self)
 
             self.jobs_done += 1
             self.platform.check_dmesg_for_changes()
@@ -367,9 +365,8 @@ class ExecutionScheduler(object):
               (self.nreboots, self.expected_reboots))
         # Dump the results file. This may already have been done, but we
         # have changed self.nreboots, which needs to be written out.
-        util.dump_results(self.config_file, self.out_file, self.results,
-                          self.platform, self.nreboots, self.eta_estimates,
-                          self.error_flag)
+        util.dump_results(self)
+
         if self.nreboots > self.expected_reboots:
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
                         "INVARIANT num_reboots <= num_jobs violated. " +

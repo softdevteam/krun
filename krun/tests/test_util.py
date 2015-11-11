@@ -124,32 +124,37 @@ def test_read_results():
 
 
 def test_dump_results():
-    config_file = 'krun/tests/example.krun'
 
-    class DummyPlatform:
+    class DummyPlatform(object):
         audit = 'example audit (py.test)'
         starting_temperatures = [4355, 9879]
-    platform = DummyPlatform()
 
-    out_file = output_name(config_file)
-    all_results = {'dummy:Java:default-java': [[1.000726]]}
-    reboots = 5
-    dummy_etas = {'dummy:Java:default-java': [1.1]}
-    error_flag = False
-    dump_results(config_file, out_file, all_results, platform,
-                 reboots, dummy_etas, error_flag)
-    with open(config_file, 'r') as config_fp:
+    class DummyExecutionScheduler(object):
+        platform = DummyPlatform()
+        out_file = output_name("krun/tests/example.krun")
+        results = {'dummy:Java:default-java': [[1.000726]]}
+        nreboots = 5
+        eta_estimates = {'dummy:Java:default-java': [1.1]}
+        error_flag = False
+        config_file = 'krun/tests/example.krun'
+
+    dummy_sched = DummyExecutionScheduler()
+    dump_results(dummy_sched)
+
+    with open(dummy_sched.config_file, 'r') as config_fp:
         config = config_fp.read()
-        with bz2.BZ2File(out_file, 'rb') as input_file:
+        with bz2.BZ2File(dummy_sched.out_file, 'rb') as input_file:
             dumped_results = json.loads(input_file.read())
-            assert dumped_results['audit'] == platform.audit
-            assert dumped_results['starting_temperatures'] == platform.starting_temperatures
+            assert dumped_results['audit'] == dummy_sched.platform.audit
+            assert dumped_results['starting_temperatures'] == \
+                dummy_sched.platform.starting_temperatures
             assert dumped_results['config'] == config
-            assert dumped_results['data'] == all_results
-            assert dumped_results['reboots'] == reboots
-            assert dumped_results['eta_estimates'] == dummy_etas
-            assert dumped_results['error_flag'] == error_flag
-        os.unlink(out_file)  # Clean-up generated file.
+            assert dumped_results['data'] == dummy_sched.results
+            assert dumped_results['reboots'] == dummy_sched.nreboots
+            assert dumped_results['eta_estimates'] == \
+                dummy_sched.eta_estimates
+            assert dumped_results['error_flag'] == dummy_sched.error_flag
+        os.unlink(dummy_sched.out_file)  # Clean-up generated file.
 
 
 def test_check_and_parse_execution_results():
