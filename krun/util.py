@@ -106,7 +106,7 @@ def dump_results(config_file, out_file, all_results, platform,
         "reboots": reboots,
         "starting_temperatures": platform.starting_temperatures,
         "eta_estimates": eta_estimates,
-        "errors": error_flag,
+        "error_flag": error_flag,
     }
 
     with bz2.BZ2File(out_file, "w") as f:
