@@ -122,6 +122,10 @@ class ExecutionScheduler(object):
         self.dry_run = dry_run
         self.started_by_init = started_by_init
 
+        # Flipped when a (non-fatal) error occurs and used at the end to warn
+        # the user that they should check the log file.
+        self.error_flag = False
+
         # Record how long processes are taking so we can make a
         # rough ETA for the user.
         # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
@@ -229,6 +233,8 @@ class ExecutionScheduler(object):
                     util.log_and_mail(self.mailer, error,
                                       "Fatal Krun Error",
                                       msg, bypass_limiter=True, exit=True)
+            # Load back the error flag
+            self.error_flag = current_result_json["error_flag"]
 
     def _remove_previous_execs_from_schedule(self, current_result_json):
             self.nreboots = current_result_json['reboots']
@@ -283,7 +289,6 @@ class ExecutionScheduler(object):
             else:
                 time.sleep(STARTUP_WAIT_SECONDS)
 
-        errors = False # XXX not preserved across reboots!
         start_time = time.time() # rough overall timer, not used for actual results
 
         while True:
@@ -323,7 +328,7 @@ class ExecutionScheduler(object):
             exec_result = util.format_raw_exec_results(raw_exec_result)
 
             if not exec_result and not self.dry_run:
-                errors = True
+                self.error_flag = True
 
             self.results[job.key].append(exec_result)
             self.add_eta_info(job.key, exec_end_time - exec_start_time)
@@ -332,7 +337,8 @@ class ExecutionScheduler(object):
             # json file mid-run. It is overwritten each time.
             info("Intermediate results dumped to %s" % self.out_file)
             util.dump_results(self.config_file, self.out_file, self.results,
-                              self.platform, self.nreboots, self.eta_estimates)
+                              self.platform, self.nreboots,
+                              self.eta_estimates, self.error_flag)
 
             self.jobs_done += 1
             self.platform.check_dmesg_for_changes()
@@ -347,7 +353,7 @@ class ExecutionScheduler(object):
         self.platform.save_power()
 
         info("Done: Results dumped to %s" % self.out_file)
-        if errors:
+        if self.error_flag:
             warn("Errors occurred --  read the log!")
 
         msg = "Completed in (roughly) %f seconds.\nLog file at: %s" % \
@@ -362,7 +368,8 @@ class ExecutionScheduler(object):
         # Dump the results file. This may already have been done, but we
         # have changed self.nreboots, which needs to be written out.
         util.dump_results(self.config_file, self.out_file, self.results,
-                  self.platform, self.nreboots, self.eta_estimates)
+                          self.platform, self.nreboots, self.eta_estimates,
+                          self.error_flag)
         if self.nreboots > self.expected_reboots:
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
                         "INVARIANT num_reboots <= num_jobs violated. " +

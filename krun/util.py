@@ -94,7 +94,7 @@ def run_shell_cmd(cmd, failure_fatal=True):
 
 
 def dump_results(config_file, out_file, all_results, platform,
-                 reboots, eta_estimates):
+                 reboots, eta_estimates, error_flag):
     """Dump results (and a few other bits) into a bzip2 json file."""
     with open(config_file, "r") as f:
         config_text = f.read()
@@ -106,6 +106,7 @@ def dump_results(config_file, out_file, all_results, platform,
         "reboots": reboots,
         "starting_temperatures": platform.starting_temperatures,
         "eta_estimates": eta_estimates,
+        "errors": error_flag,
     }
 
     with bz2.BZ2File(out_file, "w") as f:
