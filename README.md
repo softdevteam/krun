@@ -160,6 +160,8 @@ Some options exist to help inspect the results file:
   * `--dump-etas`
   * `--dump-config`
   * `--dump-audits`
+  * `--dump-temps`
+  * `--dump-data`
 
 ```bash
 $ python krun.py --dump-config examples/example_results.json.bz2

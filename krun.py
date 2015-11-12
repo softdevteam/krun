@@ -8,6 +8,7 @@ usage: runner.py <config_file.krun>
 
 import argparse, json, logging, os, sys
 from logging import debug, info, warn
+import locale
 
 import krun.util as util
 from krun.platform import detect_platform
@@ -139,6 +140,14 @@ def create_arg_parser():
                         dest='dump_etas', required=False,
                         help=('Print the eta_estimates section of a Krun ' +
                               'results file to STDOUT'))
+    parser.add_argument('--dump-temps', action="store_true",
+                        dest='dump_temps', required=False,
+                        help=('Print the starting_temperatures section of ' +
+                              'a Krun results file to STDOUT'))
+    parser.add_argument('--dump-data', action="store_true",
+                        dest='dump_data', required=False,
+                        help=('Print the data section of ' +
+                              'a Krun results file to STDOUT'))
     parser.add_argument('--develop', action="store_true",
                         dest='develop', required=False,
                         help=('Enable developer mode'))
@@ -153,31 +162,48 @@ def create_arg_parser():
                         help=(filename_help))
     return parser
 
+def dump_section(args):
+    results = util.read_results(args.filename)
+    if args.dump_config:
+        text = results['config']
+    elif args.dump_audit:
+        text = util.dump_audit(results['audit'])
+    elif args.dump_reboots:
+        text = str(results['reboots'])
+    elif args.dump_etas:
+        text = json.dumps(results['eta_estimates'],
+                          sort_keys=True, indent=2)
+    elif args.dump_temps:
+        text = json.dumps(results['starting_temperatures'],
+                          sort_keys=True, indent=2)
+    elif args.dump_data:
+        text = json.dumps(results['data'],
+                          sort_keys=True, indent=2)
+    else:
+        assert False  # unreachable
+
+    # String data read in from JSON are unicode objects. This matters for us
+    # as some data in the audit includes unicode characters. If it does,
+    # a simple print no longer suffices if the system locale is (e.g.) ASCII.
+    # In this case print will raise.
+    #
+    # The correct thing to do is to encode() the unicode to the system locale.
+    print(text.encode(locale.getpreferredencoding()))
+
 
 def main(parser):
     args = parser.parse_args()
 
-    if args.dump_config or args.dump_audit or args.dump_reboots or args.dump_etas:
+    if (args.dump_config or
+            args.dump_audit or
+            args.dump_reboots or
+            args.dump_etas or
+            args.dump_temps or
+            args.dump_data):
         if not args.filename.endswith(".json.bz2"):
             usage(parser)
         else:
-            results = util.read_results(args.filename)
-            if args.dump_config:
-                text = results['config']
-            elif args.dump_audit:
-                text = json.dumps(results['audit'],
-                                  ensure_ascii=True, sort_keys=True,
-                                  indent=4, separators=(',\n', ':\t'))
-            elif args.dump_reboots:
-                text = str(results['reboots'])
-            elif args.dump_etas:
-                text = json.dumps(results['eta_estimates'],
-                                  ensure_ascii=True, sort_keys=True,
-                                  indent=2)
-            else:
-                assert False  # unreachable
-
-            print(text)
+            dump_section(args)
             sys.exit(0)
 
     if not args.filename.endswith(".krun"):
