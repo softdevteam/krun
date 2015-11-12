@@ -279,6 +279,7 @@ class LinuxPlatform(UnixLikePlatform):
     CHANGE_USER_CMD = "sudo"
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
+    ASLR_FILE = "/proc/sys/kernel/randomize_va_space"
 
     # We will wait until the zones cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
@@ -400,6 +401,7 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_cpu_scaler()
         self._check_perf_samplerate()
         self._check_tickless_kernel()
+        self._check_aslr_disabled()
 
     @staticmethod
     def _tickless_config_info_str(modes):
@@ -621,6 +623,26 @@ class LinuxPlatform(UnixLikePlatform):
                       "pstate CPU scaling and Krun just determined that "
                       "the system is not!")
 
+    def _check_aslr_disabled(self):
+        debug("Checking ASLR is off")
+        with open(self.ASLR_FILE, "r") as fh:
+                enabled = fh.read().strip()
+        if enabled == "0":
+            return  # OK!
+        else:
+            # ASLR is off, but we can try to enable it
+            info("Turning ASLR off")
+            cmd = "%s sh -c 'echo 0 > %s'" % \
+                (self.CHANGE_USER_CMD, self.ASLR_FILE)
+            stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+
+            if rc != 0:
+                msg = "ASLR disabled (%s, expect '0' got '%s').\n" % \
+                    (self.ASLR_FILE, enabled)
+                msg += "Krun tried to turn it off, but failed."
+                fatal(msg)
+            else:
+                self._check_aslr_disabled()  # should work this time
 
     def collect_audit(self):
         BasePlatform.collect_audit(self)
