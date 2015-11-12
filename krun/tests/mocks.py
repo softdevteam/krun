@@ -24,9 +24,6 @@ class MockPlatform(DebianLinuxPlatform):
     def check_dmesg_for_changes(self):
         pass
 
-    def print_all_dmesg_changes(self):
-        pass
-
     def wait_until_cpu_cool(self):
         pass
 

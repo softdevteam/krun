@@ -131,6 +131,7 @@ def test_run_schedule(monkeypatch):
         assert type(jso["reboots"]) is int
         assert type(jso["audit"]) is dict
         assert type(jso["config"]) is unicode
+        assert type(jso["error_flag"]) is bool
 
     os.unlink(jso_file)
 
