@@ -194,6 +194,7 @@ class BasePlatform(object):
             warn("Not adjusting CPU governor due to developer mode")
             return
         else:
+            debug("Save power")
             self._save_power()
 
     @abstractmethod
@@ -567,6 +568,7 @@ class LinuxPlatform(UnixLikePlatform):
         # And that the correct scaler is in use. We never want the pstate
         # scaler, as it tends to cause the clock speed to fluctuate, even
         # when in performance mode. Instead we use standard ACPI.
+        changed = False
         for cpu_n in xrange(self.num_cpus):
             # Check CPU governors
             debug("Checking CPU governor for CPU%d" % cpu_n)
@@ -574,9 +576,11 @@ class LinuxPlatform(UnixLikePlatform):
                 v = fh.read().strip()
 
             if v != "performance":
+                info("changing CPU governor for CPU %s" % cpu_n)
                 cmd = "%s cpufreq-set -c %d -g performance" % \
                     (self.CHANGE_USER_CMD, cpu_n)
                 stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+                changed = True
 
                 if rc != 0:
                     fatal("Governor for CPU%d governor: is '%s' not "
@@ -585,6 +589,8 @@ class LinuxPlatform(UnixLikePlatform):
                           "however this command failed. Is %s configured "
                           "and is cpufrequtils installed?"
                           % (cpu_n, v, cmd, self.CHANGE_USER_CMD))
+        if changed:
+            self._check_cpu_governor()  # just to be sure
 
     def _check_cpu_scaler(self):
         """Check the correct CPU scaler is in effect"""
