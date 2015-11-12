@@ -194,6 +194,7 @@ class BasePlatform(object):
             warn("Not adjusting CPU governor due to developer mode")
             return
         else:
+            debug("Save power")
             self._save_power()
 
     @abstractmethod
@@ -279,6 +280,7 @@ class LinuxPlatform(UnixLikePlatform):
     CHANGE_USER_CMD = "sudo"
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
+    ASLR_FILE = "/proc/sys/kernel/randomize_va_space"
 
     # We will wait until the zones cools to within TEMP_THRESHOLD_PERCENT
     # percent warmer than where we started.
@@ -400,6 +402,7 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_cpu_scaler()
         self._check_perf_samplerate()
         self._check_tickless_kernel()
+        self._check_aslr_disabled()
 
     @staticmethod
     def _tickless_config_info_str(modes):
@@ -565,6 +568,7 @@ class LinuxPlatform(UnixLikePlatform):
         # And that the correct scaler is in use. We never want the pstate
         # scaler, as it tends to cause the clock speed to fluctuate, even
         # when in performance mode. Instead we use standard ACPI.
+        changed = False
         for cpu_n in xrange(self.num_cpus):
             # Check CPU governors
             debug("Checking CPU governor for CPU%d" % cpu_n)
@@ -572,9 +576,11 @@ class LinuxPlatform(UnixLikePlatform):
                 v = fh.read().strip()
 
             if v != "performance":
+                info("changing CPU governor for CPU %s" % cpu_n)
                 cmd = "%s cpufreq-set -c %d -g performance" % \
                     (self.CHANGE_USER_CMD, cpu_n)
                 stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+                changed = True
 
                 if rc != 0:
                     fatal("Governor for CPU%d governor: is '%s' not "
@@ -583,6 +589,8 @@ class LinuxPlatform(UnixLikePlatform):
                           "however this command failed. Is %s configured "
                           "and is cpufrequtils installed?"
                           % (cpu_n, v, cmd, self.CHANGE_USER_CMD))
+        if changed:
+            self._check_cpu_governor()  # just to be sure
 
     def _check_cpu_scaler(self):
         """Check the correct CPU scaler is in effect"""
@@ -621,6 +629,26 @@ class LinuxPlatform(UnixLikePlatform):
                       "pstate CPU scaling and Krun just determined that "
                       "the system is not!")
 
+    def _check_aslr_disabled(self):
+        debug("Checking ASLR is off")
+        with open(self.ASLR_FILE, "r") as fh:
+                enabled = fh.read().strip()
+        if enabled == "0":
+            return  # OK!
+        else:
+            # ASLR is off, but we can try to enable it
+            info("Turning ASLR off")
+            cmd = "%s sh -c 'echo 0 > %s'" % \
+                (self.CHANGE_USER_CMD, self.ASLR_FILE)
+            stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+
+            if rc != 0:
+                msg = "ASLR disabled (%s, expect '0' got '%s').\n" % \
+                    (self.ASLR_FILE, enabled)
+                msg += "Krun tried to turn it off, but failed."
+                fatal(msg)
+            else:
+                self._check_aslr_disabled()  # should work this time
 
     def collect_audit(self):
         BasePlatform.collect_audit(self)
