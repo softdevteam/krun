@@ -1,4 +1,3 @@
-import bz2  # decent enough compression with Python 2.7 compatibility.
 import json
 import os.path
 import sys
@@ -91,32 +90,6 @@ def run_shell_cmd(cmd, failure_fatal=True):
     if failure_fatal and rc != 0:
         fatal("Shell command failed: '%s'" % cmd)
     return stdout.strip(), stderr.strip(), rc
-
-
-def dump_results(sched):
-    """Dump results (and a few other bits) into a bzip2 json file."""
-    with open(sched.config_file, "r") as f:
-        config_text = f.read()
-
-    to_write = {
-        "config": config_text,
-        "data": sched.results,
-        "audit": sched.platform.audit,
-        "reboots": sched.nreboots,
-        "starting_temperatures": sched.platform.starting_temperatures,
-        "eta_estimates": sched.eta_estimates,
-        "error_flag": sched.error_flag,
-    }
-
-    with bz2.BZ2File(sched.out_file, "w") as f:
-        f.write(json.dumps(to_write, indent=1, sort_keys=True))
-
-
-def read_results(results_file):
-    results = None
-    with bz2.BZ2File(results_file, "rb") as f:
-        results = json.loads(f.read())
-    return results
 
 
 def check_and_parse_execution_results(stdout, stderr, rc):

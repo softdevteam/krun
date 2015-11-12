@@ -1,10 +1,9 @@
 from krun.tests.mocks import MockMailer, MockPlatform
+from krun.results import Results
 from krun.scheduler import mean, ExecutionJob, ExecutionScheduler, JobMissingError
 import krun.util
 
 import os, pytest, subprocess
-import bz2
-import json
 
 
 def test_mean_empty():
@@ -21,9 +20,9 @@ def test_mean():
 
 def test_add_del_job():
     mailer = MockMailer()
-    sched = ExecutionScheduler("", "example_test.log",
-                               "example_test.json.bz2", mailer,
-                               MockPlatform(mailer), resume=True,
+    sched = ExecutionScheduler(None, "example_test.log",
+                               "krun/tests/example_test.json.bz2", mailer,
+                               MockPlatform(mailer), resume=False,
                                reboot=True, dry_run=False,
                                started_by_init=False)
     assert len(sched) == 0
@@ -39,12 +38,12 @@ def test_add_del_job():
 def test_build_schedule():
     mailer = MockMailer()
     config = krun.util.read_config('krun/tests/example.krun')
-    sched = ExecutionScheduler("example.krun", "example_test.log",
-                               "example_test.json.bz2", mailer,
-                               MockPlatform(mailer), resume=True,
+    sched = ExecutionScheduler("krun/tests/example.krun", "example_test.log",
+                               "krun/tests/example_test.json.bz2", mailer,
+                               MockPlatform(mailer), resume=False,
                                reboot=True, dry_run=True,
                                started_by_init=False)
-    sched.build_schedule(config, None)
+    sched.build_schedule(config)
     assert len(sched) == 8
     dummy_py = ExecutionJob(sched, config, "CPython", "", "dummy",
                             "default-python", 1000)
@@ -63,77 +62,74 @@ def test_build_schedule():
 def test_part_complete_schedule():
     mailer = MockMailer()
     config = krun.util.read_config('krun/tests/quick.krun')
-    results_json = krun.util.read_results('krun/tests/quick_results.json.bz2')
-    sched = ExecutionScheduler("quick.krun", "quick_test.log",
-                               "quick_test.json.bz2", mailer,
+    sched = ExecutionScheduler("krun/tests/quick.krun", "krun/tests/quick_test.log",
+                               "krun/tests/quick_results.json.bz2", mailer,
                                MockPlatform(mailer), resume=True,
                                reboot=True, dry_run=True,
                                started_by_init=False)
-    sched.build_schedule(config, results_json)
+    sched.build_schedule(config)
     assert len(sched) == 0
 
 
-def test_eta_dont_agree_with_schedule():
+def test_etas_dont_agree_with_schedule():
     """ETAs don't exist for all jobs for which there is iterations data"""
 
     mailer = MockMailer()
-    config = krun.util.read_config('krun/tests/broken_etas.krun')
-    results_json = krun.util.read_results('krun/tests/broken_etas_results.json.bz2')
-    sched = ExecutionScheduler("broken_etas.krun", "broken_etas.log",
-                               "broken_etas_results.json.bz2", mailer,
-                               MockPlatform(mailer), resume=True,
-                               reboot=False, dry_run=True,
+    config = krun.util.read_config("krun/tests/broken_etas.krun")
+    sched = ExecutionScheduler("krun/tests/broken_etas.krun",
+                               "krun/tests/broken_etas.log",
+                               "krun/tests/broken_etas_results.json.bz2",
+                               mailer,
+                               MockPlatform(mailer),
+                               resume=True, reboot=False, dry_run=True,
                                started_by_init=False)
     try:
-        sched.build_schedule(config, results_json)
+        sched.build_schedule(config)
     except SystemExit:
         pass
     else:
-        assert(False)  # did not exit!
+        assert False, "Krun did not exit when ETAs failed to tally with results!"
 
 
 def test_run_schedule(monkeypatch):
-    jso_file = "example_test.json.bz2"
+    json_file = "krun/tests/test_run_schedule.json.bz2"
     def dummy_shell_cmd(text):
         pass
     monkeypatch.setattr(subprocess, 'call', dummy_shell_cmd)
     monkeypatch.setattr(krun.util, 'run_shell_cmd', dummy_shell_cmd)
     mailer = MockMailer()
-    config = krun.util.read_config('krun/tests/example.krun')
+    config = krun.util.read_config("krun/tests/example.krun")
     platform = MockPlatform(mailer)
     for vm_name, vm_info in config["VMS"].items():
         vm_info["vm_def"].set_platform(platform)
     sched = ExecutionScheduler("krun/tests/example.krun", "example_test.log",
-                               jso_file, mailer,
+                               json_file, mailer,
                                platform, resume=False,
                                reboot=False, dry_run=True,
                                started_by_init=False)
-    sched.build_schedule(config, None)
+    sched.build_schedule(config)
     assert len(sched) == 8
     sched.run()
     assert len(sched) == 0
 
-    # Type checks on what the scheduler dumped
-    with bz2.BZ2File(jso_file, 'rb') as input_file:
-        jso = json.loads(input_file.read())
+    results = Results(results_file=json_file)
+    for k, execs in results.data.iteritems():
+        assert type(execs) is list
+        for one_exec in execs:
+            assert type(one_exec) is list
+            assert all([type(x) is float for x in one_exec])
 
-        for k, execs in jso["data"].iteritems():
-            assert type(execs) is list
-            for one_exec in execs:
-                assert type(one_exec) is list
-                assert all([type(x) is float for x in one_exec])
+    for k, execs in results.etas.iteritems():
+        assert type(execs) is list
+        assert all([type(x) is float for x in execs])
 
-        for k, execs in jso["eta_estimates"].iteritems():
-            assert type(execs) is list
-            assert all([type(x) is float for x in execs])
+    assert type(results.starting_temperatures) is list
+    assert type(results.reboots) is int
+    assert type(results.audit) is dict
+    assert type(results.config) is unicode
+    assert type(results.error_flag) is bool
 
-        assert type(jso["starting_temperatures"]) is list
-        assert type(jso["reboots"]) is int
-        assert type(jso["audit"]) is dict
-        assert type(jso["config"]) is unicode
-        assert type(jso["error_flag"]) is bool
-
-    os.unlink(jso_file)
+    os.unlink(json_file)
 
 
 def test_run_schedule_reboot(monkeypatch):
@@ -141,22 +137,24 @@ def test_run_schedule_reboot(monkeypatch):
         pass
     def dummy_execv(text, lst):
         pass
-    monkeypatch.setattr(os, 'execv', dummy_execv)
-    monkeypatch.setattr(subprocess, 'call', dummy_shell_cmd)
-    monkeypatch.setattr(krun.util, 'run_shell_cmd', dummy_shell_cmd)
+    monkeypatch.setattr(os, "execv", dummy_execv)
+    monkeypatch.setattr(subprocess, "call", dummy_shell_cmd)
+    monkeypatch.setattr(krun.util, "run_shell_cmd", dummy_shell_cmd)
     mailer = MockMailer()
-    config = krun.util.read_config('krun/tests/example.krun')
+    config = krun.util.read_config("krun/tests/example.krun")
     platform = MockPlatform(mailer)
     for vm_name, vm_info in config["VMS"].items():
         vm_info["vm_def"].set_platform(platform)
-    sched = ExecutionScheduler("krun/tests/example.krun", "example_test.log",
-                               "example_test.json.bz2", mailer,
-                               platform, resume=True,
+    sched = ExecutionScheduler("krun/tests/example.krun",
+                               "krun/test/sexample_test.log",
+                               "krun/tests/example_test.json.bz2",
+                               mailer,
+                               platform, resume=False,
                                reboot=True, dry_run=True,
                                started_by_init=True)
-    sched.build_schedule(config, None)
+    sched.build_schedule(config)
     assert len(sched) == 8
     with pytest.raises(AssertionError):
         sched.run()
     assert len(sched) == 7
-    os.unlink("example_test.json.bz2")
+    os.unlink("krun/tests/example_test.json.bz2")
