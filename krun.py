@@ -182,13 +182,12 @@ def dump_section(args):
     else:
         assert False  # unreachable
 
-    # JSON is UTF-8 encoded. Some of the audit may not be ACSCII.
-    # You can't load JSON in another encoding, so instead we decode the
-    # unicode to the user's preferred locale when we output. Annoyingly
-    # the decode function in Python is call "encode".
+    # String data read in from JSON are unicode objects. This matters for us
+    # as some data in the audit includes unicode characters. If it does,
+    # a simple print no longer suffices if the system locale is (e.g.) ASCII.
+    # In this case print will raise.
     #
-    # Note that if you use less(1) or redirect the output (anything
-    # that uses a pipe) then you implicitly opt for an ASCII locale.
+    # The correct thing to do is to encode() the unicode to the system locale.
     print(text.encode(locale.getpreferredencoding()))
 
 
