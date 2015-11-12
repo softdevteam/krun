@@ -36,7 +36,6 @@ class BasePlatform(object):
         # really want to know about it!
         self.last_dmesg = self._collect_dmesg_lines()
         self.last_dmesg_time = localtime()
-        self.dmesg_changes = []
 
     def _collect_dmesg_lines(self):
         return run_shell_cmd("dmesg")[0].split("\n")
@@ -59,25 +58,11 @@ class BasePlatform(object):
             warn_s = "dmesg seems to have changed! Diff follows:\n" + diff
             log_and_mail(self.mailer, warn, "dmesg changed", warn_s)
 
-            self.dmesg_changes.append(diff)
             self.last_dmesg = new_dmesg
             self.last_dmesg_time = new_dmesg_time
 
-    def print_all_dmesg_changes(self):
-        if not self.dmesg_changes:
-            return
-
-        warn_s = (
-            "dmesg output changed during benchmarking!\n"
-            "It is advisable to check for errors and warnings\n"
-        )
-
-        n_changes = len(self.dmesg_changes)
-        for i in range(n_changes):
-            warn_s += "dmesg change %d/%d:\n" % (i + 1, n_changes)
-            warn_s += self.dmesg_changes[i] + "\n"
-
-        warn(warn_s)
+            return True  # i.e. a (potential) error occurred
+        return False
 
     def wait_until_cool(self):
         if self.developer_mode:
