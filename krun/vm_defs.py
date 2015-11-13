@@ -219,6 +219,9 @@ class BaseVMDef(object):
                   "return code: %s\nstdout:%s\nstderr: %s" %
                   (entry_point.target, rc, stdout, stderr))
 
+    def __eq__(self, other):
+        return isinstance(other, self.__class__)
+
 
 class NativeCodeVMDef(BaseVMDef):
     """Not really a "VM definition" at all. Runs native code."""
