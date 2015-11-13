@@ -1,4 +1,6 @@
 from collections import OrderedDict
+from logging import debug
+
 
 class Audit(object):
 
@@ -40,6 +42,9 @@ class Audit(object):
             (not len(self) == len(other))):
             return False
         for key in self._audit:
+            if key == "packages" and (key in self) and (key in other):
+                continue
             if ((key not in other._audit) or (other[key] != self[key])):
+                debug("%s keys differed in audit" % key)
                 return False
         return True

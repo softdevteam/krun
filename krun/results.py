@@ -9,19 +9,24 @@ class Results(object):
     """Results of a Krun benchmarking session.
     Can be serialised to disk.
     """
+
     def __init__(self, config, platform, results_file=None):
         self.config = config
+
         # Maps key to results:
         # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
         self.data = dict()
         self.reboots = 0
+
         # Record how long execs are taking so we can give the user a rough ETA.
         # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
         self.eta_estimates = dict()
+
         # error_flag is flipped when a (non-fatal) error or warning occurs.
         # When Krun finishes and this flag is true, a message is printed,
         # thus prompting the user to investigate.
         self.error_flag = False
+
         # Fill in attributes from the config, platform and prior results.
         if self.config is not None:
             self.filename = self.config.results_filename()
@@ -32,6 +37,7 @@ class Results(object):
         else:
             self.starting_temperatures = list()
             self.audit = dict()
+
         # Import data from a Results object serialised on disk.
         if results_file is not None:
             self.read_from_file(results_file)
@@ -91,10 +97,10 @@ class Results(object):
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
             return False
-        return (self.config == other.config and \
-                self.data == other.data and \
-                self.audit == other.audit and \
-                self.reboots == other.reboots and \
-                self.starting_temperatures == other.starting_temperatures and \
-                self.eta_estimates == other.eta_estimates and \
+        return (self.config == other.config and
+                self.data == other.data and
+                self.audit == other.audit and
+                self.reboots == other.reboots and
+                self.starting_temperatures == other.starting_temperatures and
+                self.eta_estimates == other.eta_estimates and
                 self.error_flag == other.error_flag)

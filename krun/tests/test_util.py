@@ -1,7 +1,7 @@
 from krun.util import (format_raw_exec_results,
                        log_and_mail, fatal,
                        check_and_parse_execution_results,
-                       run_shell_cmd, audits_same_platform,
+                       run_shell_cmd,
                        ExecutionFailed)
 from krun.tests.mocks import MockMailer
 
@@ -87,20 +87,3 @@ stderr:
 --------------------------------------------------
 """
     assert excinfo.value.message == expected
-
-
-def test_audit_compare():
-    audit0 = dict([("cpuinfo", u"processor\t: 0\nvendor_id\t: GenuineIntel"),
-                   ("uname", u"Linux"),
-                   ("debian_version", u"jessie/sid"),
-                   ("packages", u"1:1.2.8.dfsg-2ubuntu1"),
-                   ("dmesg", u"")])
-    audit1 = dict([("cpuinfo", u"processor\t: 0\nvendor_id\t: GenuineIntel"),
-                   ("uname", u"BSD"),
-                   ("packages", u"1:1.2.8.dfsg-2ubuntu1"),
-                   ("dmesg", u"")])
-    assert audits_same_platform(audit0, audit0)
-    assert audits_same_platform(audit1, audit1)
-    assert not audits_same_platform([], [])
-    assert not audits_same_platform(audit0, audit1)
-    assert not audits_same_platform(audit1, audit0)

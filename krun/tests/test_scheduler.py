@@ -96,8 +96,6 @@ def test_run_schedule(monkeypatch):
                                platform, resume=False,
                                reboot=False, dry_run=True,
                                started_by_init=False)
-    # for vm_name, vm_info in sched.config.VMS.items():
-    #     vm_info["vm_def"].set_platform(platform)
     sched.build_schedule()
     assert len(sched) == 8
     sched.run()
@@ -140,8 +138,6 @@ def test_run_schedule_reboot(monkeypatch):
                                platform, resume=False,
                                reboot=True, dry_run=True,
                                started_by_init=True)
-    # for vm_name, vm_info in sched.config.VMS.items():
-    #     vm_info["vm_def"].set_platform(platform)
     sched.build_schedule()
     assert len(sched) == 8
     with pytest.raises(AssertionError):

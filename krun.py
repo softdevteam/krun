@@ -254,7 +254,8 @@ def main(parser):
         # output file must exist, due to check above
         assert(out_file_exists)
         current = Results(config, platform, results_file=out_file)
-        if not util.audits_same_platform(platform.audit, current.audit):
+        from krun.audit import Audit
+        if not Audit(platform.audit) == current.audit:
             util.fatal(error_msg)
 
         debug("Using pre-recorded initial temperature readings")

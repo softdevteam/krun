@@ -84,11 +84,11 @@ class Config(object):
     def __eq__(self, other):
         # Equality should ignore filename.
         return (isinstance(other, self.__class__) and
-               (self.text == other.text) and
+                (self.text == other.text) and
                 (self.MAIL_TO == other.MAIL_TO) and
                 (self.MAX_MAILS == other.MAX_MAILS) and
                 (self.VMS == other.VMS) and
-                # (self.VARIANTS == other.VARIANTS) and
+                (self.VARIANTS == other.VARIANTS) and
                 (self.BENCHMARKS == other.BENCHMARKS) and
                 (self.SKIP == other.SKIP) and
                 (self.N_EXECUTIONS == other.N_EXECUTIONS))
