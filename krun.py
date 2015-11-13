@@ -11,7 +11,9 @@ from logging import debug, info, warn
 import locale
 
 import krun.util as util
+from krun.config import Config
 from krun.platform import detect_platform
+from krun.results import Results
 from krun.scheduler import ExecutionScheduler
 from krun import ABS_TIME_FORMAT
 from krun.mail import Mailer
@@ -40,21 +42,21 @@ def usage(parser):
 def sanity_checks(config, platform):
     vms_that_will_run = []
     # check all necessary benchmark files exist
-    for bench, bench_param in config["BENCHMARKS"].items():
-        for vm_name, vm_info in config["VMS"].items():
+    for bench, bench_param in config.BENCHMARKS.items():
+        for vm_name, vm_info in config.VMS.items():
             for variant in vm_info["variants"]:
-                entry_point = config["VARIANTS"][variant]
+                entry_point = config.VARIANTS[variant]
                 key = "%s:%s:%s" % (bench, vm_name, variant)
                 debug("Running sanity check for experiment %s" % key)
 
-                if util.should_skip(config, key):
+                if config.should_skip(key):
                     continue  # won't execute, so no check needed
 
                 vm_info["vm_def"].check_benchmark_files(bench, entry_point)
                 vms_that_will_run.append(vm_name)
 
     # per-VM sanity checks
-    for vm_name, vm_info in config["VMS"].items():
+    for vm_name, vm_info in config.VMS.items():
         if vm_name not in vms_that_will_run:
             # User's SKIP config directive may mean a defined VM never runs.
             # This may be deliberate, e.g. the user does not yet have it built.
@@ -101,109 +103,90 @@ def sanity_check_user_change(platform):
 def create_arg_parser():
     """Create a parser to process command-line options.
     """
-    parser = argparse.ArgumentParser(description='Benchmark, running many fresh processes.')
+    parser = argparse.ArgumentParser(description="Benchmark, running many fresh processes.")
 
     # Upper-case '-I' so as to make it harder to use by accident.
     # Real users should never use -I. Only the OS init system.
-    parser.add_argument('--started-by-init', '-I', action='store_true',
-                        default=False, dest='started_by_init', required=False,
-                        help='Krun is being invoked by OS init system')
-    parser.add_argument('--resume', '-r', action='store_true', default=False,
-                        dest='resume', required=False,
+    parser.add_argument("--started-by-init", "-I", action="store_true",
+                        default=False, dest="started_by_init", required=False,
+                        help="Krun is being invoked by OS init system")
+    parser.add_argument("--resume", "-r", action="store_true", default=False,
+                        dest="resume", required=False,
                         help=("Resume benchmarking if interrupted " +
                               "and append to an existing results file"))
-    parser.add_argument('--reboot', '-b', action='store_true', default=False,
-                        dest='reboot', required=False,
-                        help='Reboot before each benchmark is executed')
-    parser.add_argument('--dryrun', '-d', action='store_true', default=False,
-                        dest='dry_run', required=False,
+    parser.add_argument("--reboot", "-b", action="store_true", default=False,
+                        dest="reboot", required=False,
+                        help="Reboot before each benchmark is executed")
+    parser.add_argument("--dryrun", "-d", action="store_true", default=False,
+                        dest="dry_run", required=False,
                         help=("Build and run a benchmarking schedule " +
                               "But don't execute the benchmarks. " +
                               "Useful for verifying configuration files"))
-    parser.add_argument('--debug', '-g', action="store", default='INFO',
-                        dest='debug_level', required=False,
-                        help=('Debug level used by logger. Must be one of: ' +
-                              'DEBUG, INFO, WARN, DEBUG, CRITICAL, ERROR'))
-    parser.add_argument('--dump-audit', action="store_true",
-                        dest='dump_audit', required=False,
-                        help=('Print the audit section of a Krun ' +
-                              'results file to STDOUT'))
-    parser.add_argument('--dump-config', action="store_true",
-                        dest='dump_config', required=False,
-                        help=('Print the config section of a Krun ' +
-                              'results file to STDOUT'))
-    parser.add_argument('--dump-reboots', action="store_true",
-                        dest='dump_reboots', required=False,
-                        help=('Print the reboots section of a Krun ' +
-                              'results file to STDOUT'))
-    parser.add_argument('--dump-etas', action="store_true",
-                        dest='dump_etas', required=False,
-                        help=('Print the eta_estimates section of a Krun ' +
-                              'results file to STDOUT'))
-    parser.add_argument('--dump-temps', action="store_true",
-                        dest='dump_temps', required=False,
-                        help=('Print the starting_temperatures section of ' +
-                              'a Krun results file to STDOUT'))
-    parser.add_argument('--dump-data', action="store_true",
-                        dest='dump_data', required=False,
-                        help=('Print the data section of ' +
-                              'a Krun results file to STDOUT'))
-    parser.add_argument('--develop', action="store_true",
-                        dest='develop', required=False,
-                        help=('Enable developer mode'))
-    filename_help = ('Krun configuration or results file. FILENAME should' +
-                     ' be a configuration file when running benchmarks ' +
-                     '(e.g. experiment.krun) and a results file ' +
-                     '(e.g. experiment_results.json.bz2) when calling ' +
-                     'krun with --dump-config, --dump_audit or ' +
-                     '--dump-reboots')
-    parser.add_argument('filename', action="store", # Required by default.
-                        metavar='FILENAME',
+    parser.add_argument("--debug", "-g", action="store", default='INFO',
+                        dest="debug_level", required=False,
+                        help=("Debug level used by logger. Must be one of: " +
+                              "DEBUG, INFO, WARN, DEBUG, CRITICAL, ERROR"))
+    parser.add_argument("--dump-audit", action="store_const",
+                        dest="dump", const="audit", required=False,
+                        help=("Print the audit section of a Krun " +
+                              "results file to STDOUT"))
+    parser.add_argument("--dump-config", action="store_const",
+                        dest="dump", const="config", required=False,
+                        help=("Print the config section of a Krun " +
+                              "results file to STDOUT"))
+    parser.add_argument("--dump-reboots", action="store_const",
+                        dest="dump", const="reboots", required=False,
+                        help=("Print the reboots section of a Krun " +
+                              "results file to STDOUT"))
+    parser.add_argument("--dump-etas", action="store_const",
+                        dest="dump", const="eta_estimates", required=False,
+                        help=("Print the eta_estimates section of a Krun " +
+                              "results file to STDOUT"))
+    parser.add_argument("--dump-temps", action="store_const",
+                        dest="dump", const="starting_temperatures",
+                        required=False,
+                        help=("Print the starting_temperatures section of " +
+                              "a Krun results file to STDOUT"))
+    parser.add_argument("--dump-data", action="store_const",
+                        dest="dump", const="data", required=False,
+                        help=("Print the data section of " +
+                              "a Krun results file to STDOUT"))
+    parser.add_argument("--develop", action="store_true",
+                        dest="develop", required=False,
+                        help=("Enable developer mode"))
+    filename_help = ("Krun configuration or results file. FILENAME should" +
+                     " be a configuration file when running benchmarks " +
+                     "(e.g. experiment.krun) and a results file " +
+                     "(e.g. experiment_results.json.bz2) when calling " +
+                     "krun with --dump-config, --dump_audit, " +
+                     "--dump-reboots, --dump-etas, --dump-temps, or"
+                     "--dump-data")
+    parser.add_argument("filename", action="store", # Required by default.
+                        metavar="FILENAME",
                         help=(filename_help))
     return parser
-
-def dump_section(args):
-    results = util.read_results(args.filename)
-    if args.dump_config:
-        text = results['config']
-    elif args.dump_audit:
-        text = util.dump_audit(results['audit'])
-    elif args.dump_reboots:
-        text = str(results['reboots'])
-    elif args.dump_etas:
-        text = json.dumps(results['eta_estimates'],
-                          sort_keys=True, indent=2)
-    elif args.dump_temps:
-        text = json.dumps(results['starting_temperatures'],
-                          sort_keys=True, indent=2)
-    elif args.dump_data:
-        text = json.dumps(results['data'],
-                          sort_keys=True, indent=2)
-    else:
-        assert False  # unreachable
-
-    # String data read in from JSON are unicode objects. This matters for us
-    # as some data in the audit includes unicode characters. If it does,
-    # a simple print no longer suffices if the system locale is (e.g.) ASCII.
-    # In this case print will raise.
-    #
-    # The correct thing to do is to encode() the unicode to the system locale.
-    print(text.encode(locale.getpreferredencoding()))
 
 
 def main(parser):
     args = parser.parse_args()
 
-    if (args.dump_config or
-            args.dump_audit or
-            args.dump_reboots or
-            args.dump_etas or
-            args.dump_temps or
-            args.dump_data):
+    if args.dump is not None:
         if not args.filename.endswith(".json.bz2"):
             usage(parser)
         else:
-            dump_section(args)
+            results = Results(None, None, results_file=args.filename)
+            if args.dump == "config" or "audit":
+                text = unicode(results.__getattribute__(args.dump))
+            else:
+                text = json.dumps(results.__getattribute__(args.dump),
+                                  sort_keys=True, indent=2)
+            # String data read in from JSON are unicode objects. This matters
+            # for us as some data in the audit includes unicode characters.
+            # If it does, a simple print no longer suffices if the system
+            # locale is (e.g.) ASCII. In this case print will raise an
+            # exception. The correct thing to do is to encode() the unicode to
+            # the system locale.
+            print(text.encode(locale.getpreferredencoding()))
             sys.exit(0)
 
     if not args.filename.endswith(".krun"):
@@ -215,8 +198,8 @@ def main(parser):
     except OSError:
         util.fatal('Krun configuration file %s does not exist.' % args.filename)
 
-    config = util.read_config(args.filename)
-    out_file = util.output_name(args.filename)
+    config = Config(args.filename)
+    out_file = config.results_filename()
     out_file_exists = os.path.exists(out_file)
 
     if out_file_exists and not os.path.isfile(out_file):
@@ -240,12 +223,11 @@ def main(parser):
     if args.develop:
         warn("Developer mode enabled. Results will not be reliable.")
 
-    mail_recipients = config.get("MAIL_TO", [])
+    mail_recipients = config.MAIL_TO
     if type(mail_recipients) is not list:
         util.fatal("MAIL_TO config should be a list")
 
-    max_mails = config.get("MAX_MAILS", 5)
-    mailer = Mailer(mail_recipients, max_mails=max_mails)
+    mailer = Mailer(mail_recipients, max_mails=config.MAX_MAILS)
 
     # Initialise platform instance and assign to VM defs.
     # This needs to be done early, so VM sanity checks can run.
@@ -260,8 +242,6 @@ def main(parser):
         platform.developer_mode = True
 
     platform.collect_audit()
-    for vm_name, vm_info in config["VMS"].items():
-        vm_info["vm_def"].set_platform(platform)
 
     # If the user has asked for resume-mode, the current platform must
     # be an identical machine to the current one.
@@ -273,12 +253,13 @@ def main(parser):
     if args.resume:
         # output file must exist, due to check above
         assert(out_file_exists)
-        current = util.read_results(out_file)
-        if not util.audits_same_platform(platform.audit, current["audit"]):
+        current = Results(config, platform, results_file=out_file)
+        from krun.audit import Audit
+        if not Audit(platform.audit) == current.audit:
             util.fatal(error_msg)
 
         debug("Using pre-recorded initial temperature readings")
-        platform.set_starting_temperatures(current["starting_temperatures"])
+        platform.set_starting_temperatures(current.starting_temperatures)
     else:
         # Touch the config file to update its mtime. This is required
         # by resume-mode which uses the mtime to determine the name of
@@ -290,21 +271,19 @@ def main(parser):
         debug("Taking fresh initial temperature readings")
         platform.set_starting_temperatures()
 
-    log_filename = attach_log_file(args.filename, args.resume)
+    attach_log_file(config, args.resume)
 
     sanity_checks(config, platform)
 
     # Build job queue -- each job is an execution
-    sched = ExecutionScheduler(args.filename,
-                               log_filename,
-                               out_file,
+    sched = ExecutionScheduler(config,
                                mailer,
                                platform,
                                resume=args.resume,
                                reboot=args.reboot,
                                dry_run=args.dry_run,
                                started_by_init=args.started_by_init)
-    sched.build_schedule(config, current)
+    sched.build_schedule()
 
     # does the benchmarking
     sched.run()
@@ -331,13 +310,13 @@ def setup_logging(parser):
     logging.root.handlers = [stream]
 
 
-def attach_log_file(config_filename, resume):
-    log_filename = util.log_name(config_filename, resume)
+def attach_log_file(config, resume):
+    log_filename = config.log_filename(resume)
     mode = 'a' if resume else 'w'
     fh = logging.FileHandler(log_filename, mode=mode)
     fh.setFormatter(PLAIN_FORMATTER)
     logging.root.addHandler(fh)
-    return os.path.abspath(log_filename)
+    return
 
 
 if __name__ == "__main__":

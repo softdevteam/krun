@@ -1,61 +1,12 @@
-from krun import LOGFILE_FILENAME_TIME_FORMAT
-from krun.util import (should_skip, format_raw_exec_results, output_name,
-                       log_and_mail, log_name, fatal, read_config,
-                       run_shell_cmd, read_results, dump_results,
+from krun.util import (format_raw_exec_results,
+                       log_and_mail, fatal,
                        check_and_parse_execution_results,
-                       audits_same_platform, ExecutionFailed)
+                       run_shell_cmd,
+                       ExecutionFailed)
 from krun.tests.mocks import MockMailer
 
-import bz2, json, os, pytest, time
-
-
-def test_should_skip():
-    config = dict([("SKIP", ["*:PyPy:*",
-                             "*:CPython:*",
-                             "*:Hotspot:*",
-                             "*:Graal:*",
-                             "*:LuaJIT:*",
-                             "*:HHVM:*",
-                             "*:JRubyTruffle:*",
-                             "*:V8:*",
-    ])])
-    assert should_skip(config, "nbody:HHVM:default-php")
-    assert not should_skip(dict([("SKIP", [])]), "nbody:HHVM:default-php")
-
-
-def test_read_config():
-    path = "examples/example.krun"
-    config = read_config(path)
-    assert config is not None
-    assert config["BENCHMARKS"] == {"dummy": 1000, "nbody": 1000}
-    assert config["N_EXECUTIONS"] == 2
-    assert config["SKIP"] == []
-    assert config["MAIL_TO"] == []
-    assert config["ITERATIONS_ALL_VMS"] == 5
-    assert config["HEAP_LIMIT"] == 2097152
-
-
-def test_read_corrupt_config():
-    path = "krun/tests/corrupt.krun"
-    with pytest.raises(Exception):
-        _ = read_config(path)
-
-
-def test_output_name():
-    assert output_name(".krun") == "_results.json.bz2"
-    assert output_name("example.krun") == "example_results.json.bz2"
-
-
-def test_log_name(monkeypatch):
-    tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT)
-    assert log_name("example.krun", False) == "example" + "_" + tstamp + ".log"
-    assert log_name(".krun", False) == "_" + tstamp + ".log"
-    def mock_mtime(path):
-        return 1445964109.9363003
-    monkeypatch.setattr(os.path, 'getmtime', mock_mtime)
-    tstamp = '20151027_164149'
-    assert log_name("example.krun", True) == "example" + "_" + tstamp + ".log"
-    assert log_name(".krun", True) == "_" + tstamp + ".log"
+import json
+import pytest
 
 
 def test_fatal(capsys):
@@ -101,62 +52,6 @@ def test_run_shell_cmd_fatal(capsys):
         assert out == ""
 
 
-def test_read_results():
-    results = read_results('krun/tests/quick_results.json.bz2')
-    expected = {u'nbody:CPython:default-python': [[0.022256]],
-                u'dummy:CPython:default-python': [[1.005115]],
-                u'nbody:Java:default-java': [[26.002632]],
-                u'dummy:Java:default-java': [[1.000941]]}
-    with open('krun/tests/quick.krun', 'rb') as config_fp:
-        config = config_fp.read()
-    assert results['config'] == config
-    assert results['audit']['uname'] == u'Linux'
-    assert results['audit']['debian_version'] == u'jessie/sid'
-    assert results['data'] == expected
-    assert results['starting_temperatures'] == [4355, 9879]
-    assert results['eta_estimates'] == \
-        {
-            u'nbody:CPython:default-python': [0.022256],
-            u'dummy:CPython:default-python': [1.005115],
-            u'nbody:Java:default-java': [26.002632],
-            u'dummy:Java:default-java': [1.000941]
-        }
-
-
-def test_dump_results():
-
-    class DummyPlatform(object):
-        audit = 'example audit (py.test)'
-        starting_temperatures = [4355, 9879]
-
-    class DummyExecutionScheduler(object):
-        platform = DummyPlatform()
-        out_file = output_name("krun/tests/example.krun")
-        results = {'dummy:Java:default-java': [[1.000726]]}
-        nreboots = 5
-        eta_estimates = {'dummy:Java:default-java': [1.1]}
-        error_flag = False
-        config_file = 'krun/tests/example.krun'
-
-    dummy_sched = DummyExecutionScheduler()
-    dump_results(dummy_sched)
-
-    with open(dummy_sched.config_file, 'r') as config_fp:
-        config = config_fp.read()
-        with bz2.BZ2File(dummy_sched.out_file, 'rb') as input_file:
-            dumped_results = json.loads(input_file.read())
-            assert dumped_results['audit'] == dummy_sched.platform.audit
-            assert dumped_results['starting_temperatures'] == \
-                dummy_sched.platform.starting_temperatures
-            assert dumped_results['config'] == config
-            assert dumped_results['data'] == dummy_sched.results
-            assert dumped_results['reboots'] == dummy_sched.nreboots
-            assert dumped_results['eta_estimates'] == \
-                dummy_sched.eta_estimates
-            assert dumped_results['error_flag'] == dummy_sched.error_flag
-        os.unlink(dummy_sched.out_file)  # Clean-up generated file.
-
-
 def test_check_and_parse_execution_results():
     stdout = "[0.000403]"
     stderr = "[iterations_runner.py] iteration 1/1"
@@ -192,20 +87,3 @@ stderr:
 --------------------------------------------------
 """
     assert excinfo.value.message == expected
-
-
-def test_audit_compare():
-    audit0 = dict([("cpuinfo", u"processor\t: 0\nvendor_id\t: GenuineIntel"),
-                   ("uname", u"Linux"),
-                   ("debian_version", u"jessie/sid"),
-                   ("packages", u"1:1.2.8.dfsg-2ubuntu1"),
-                   ("dmesg", u"")])
-    audit1 = dict([("cpuinfo", u"processor\t: 0\nvendor_id\t: GenuineIntel"),
-                   ("uname", u"BSD"),
-                   ("packages", u"1:1.2.8.dfsg-2ubuntu1"),
-                   ("dmesg", u"")])
-    assert audits_same_platform(audit0, audit0)
-    assert audits_same_platform(audit1, audit1)
-    assert not audits_same_platform([], [])
-    assert not audits_same_platform(audit0, audit1)
-    assert not audits_same_platform(audit1, audit0)

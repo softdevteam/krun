@@ -1,4 +1,5 @@
 from krun.time_estimate import TimeEstimateFormatter
+from krun.results import Results
 from krun import util
 
 from collections import deque
@@ -33,13 +34,12 @@ class ScheduleEmpty(Exception):
 class ExecutionJob(object):
     """Represents a single executions level benchmark run"""
 
-    def __init__(self, sched, config, vm_name, vm_info, benchmark, variant, parameter):
+    def __init__(self, sched, vm_name, vm_info, benchmark, variant, parameter):
         self.sched = sched
         self.vm_name, self.vm_info = vm_name, vm_info
         self.benchmark = benchmark
         self.variant = variant
         self.parameter = parameter
-        self.config = config
 
         # Used in results JSON and ETA dict
         self.key = "%s:%s:%s" % (self.benchmark, self.vm_name, self.variant)
@@ -58,8 +58,7 @@ class ExecutionJob(object):
     def __eq__(self, other):
         return (self.sched == other.sched and
                 self.key == other.key and
-                self.parameter == other.parameter and
-                self.config == other.config)
+                self.parameter == other.parameter)
 
     def add_exec_time(self, exec_time):
         """Feed back a rough execution time for ETA usage"""
@@ -68,7 +67,7 @@ class ExecutionJob(object):
     def run(self, mailer, dry_run=False):
         """Runs this job (execution)"""
 
-        entry_point = self.config["VARIANTS"][self.variant]
+        entry_point = self.sched.config.VARIANTS[self.variant]
         vm_def = self.vm_info["vm_def"]
         vm_def.dry_run = dry_run
 
@@ -83,7 +82,7 @@ class ExecutionJob(object):
                                          tfmt.delta_str))
 
         # Set heap limit
-        heap_limit_kb = self.config["HEAP_LIMIT"]
+        heap_limit_kb = self.sched.config.HEAP_LIMIT
         heap_limit_b = heap_limit_kb * 1024  # resource module speaks in bytes
         heap_t = (heap_limit_b, heap_limit_b)
         resource.setrlimit(resource.RLIMIT_DATA, heap_t)
@@ -108,13 +107,14 @@ class ExecutionJob(object):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config_file, log_filename, out_file, mailer, platform,
+    def __init__(self, config, mailer, platform,
                  resume=False, reboot=False, dry_run=False,
                  started_by_init=False):
         self.mailer = mailer
 
+        self.config = config
         self.work_deque = deque()
-        self.eta_avail = None
+        self.eta_avail = 0
         self.jobs_done = 0
         self.platform = platform
         self.resume = resume
@@ -122,28 +122,17 @@ class ExecutionScheduler(object):
         self.dry_run = dry_run
         self.started_by_init = started_by_init
 
-        # Flipped when a (non-fatal) error or warning occurs.
-        # When krun finishes and this flag is true, a message is printed,
-        # thus prompting the user to investigate.
-        self.error_flag = False
+        if resume:
+            self.results = Results(self.config, platform,
+                                   results_file=self.config.results_filename())
+        else:
+            self.results = Results(self.config, platform)
 
-        # Record how long processes are taking so we can make a
-        # rough ETA for the user.
-        # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
-        self.eta_estimates = {}
+        # Give VM objects access to the platform.
+        for vm_name, vm_info in self.config.VMS.items():
+            vm_info["vm_def"].set_platform(platform)
 
-        # Maps key to results:
-        # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
-        self.results = {}
-
-        # Reboot mode.
-        self.nreboots = 0
-        self.expected_reboots = 0
-
-        # file names
-        self.config_file = config_file
-        self.out_file = out_file
-        self.log_path = log_filename
+        self.log_path = self.config.log_filename(self.resume)
 
     def set_eta_avail(self):
         """call after adding job before eta should become available"""
@@ -175,7 +164,7 @@ class ExecutionScheduler(object):
         return len(self.work_deque)
 
     def get_estimated_exec_duration(self, key):
-        previous_exec_times = self.eta_estimates.get(key)
+        previous_exec_times = self.results.eta_estimates.get(key)
         if previous_exec_times:
             return mean(previous_exec_times)
         else:
@@ -194,17 +183,17 @@ class ExecutionScheduler(object):
         return TimeEstimateFormatter(self.get_estimated_overall_duration())
 
     def add_eta_info(self, key, exec_time):
-        self.eta_estimates[key].append(exec_time)
+        self.results.eta_estimates[key].append(exec_time)
 
-    def build_schedule(self, config, current_result_json):
+    def build_schedule(self):
         one_exec_scheduled = False
         eta_avail_job = None
-        for exec_n in xrange(config["N_EXECUTIONS"]):
-            for vm_name, vm_info in config["VMS"].items():
-                for bmark, param in config["BENCHMARKS"].items():
+        for exec_n in xrange(self.config.N_EXECUTIONS):
+            for vm_name, vm_info in self.config.VMS.items():
+                for bmark, param in self.config.BENCHMARKS.items():
                     for variant in vm_info["variants"]:
-                        job = ExecutionJob(self, config, vm_name, vm_info, bmark, variant, param)
-                        if not util.should_skip(config, job.key):
+                        job = ExecutionJob(self, vm_name, vm_info, bmark, variant, param)
+                        if not self.config.should_skip(job.key):
                             if one_exec_scheduled and not eta_avail_job:
                                 # first job of second executions eta becomes known.
                                 eta_avail_job = job
@@ -219,42 +208,40 @@ class ExecutionScheduler(object):
         # Resume mode: if previous results are available, remove the
         # jobs from the schedule which have already been executed, and
         # add the results to this object, ready to be saved to a Json file.
-        if self.resume and current_result_json is not None:
-            self._remove_previous_execs_from_schedule(current_result_json)
-
-            # Load back (and sanity check) ETA estimates
-            self.eta_estimates = current_result_json["eta_estimates"]
-            for key, exec_data in current_result_json["data"].iteritems():
-                got_len = len(current_result_json["eta_estimates"][key])
+        if self.resume:
+            self._remove_previous_execs_from_schedule()
+            # Sanity check ETA estimates
+            for key, exec_data in self.results.data.iteritems():
+                got_len = len(self.results.eta_estimates[key])
                 expect_len = len(exec_data)
                 if expect_len != got_len:
                     msg = "ETA estimates didn't tally with results: "
-                    msg += "key=%s, expect_len=%d, got_len=%d" % \
+                    msg += "key=%s, expect_len=%d, got_len=%d " % \
                         (key, expect_len, got_len)
+                    msg += "data[%s]=%s; " % (key, str(self.results.data[key]))
+                    msg += "eta[%s]=%s" % \
+                        (key, str(self.results.eta_estimates[key]))
                     util.log_and_mail(self.mailer, error,
                                       "Fatal Krun Error",
                                       msg, bypass_limiter=True, exit=True)
-            # Load back the error flag
-            self.error_flag = current_result_json["error_flag"]
 
-    def _remove_previous_execs_from_schedule(self, current_result_json):
-            self.nreboots = current_result_json['reboots']
-            for key in current_result_json['data']:
-                num_completed_jobs = len(current_result_json['data'][key])
-                if num_completed_jobs > 0:
-                    try:
-                        debug("%s has already been run %d times." %
-                              (key, num_completed_jobs))
-                        for _ in range(num_completed_jobs):
-                            self.remove_job_by_key(key)
-                            self.jobs_done += 1
-                    except JobMissingError as excn:
-                        tup = (excn.key, self.config_file, self.out_file)
-                        msg = ("Failed to resume benchmarking session\n." +
-                               "The execution %s appears in results " +
-                               "file: %s, but not in config file: %s." % tup)
-                        util.fatal(msg)
-                    self.results[key] = current_result_json['data'][key]
+    def _remove_previous_execs_from_schedule(self):
+        for key in self.results.data:
+            num_completed_jobs = self.results.jobs_completed(key)
+            if num_completed_jobs > 0:
+                try:
+                    debug("%s has already been run %d times." %
+                          (key, num_completed_jobs))
+                    for _ in range(num_completed_jobs):
+                        self.remove_job_by_key(key)
+                        self.jobs_done += 1
+                except JobMissingError as excn:
+                    tup = (excn.key, self.config.filename,
+                           self.config.results_filename())
+                    msg = ("Failed to resume benchmarking session\n." +
+                           "The execution %s appears in results " +
+                           "file: %s, but not in config file: %s." % tup)
+                    util.fatal(msg)
 
     def run(self):
         """Benchmark execution starts here"""
@@ -268,13 +255,6 @@ class ExecutionScheduler(object):
                               "Benchmarking started.\nLogging to %s" %
                               self.log_path,
                               bypass_limiter=True)
-
-        # scaffold dicts
-        for job in self.work_deque:
-            if not job.key in self.eta_estimates:
-                self.eta_estimates[job.key] = []
-            if not job.key in self.results:
-                self.results[job.key] = []
 
         if self.reboot and not self.started_by_init:
             # Reboot before first benchmark (dumps results file).
@@ -329,19 +309,20 @@ class ExecutionScheduler(object):
             exec_result = util.format_raw_exec_results(raw_exec_result)
 
             if not exec_result and not self.dry_run:
-                self.error_flag = True
+                self.results.error_flag = True
 
-            self.results[job.key].append(exec_result)
+            self.results.data[job.key].append(exec_result)
             self.add_eta_info(job.key, exec_end_time - exec_start_time)
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
-            info("Intermediate results dumped to %s" % self.out_file)
-            util.dump_results(self)
+            info("Intermediate results dumped to %s" %
+                 self.config.results_filename())
+            self.results.write_to_file()
 
             self.jobs_done += 1
             if self.platform.check_dmesg_for_changes():
-                self.error_flag = True
+                self.results.error_flag = True
 
             if self.reboot and len(self) > 0:
                 info("Reboot in preparation for next execution")
@@ -351,8 +332,8 @@ class ExecutionScheduler(object):
 
         self.platform.save_power()
 
-        info("Done: Results dumped to %s" % self.out_file)
-        if self.error_flag:
+        info("Done: Results dumped to %s" % self.config.results_filename())
+        if self.results.error_flag:
             warn("Errors/warnings occurred -- read the log!")
 
         msg = "Completed in (roughly) %f seconds.\nLog file at: %s" % \
@@ -361,24 +342,25 @@ class ExecutionScheduler(object):
                           bypass_limiter=True)
 
     def _reboot(self):
-        self.nreboots += 1
+        self.results.reboots += 1
         debug("About to execute reboot: %g, expecting %g in total." %
-              (self.nreboots, self.expected_reboots))
+              (self.results.reboots, self.expected_reboots))
         # Dump the results file. This may already have been done, but we
         # have changed self.nreboots, which needs to be written out.
-        util.dump_results(self)
+        self.results.write_to_file()
 
-        if self.nreboots > self.expected_reboots:
+        if self.results.reboots > self.expected_reboots:
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
                         "INVARIANT num_reboots <= num_jobs violated. " +
                         "Krun was about to execute reboot number: %g. " +
                         "%g jobs have been completed, %g are left to go.") %
-                       (self.nreboots, self.jobs_done, len(self)))
+                       (self.results.reboots, self.jobs_done, len(self)))
         if self.dry_run:
             info("SIMULATED: reboot (restarting Krun in-place)")
             args =  sys.argv
             if not self.started_by_init:
                 args.extend(["--resume", "--started-by-init"])
+                debug("Simulated reboot with args: " + " ".join(args))
             os.execv(args[0], args)  # replace myself
             assert False  # unreachable
         else:
