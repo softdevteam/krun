@@ -1,65 +1,12 @@
 import json
-import os.path
 import sys
-import time
-from collections import OrderedDict
 from subprocess import Popen, PIPE
 from logging import error
-from krun import LOGFILE_FILENAME_TIME_FORMAT
 
 FLOAT_FORMAT = ".6f"
 
 class ExecutionFailed(Exception):
     pass
-
-
-def should_skip(config, this_key):
-    skips = config["SKIP"]
-
-    for skip_key in skips:
-        skip_elems = skip_key.split(":")
-        this_elems = this_key.split(":")
-
-        # should be triples of: bench * vm * variant
-        assert len(skip_elems) == 3 and len(this_elems) == 3
-
-        for i in range(3):
-            if skip_elems[i] == "*":
-                this_elems[i] = "*"
-
-        if skip_elems == this_elems:
-            return True # skip
-
-    return False
-
-
-def read_config(path):
-    assert path.endswith(".krun")
-    dct = {}
-    try:
-        execfile(path, dct)
-    except Exception as e:
-        error("error importing config file:\n%s" % str(e))
-        raise
-
-    return dct
-
-
-def output_name(config_path):
-    """Makes a result file name based upon the config file name."""
-
-    assert config_path.endswith(".krun")
-    return config_path[:-5] + "_results.json.bz2"
-
-
-def log_name(config_path, resume=False):
-    assert config_path.endswith(".krun")
-    if resume:
-        config_mtime = time.gmtime(os.path.getmtime(config_path))
-        tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT, config_mtime)
-    else:
-        tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT)
-    return config_path[:-5] + "_%s.log" % tstamp
 
 
 def fatal(msg):
@@ -128,12 +75,3 @@ def audits_same_platform(audit0, audit1):
     if ("uname" not in audit0) or ("uname" not in audit1):
         return False
     return audit0["uname"] == audit1["uname"]
-
-def dump_audit(audit):
-    s = ""
-    # important that the sections are sorted, for diffing
-    for key, text in OrderedDict(sorted(audit.iteritems())).iteritems():
-        s += "Audit Section: %s" % key + "\n"
-        s += "#" * 78 + "\n\n"
-        s += text + "\n\n"
-    return s

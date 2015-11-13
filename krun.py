@@ -11,6 +11,7 @@ from logging import debug, info, warn
 import locale
 
 import krun.util as util
+from krun.config import Config
 from krun.platform import detect_platform
 from krun.results import Results
 from krun.scheduler import ExecutionScheduler
@@ -41,21 +42,21 @@ def usage(parser):
 def sanity_checks(config, platform):
     vms_that_will_run = []
     # check all necessary benchmark files exist
-    for bench, bench_param in config["BENCHMARKS"].items():
-        for vm_name, vm_info in config["VMS"].items():
+    for bench, bench_param in config.BENCHMARKS.items():
+        for vm_name, vm_info in config.VMS.items():
             for variant in vm_info["variants"]:
-                entry_point = config["VARIANTS"][variant]
+                entry_point = config.VARIANTS[variant]
                 key = "%s:%s:%s" % (bench, vm_name, variant)
                 debug("Running sanity check for experiment %s" % key)
 
-                if util.should_skip(config, key):
+                if config.should_skip(key):
                     continue  # won't execute, so no check needed
 
                 vm_info["vm_def"].check_benchmark_files(bench, entry_point)
                 vms_that_will_run.append(vm_name)
 
     # per-VM sanity checks
-    for vm_name, vm_info in config["VMS"].items():
+    for vm_name, vm_info in config.VMS.items():
         if vm_name not in vms_that_will_run:
             # User's SKIP config directive may mean a defined VM never runs.
             # This may be deliberate, e.g. the user does not yet have it built.
@@ -138,7 +139,7 @@ def create_arg_parser():
                         help=("Print the reboots section of a Krun " +
                               "results file to STDOUT"))
     parser.add_argument("--dump-etas", action="store_const",
-                        dest="dump", const="etas", required=False,
+                        dest="dump", const="eta_estimates", required=False,
                         help=("Print the eta_estimates section of a Krun " +
                               "results file to STDOUT"))
     parser.add_argument("--dump-temps", action="store_const",
@@ -173,9 +174,9 @@ def main(parser):
         if not args.filename.endswith(".json.bz2"):
             usage(parser)
         else:
-            results = Results(results_file=args.filename)
-            if args.dump == "config":
-                text = results.config  # FIXME: This should be an object
+            results = Results(None, None, results_file=args.filename)
+            if args.dump == "config" or "audit":
+                text = unicode(results.__getattribute__(args.dump))
             else:
                 text = json.dumps(results.__getattribute__(args.dump),
                                   sort_keys=True, indent=2)
@@ -197,8 +198,8 @@ def main(parser):
     except OSError:
         util.fatal('Krun configuration file %s does not exist.' % args.filename)
 
-    config = util.read_config(args.filename)
-    out_file = util.output_name(args.filename)
+    config = Config(args.filename)
+    out_file = config.results_filename()
     out_file_exists = os.path.exists(out_file)
 
     if out_file_exists and not os.path.isfile(out_file):
@@ -222,12 +223,11 @@ def main(parser):
     if args.develop:
         warn("Developer mode enabled. Results will not be reliable.")
 
-    mail_recipients = config.get("MAIL_TO", [])
+    mail_recipients = config.MAIL_TO
     if type(mail_recipients) is not list:
         util.fatal("MAIL_TO config should be a list")
 
-    max_mails = config.get("MAX_MAILS", 5)
-    mailer = Mailer(mail_recipients, max_mails=max_mails)
+    mailer = Mailer(mail_recipients, max_mails=config.MAX_MAILS)
 
     # Initialise platform instance and assign to VM defs.
     # This needs to be done early, so VM sanity checks can run.
@@ -242,8 +242,6 @@ def main(parser):
         platform.developer_mode = True
 
     platform.collect_audit()
-    for vm_name, vm_info in config["VMS"].items():
-        vm_info["vm_def"].set_platform(platform)
 
     # If the user has asked for resume-mode, the current platform must
     # be an identical machine to the current one.
@@ -255,12 +253,12 @@ def main(parser):
     if args.resume:
         # output file must exist, due to check above
         assert(out_file_exists)
-        current = util.read_results(out_file)
-        if not util.audits_same_platform(platform.audit, current["audit"]):
+        current = Results(config, platform, results_file=out_file)
+        if not util.audits_same_platform(platform.audit, current.audit):
             util.fatal(error_msg)
 
         debug("Using pre-recorded initial temperature readings")
-        platform.set_starting_temperatures(current["starting_temperatures"])
+        platform.set_starting_temperatures(current.starting_temperatures)
     else:
         # Touch the config file to update its mtime. This is required
         # by resume-mode which uses the mtime to determine the name of
@@ -272,21 +270,19 @@ def main(parser):
         debug("Taking fresh initial temperature readings")
         platform.set_starting_temperatures()
 
-    log_filename = attach_log_file(args.filename, args.resume)
+    attach_log_file(config, args.resume)
 
     sanity_checks(config, platform)
 
     # Build job queue -- each job is an execution
-    sched = ExecutionScheduler(args.filename,
-                               log_filename,
-                               out_file,
+    sched = ExecutionScheduler(config,
                                mailer,
                                platform,
                                resume=args.resume,
                                reboot=args.reboot,
                                dry_run=args.dry_run,
                                started_by_init=args.started_by_init)
-    sched.build_schedule(config)
+    sched.build_schedule()
 
     # does the benchmarking
     sched.run()
@@ -313,13 +309,13 @@ def setup_logging(parser):
     logging.root.handlers = [stream]
 
 
-def attach_log_file(config_filename, resume):
-    log_filename = util.log_name(config_filename, resume)
+def attach_log_file(config, resume):
+    log_filename = config.log_filename(resume)
     mode = 'a' if resume else 'w'
     fh = logging.FileHandler(log_filename, mode=mode)
     fh.setFormatter(PLAIN_FORMATTER)
     logging.root.addHandler(fh)
-    return os.path.abspath(log_filename)
+    return
 
 
 if __name__ == "__main__":

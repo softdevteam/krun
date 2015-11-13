@@ -1,61 +1,12 @@
-from krun import LOGFILE_FILENAME_TIME_FORMAT
-from krun.util import (should_skip, format_raw_exec_results, output_name,
-                       log_and_mail, log_name, fatal, read_config,
+from krun.util import (format_raw_exec_results,
+                       log_and_mail, fatal,
                        check_and_parse_execution_results,
                        run_shell_cmd, audits_same_platform,
                        ExecutionFailed)
 from krun.tests.mocks import MockMailer
 
-import json, os, pytest, time
-
-
-def test_should_skip():
-    config = dict([("SKIP", ["*:PyPy:*",
-                             "*:CPython:*",
-                             "*:Hotspot:*",
-                             "*:Graal:*",
-                             "*:LuaJIT:*",
-                             "*:HHVM:*",
-                             "*:JRubyTruffle:*",
-                             "*:V8:*",
-    ])])
-    assert should_skip(config, "nbody:HHVM:default-php")
-    assert not should_skip(dict([("SKIP", [])]), "nbody:HHVM:default-php")
-
-
-def test_read_config():
-    path = "examples/example.krun"
-    config = read_config(path)
-    assert config is not None
-    assert config["BENCHMARKS"] == {"dummy": 1000, "nbody": 1000}
-    assert config["N_EXECUTIONS"] == 2
-    assert config["SKIP"] == []
-    assert config["MAIL_TO"] == []
-    assert config["ITERATIONS_ALL_VMS"] == 5
-    assert config["HEAP_LIMIT"] == 2097152
-
-
-def test_read_corrupt_config():
-    path = "krun/tests/corrupt.krun"
-    with pytest.raises(Exception):
-        _ = read_config(path)
-
-
-def test_output_name():
-    assert output_name(".krun") == "_results.json.bz2"
-    assert output_name("example.krun") == "example_results.json.bz2"
-
-
-def test_log_name(monkeypatch):
-    tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT)
-    assert log_name("example.krun", False) == "example" + "_" + tstamp + ".log"
-    assert log_name(".krun", False) == "_" + tstamp + ".log"
-    def mock_mtime(path):
-        return 1445964109.9363003
-    monkeypatch.setattr(os.path, 'getmtime', mock_mtime)
-    tstamp = '20151027_164149'
-    assert log_name("example.krun", True) == "example" + "_" + tstamp + ".log"
-    assert log_name(".krun", True) == "_" + tstamp + ".log"
+import json
+import pytest
 
 
 def test_fatal(capsys):
@@ -99,7 +50,6 @@ def test_run_shell_cmd_fatal(capsys):
         assert rc != 0
         assert err == cmd + ": command not found"
         assert out == ""
-
 
 
 def test_check_and_parse_execution_results():

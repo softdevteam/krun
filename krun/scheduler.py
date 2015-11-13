@@ -34,13 +34,12 @@ class ScheduleEmpty(Exception):
 class ExecutionJob(object):
     """Represents a single executions level benchmark run"""
 
-    def __init__(self, sched, config, vm_name, vm_info, benchmark, variant, parameter):
+    def __init__(self, sched, vm_name, vm_info, benchmark, variant, parameter):
         self.sched = sched
         self.vm_name, self.vm_info = vm_name, vm_info
         self.benchmark = benchmark
         self.variant = variant
         self.parameter = parameter
-        self.config = config
 
         # Used in results JSON and ETA dict
         self.key = "%s:%s:%s" % (self.benchmark, self.vm_name, self.variant)
@@ -59,8 +58,7 @@ class ExecutionJob(object):
     def __eq__(self, other):
         return (self.sched == other.sched and
                 self.key == other.key and
-                self.parameter == other.parameter and
-                self.config == other.config)
+                self.parameter == other.parameter)
 
     def add_exec_time(self, exec_time):
         """Feed back a rough execution time for ETA usage"""
@@ -69,7 +67,7 @@ class ExecutionJob(object):
     def run(self, mailer, dry_run=False):
         """Runs this job (execution)"""
 
-        entry_point = self.config["VARIANTS"][self.variant]
+        entry_point = self.sched.config.VARIANTS[self.variant]
         vm_def = self.vm_info["vm_def"]
         vm_def.dry_run = dry_run
 
@@ -84,7 +82,7 @@ class ExecutionJob(object):
                                          tfmt.delta_str))
 
         # Set heap limit
-        heap_limit_kb = self.config["HEAP_LIMIT"]
+        heap_limit_kb = self.sched.config.HEAP_LIMIT
         heap_limit_b = heap_limit_kb * 1024  # resource module speaks in bytes
         heap_t = (heap_limit_b, heap_limit_b)
         resource.setrlimit(resource.RLIMIT_DATA, heap_t)
@@ -109,13 +107,14 @@ class ExecutionJob(object):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config_file, log_filename, out_file, mailer, platform,
+    def __init__(self, config, mailer, platform,
                  resume=False, reboot=False, dry_run=False,
                  started_by_init=False):
         self.mailer = mailer
 
+        self.config = config
         self.work_deque = deque()
-        self.eta_avail = None
+        self.eta_avail = 0
         self.jobs_done = 0
         self.platform = platform
         self.resume = resume
@@ -124,14 +123,16 @@ class ExecutionScheduler(object):
         self.started_by_init = started_by_init
 
         if resume:
-            self.results = Results(results_file=out_file, config_file=config_file)
+            self.results = Results(self.config, platform,
+                                   results_file=self.config.results_filename())
         else:
-            self.results = Results(config_file=config_file)
+            self.results = Results(self.config, platform)
 
-        # file names
-        self.config_file = config_file
-        self.out_file = out_file
-        self.log_path = log_filename
+        # Give VM objects access to the platform.
+        for vm_name, vm_info in self.config.VMS.items():
+            vm_info["vm_def"].set_platform(platform)
+
+        self.log_path = self.config.log_filename(self.resume)
 
     def set_eta_avail(self):
         """call after adding job before eta should become available"""
@@ -163,7 +164,7 @@ class ExecutionScheduler(object):
         return len(self.work_deque)
 
     def get_estimated_exec_duration(self, key):
-        previous_exec_times = self.results.etas.get(key)
+        previous_exec_times = self.results.eta_estimates.get(key)
         if previous_exec_times:
             return mean(previous_exec_times)
         else:
@@ -182,18 +183,17 @@ class ExecutionScheduler(object):
         return TimeEstimateFormatter(self.get_estimated_overall_duration())
 
     def add_eta_info(self, key, exec_time):
-        self.results.etas[key].append(exec_time)
+        self.results.eta_estimates[key].append(exec_time)
 
-    def build_schedule(self, config):
+    def build_schedule(self):
         one_exec_scheduled = False
         eta_avail_job = None
-        for exec_n in xrange(config["N_EXECUTIONS"]):
-            for vm_name, vm_info in config["VMS"].items():
-                for bmark, param in config["BENCHMARKS"].items():
+        for exec_n in xrange(self.config.N_EXECUTIONS):
+            for vm_name, vm_info in self.config.VMS.items():
+                for bmark, param in self.config.BENCHMARKS.items():
                     for variant in vm_info["variants"]:
-                        job = ExecutionJob(self, config, vm_name, vm_info, bmark, variant, param)
-                        # FIXME: should_skip() should be a member of krun.config.Config
-                        if not util.should_skip(config, job.key):
+                        job = ExecutionJob(self, vm_name, vm_info, bmark, variant, param)
+                        if not self.config.should_skip(job.key):
                             if one_exec_scheduled and not eta_avail_job:
                                 # first job of second executions eta becomes known.
                                 eta_avail_job = job
@@ -211,34 +211,37 @@ class ExecutionScheduler(object):
         if self.resume:
             self._remove_previous_execs_from_schedule()
             # Sanity check ETA estimates
-            # self.eta_estimates = current_result_json["eta_estimates"]
             for key, exec_data in self.results.data.iteritems():
                 got_len = len(self.results.eta_estimates[key])
                 expect_len = len(exec_data)
                 if expect_len != got_len:
                     msg = "ETA estimates didn't tally with results: "
-                    msg += "key=%s, expect_len=%d, got_len=%d" % \
+                    msg += "key=%s, expect_len=%d, got_len=%d " % \
                         (key, expect_len, got_len)
+                    msg += "data[%s]=%s; " % (key, str(self.results.data[key]))
+                    msg += "eta[%s]=%s" % \
+                        (key, str(self.results.eta_estimates[key]))
                     util.log_and_mail(self.mailer, error,
                                       "Fatal Krun Error",
                                       msg, bypass_limiter=True, exit=True)
 
     def _remove_previous_execs_from_schedule(self):
-            for key in self.results.data:
-                num_completed_jobs = self.results.jobs_completed(key)
-                if num_completed_jobs > 0:
-                    try:
-                        debug("%s has already been run %d times." %
-                              (key, num_completed_jobs))
-                        for _ in range(num_completed_jobs):
-                            self.remove_job_by_key(key)
-                            self.jobs_done += 1
-                    except JobMissingError as excn:
-                        tup = (excn.key, self.config_file, self.out_file)
-                        msg = ("Failed to resume benchmarking session\n." +
-                               "The execution %s appears in results " +
-                               "file: %s, but not in config file: %s." % tup)
-                        util.fatal(msg)
+        for key in self.results.data:
+            num_completed_jobs = self.results.jobs_completed(key)
+            if num_completed_jobs > 0:
+                try:
+                    debug("%s has already been run %d times." %
+                          (key, num_completed_jobs))
+                    for _ in range(num_completed_jobs):
+                        self.remove_job_by_key(key)
+                        self.jobs_done += 1
+                except JobMissingError as excn:
+                    tup = (excn.key, self.config.filename,
+                           self.config.results_filename())
+                    msg = ("Failed to resume benchmarking session\n." +
+                           "The execution %s appears in results " +
+                           "file: %s, but not in config file: %s." % tup)
+                    util.fatal(msg)
 
     def run(self):
         """Benchmark execution starts here"""
@@ -313,8 +316,9 @@ class ExecutionScheduler(object):
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
-            info("Intermediate results dumped to %s" % self.out_file)
-            self.results.write_to_file(self.out_file)
+            info("Intermediate results dumped to %s" %
+                 self.config.results_filename())
+            self.results.write_to_file()
 
             self.jobs_done += 1
             if self.platform.check_dmesg_for_changes():
@@ -328,7 +332,7 @@ class ExecutionScheduler(object):
 
         self.platform.save_power()
 
-        info("Done: Results dumped to %s" % self.out_file)
+        info("Done: Results dumped to %s" % self.config.results_filename())
         if self.results.error_flag:
             warn("Errors/warnings occurred -- read the log!")
 
@@ -343,7 +347,7 @@ class ExecutionScheduler(object):
               (self.results.reboots, self.expected_reboots))
         # Dump the results file. This may already have been done, but we
         # have changed self.nreboots, which needs to be written out.
-        self.results.write_to_file(self.out_file)
+        self.results.write_to_file()
 
         if self.results.reboots > self.expected_reboots:
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
@@ -356,6 +360,7 @@ class ExecutionScheduler(object):
             args =  sys.argv
             if not self.started_by_init:
                 args.extend(["--resume", "--started-by-init"])
+                debug("Simulated reboot with args: " + " ".join(args))
             os.execv(args[0], args)  # replace myself
             assert False  # unreachable
         else:
