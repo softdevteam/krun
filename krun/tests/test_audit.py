@@ -8,9 +8,11 @@ def test_eq():
     assert empty == empty
     assert not empty == audit
     assert not list() == audit
-    audit["c"] = 300
-    audit_ = Audit({"a":100, "b":200, "c":400})
-    assert not audit == audit_
+    a0 = {"uname" :"Linux" }
+    a1 = {"uname" :"BSD" }
+    assert not a0 == a1
+    assert a0 == a0
+    assert a1 == a1
 
 
 def test_get_set_item():

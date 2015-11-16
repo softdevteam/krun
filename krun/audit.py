@@ -7,6 +7,9 @@ class Audit(object):
     def __init__(self, audit_dict):
         assert isinstance(audit_dict, dict)
         self._audit = audit_dict
+        for key, value in audit_dict.iteritems():
+            if type(value) is str:
+                audit_dict[key] = value.decode("utf-8")
 
     def __contains__(self, key):
         return key in self._audit
@@ -41,10 +44,6 @@ class Audit(object):
         if ((not isinstance(other, self.__class__)) or
             (not len(self) == len(other))):
             return False
-        for key in self._audit:
-            if key == "packages" and (key in self) and (key in other):
-                continue
-            if ((key not in other._audit) or (other[key] != self[key])):
-                debug("%s keys differed in audit" % key)
-                return False
+            if "uname" in other:
+                return self["uname"] == other["uname"]
         return True
