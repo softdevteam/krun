@@ -114,7 +114,7 @@ def test_run_schedule(monkeypatch):
         assert type(execs) is list
         assert all([type(x) is float for x in execs])
 
-    assert type(results.starting_temperatures) is list
+    assert type(results.starting_temperatures) is dict
     assert type(results.reboots) is int
     assert type(results.audit) is type(Audit(dict()))
     assert type(results.config) is type(Config())

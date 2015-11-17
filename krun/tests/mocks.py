@@ -1,4 +1,4 @@
-from krun.platform import DebianLinuxPlatform
+from krun.platform import BasePlatform
 
 
 class MockMailer(object):
@@ -11,11 +11,13 @@ class MockMailer(object):
         return None
 
 
-class MockPlatform(DebianLinuxPlatform):
+class MockPlatform(BasePlatform):
+    """Pretends to be a Platform instance."""
 
     CHANGE_USER_CMD = ""
 
     def __init__(self, mailer):
+        BasePlatform.__init__(self, mailer)
         self.mailer = mailer
         self.audit = dict()
         self.num_cpus = 0
@@ -32,10 +34,6 @@ class MockPlatform(DebianLinuxPlatform):
 
     def take_temperature_readings(self):
         pass
-
-    @property
-    def starting_temperatures(self):
-        return [666, 1337]
 
     def has_cooled(self):
         return True, None  # pretend we cooled down OK
@@ -69,3 +67,15 @@ class MockPlatform(DebianLinuxPlatform):
 
     def get_reboot_cmd(self):
         return ""
+
+    def _change_user_args(self):
+        return []
+
+    def _isolate_process_args(self):
+        return []
+
+    def _save_power(self):
+        pass
+
+    def _collect_dmesg_lines(self):
+        return []
