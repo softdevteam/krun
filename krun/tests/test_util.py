@@ -6,16 +6,18 @@ from krun.util import (format_raw_exec_results,
 from krun.tests.mocks import MockMailer
 
 import json
+import logging
 import pytest
 
 
-def test_fatal(capsys):
+def test_fatal(capsys, caplog):
+    caplog.setLevel(logging.ERROR)
     msg = "example text"
     with pytest.raises(SystemExit):
         fatal(msg)
-        out, err = capsys.readouterr()
-        assert out == ""
-        assert err == "ERROR:root:" + msg + "\n"
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert msg in caplog.text()
 
 
 def test_log_and_mail():
@@ -43,13 +45,12 @@ def test_run_shell_cmd():
     assert rc == 0
 
 
-def test_run_shell_cmd_fatal(capsys):
+def test_run_shell_cmd_fatal():
     cmd = "nonsensecommand"
-    with pytest.raises(SystemExit):
-        out, err, rc = run_shell_cmd(cmd)
-        assert rc != 0
-        assert err == cmd + ": command not found"
-        assert out == ""
+    out, err, rc = run_shell_cmd(cmd, False)
+    assert rc != 0
+    assert cmd in err
+    assert out == ""
 
 
 def test_check_and_parse_execution_results():

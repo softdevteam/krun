@@ -6,5 +6,6 @@ python:
 install:
   - pip install cffi
   - pip install pytest-cov
+  - pip install pytest-capturelog
 
 script: py.test --cov-report term --cov=krun  krun
