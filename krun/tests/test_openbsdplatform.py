@@ -2,12 +2,17 @@ import pytest
 import krun.platform
 import sys
 from krun.tests import BaseKrunTest
+from krun.util import run_shell_cmd
 
 def make_dummy_get_sysctl_temperature_output_fn(sysctl_output):
     def _get_sysctl_temperature_output(self):
         return sysctl_output
     return _get_sysctl_temperature_output
 
+def make_dummy_get_apm_output_fn(output):
+    def _get_apm_output(self):
+        return output
+    return _get_apm_output
 
 @pytest.mark.skipif(not sys.platform.startswith("openbsd"), reason="not OpenBSD")
 class TestOpenBSDPlatform(BaseKrunTest):
@@ -60,3 +65,31 @@ class TestOpenBSDPlatform(BaseKrunTest):
             platform.take_temperature_readings()
 
         assert "odd non-degC value" in caplog.text()
+
+    def test_apm_state0001(self, platform, caplog):
+        run_shell_cmd("apm -C")  # cool mode; forces krun to change this.
+
+        platform._check_apm_state()
+        assert "performance mode is not manual" in caplog.text()
+        # Hard to check hw.setperf, as it may well be temproarily 100
+        assert "adjusting performance mode" in caplog.text()
+
+        out, err, rc = run_shell_cmd("test `sysctl hw.setperf` == 'hw.setperf=100'")
+        assert out == err == ""
+        assert rc == 0
+
+        # cool mode.
+        # Sadly there is no way to query the current mode (e.g. -C or -H),
+        # othwerwise we could restore the APM state to how the user had it
+        # before.
+        run_shell_cmd("apm -C")
+
+    def test_apm_state0002(self, platform, caplog, monkeypatch):
+        monkey_func = make_dummy_get_apm_output_fn("flibbles")
+        monkeypatch.setattr(krun.platform.OpenBSDPlatform,
+                            "_get_apm_output", monkey_func)
+
+        with pytest.raises(SystemExit):
+            platform._check_apm_state()
+        assert "Expected 3 lines of output from apm(8)" in caplog.text()
+
