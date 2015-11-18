@@ -274,6 +274,7 @@ class UnixLikePlatform(BasePlatform):
 class OpenBSDPlatform(UnixLikePlatform):
     CHANGE_USER_CMD = "doas"
     TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
+    GET_SETPERF_CMD = "sysctl hw.setperf"
 
     def __init__(self, mailer):
         self.temperature_sensors = []
@@ -285,8 +286,41 @@ class OpenBSDPlatform(UnixLikePlatform):
         return cmd
 
     def check_preliminaries(self):
-        warn("System preliminaries not yet implemented on OpenBSD")
-        pass  # XXX not implemented
+        self._check_apm_state()
+
+    def _get_apm_output(self):
+        # separate for mocking
+        return run_shell_cmd("apm")[0]
+
+    def _check_apm_state(self):
+        info("Checking APM state is geared for high-performance")
+        adjust = False
+
+        out = self._get_apm_output()
+        lines = out.split("\n")
+
+        n_lines = len(lines)
+        if n_lines != 3:
+            fatal("Expected 3 lines of output from apm(8), got %d" % n_lines)
+
+        perf_line = lines[2].strip()
+
+        # First, the performance mode should be manual (static)
+        if not perf_line.startswith("Performance adjustment mode: manual"):
+            debug("performance mode is not manual.")
+            adjust = True
+
+        # Second, the CPU should be running as fast as possible
+        out, _, _ = run_shell_cmd(self.GET_SETPERF_CMD)
+        elems = out.split("=")
+        if len(elems) != 2 or elems[1].strip() != "100":
+            debug("hw.setperf is '%s' not '100'" % elems[1])
+            adjust = True
+
+        if adjust:
+            info("adjusting performance mode")
+            out, _, _ = run_shell_cmd("apm -H")
+            self._check_apm_state()  # should work this time
 
     def _isolate_process_args(self):
         warn("CPU isolation not yet implemented on OpenBSD")
@@ -325,8 +359,7 @@ class OpenBSDPlatform(UnixLikePlatform):
         return readings
 
     def _save_power(self):
-        warn("power management support not implemented on OpenBSD")
-        pass  # XXX not implemented
+        run_shell_cmd("apm -C")
 
 
 class LinuxPlatform(UnixLikePlatform):
