@@ -359,8 +359,7 @@ class OpenBSDPlatform(UnixLikePlatform):
         return readings
 
     def _save_power(self):
-        warn("power management support not implemented on OpenBSD")
-        pass  # XXX not implemented
+        run_shell_cmd("apm -C")
 
 
 class LinuxPlatform(UnixLikePlatform):

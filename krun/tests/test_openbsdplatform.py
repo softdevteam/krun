@@ -93,3 +93,11 @@ class TestOpenBSDPlatform(BaseKrunTest):
             platform._check_apm_state()
         assert "Expected 3 lines of output from apm(8)" in caplog.text()
 
+    def test_save_power0001(self, platform):
+        run_shell_cmd("apm -H")
+        platform.save_power()
+        out, _, _ = run_shell_cmd("apm")
+        lines = out.split("\n")
+        line3 = lines[2].strip()
+        assert line3.startswith("Performance adjustment mode: auto")
+        # Would have been "manual" if we were still in "high-performance" mode.
