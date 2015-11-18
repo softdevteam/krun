@@ -39,7 +39,7 @@ class TestResults(BaseKrunTest):
         assert results.audit[u'uname'] == u'Linux'
         assert results.audit[u'debian_version'] == u'jessie/sid'
         assert results.data == expected
-        assert results.starting_temperatures == [4355, 9879]
+        assert results.starting_temperatures == {"x": 3333, "y": 4444}
         assert results.eta_estimates == \
             {
                 u'nbody:CPython:default-python': [0.022256],
