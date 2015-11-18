@@ -259,7 +259,7 @@ def main(parser):
             util.fatal(error_msg)
 
         debug("Using pre-recorded initial temperature readings")
-        platform.set_starting_temperatures(current.starting_temperatures)
+        platform.starting_temperatures = current.starting_temperatures
     else:
         # Touch the config file to update its mtime. This is required
         # by resume-mode which uses the mtime to determine the name of
@@ -269,7 +269,7 @@ def main(parser):
             util.fatal("Could not touch config file: " + args.filename)
 
         debug("Taking fresh initial temperature readings")
-        platform.set_starting_temperatures()
+        platform.starting_temperatures = platform.take_temperature_readings()
 
     attach_log_file(config, args.resume)
 
