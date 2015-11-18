@@ -1,5 +1,6 @@
 from krun.tests.mocks import MockPlatform, MockMailer
 from abc import ABCMeta
+from krun.platform import detect_platform
 import pytest
 
 
@@ -11,3 +12,8 @@ class BaseKrunTest(object):
     @pytest.fixture
     def mock_platform(self):
         return MockPlatform(MockMailer())
+
+    @pytest.fixture
+    def platform(self):
+        return detect_platform(MockMailer())
+

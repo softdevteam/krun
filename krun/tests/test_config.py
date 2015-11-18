@@ -4,6 +4,10 @@ from krun.config import Config
 import os
 import pytest
 import time
+from distutils.spawn import find_executable
+
+
+JAVA = find_executable("java")
 
 
 def touch(fname):
@@ -64,7 +68,7 @@ def test_read_corrupt_config_from_string():
             config_string = fp.read()
             config.read_from_string(config_string)
 
-
+@pytest.mark.skipif(JAVA is None, reason="No Java found")
 def test_config_init():
     path = "examples/example.krun"
     config = Config(path)
