@@ -273,8 +273,10 @@ class UnixLikePlatform(BasePlatform):
 
 class OpenBSDPlatform(UnixLikePlatform):
     CHANGE_USER_CMD = "doas"
+    TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
 
     def __init__(self, mailer):
+        self.temperature_sensors = []
         UnixLikePlatform.__init__(self, mailer)
 
     def get_reboot_cmd(self):
@@ -290,9 +292,37 @@ class OpenBSDPlatform(UnixLikePlatform):
         warn("CPU isolation not yet implemented on OpenBSD")
         return []  # XXX not implemented, not sure if possible
 
+    def _get_sysctl_temperature_output(self):
+        # separate for test mocking
+        return run_shell_cmd(self.TEMP_SENSORS_CMD)[0]
+
     def take_temperature_readings(self):
-        warn("Temperature checks not yet implemented on OpenBSD")
-        return {}  # XXX not implemeted
+        lines = self._get_sysctl_temperature_output()
+        readings = {}
+        for line in lines.split("\n"):
+            elems = line.split("=")
+
+            if len(elems) != 2:
+                fatal("Malformed sensor sysctl line: '%s'" % line)
+
+            k, v = elems
+            v_elems = [x.strip() for x in v.split(" ")]
+            k = k.strip()
+
+            # Typically the value element looks like:
+            # "49.00 degC" or "48.00 degC (zone temperature)"
+            # We will only concern ourself with the first two elements.
+            if len(v_elems) < 2 or v_elems[1] != "degC":
+                fatal("sensor '%s' has an odd non-degC value: '%s'" % (k, v))
+
+            try:
+                temp_val = float(v_elems[0])
+            except ValueError:
+                fatal("sensor '%s' has a non-numeric value: '%s'" % (k, v_elems[0]))
+
+            readings[k] = temp_val
+
+        return readings
 
     def _save_power(self):
         warn("power management support not implemented on OpenBSD")
