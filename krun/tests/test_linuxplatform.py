@@ -1,5 +1,6 @@
 import pytest
 import krun.platform
+from krun.tests import BaseKrunTest
 import sys
 from StringIO import StringIO
 
@@ -16,12 +17,8 @@ def mk_dummy_kernel_config_fn(options_dct):
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="not linux")
-class TestLinuxPlatform(object):
+class TestLinuxPlatform(BaseKrunTest):
     """Check stuff specific to the Linux in krun.platform"""
-
-    @pytest.fixture
-    def platform(self):
-        return krun.platform.detect_platform(None)
 
     def test_tickless0001(self, monkeypatch, platform):
         """A kernel config indicating full tickless should work"""
