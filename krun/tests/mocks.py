@@ -79,3 +79,6 @@ class MockPlatform(BasePlatform):
 
     def _collect_dmesg_lines(self):
         return []
+
+    def bench_env_changes(args, env_dct):
+        return []

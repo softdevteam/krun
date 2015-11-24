@@ -7,16 +7,18 @@ import random
 import sys
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
-from krun.util import fatal, run_shell_cmd, log_and_mail
+from krun.util import fatal, run_shell_cmd, log_and_mail, MISC_SANITY_CHECK_DIR
+import krun.util as util
 from logging import warn, info, debug
 from time import localtime
 from abc import ABCMeta, abstractmethod, abstractproperty
-from krun.env import EnvChangeSet
+from krun.env import EnvChangeSet, EnvChange
 
 NICE_PRIORITY = -20
 BENCHMARK_USER = "krun"  # user is expected to have made this
 DIR = os.path.abspath(os.path.dirname(__file__))
 LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkruntime")
+
 
 class BasePlatform(object):
     __metaclass__ = ABCMeta
@@ -189,13 +191,10 @@ class BasePlatform(object):
           * Adding libkruntime to linker path
           * Process priority"""
 
-        # Force libkruntime into linker path.
-        # We are working on the assumption that no-one else uses
-        # LD_LIBRARY_PATH (or equivalent) elsewhere. EnvChangeSet will check
-        # this and crash out if this assumption is invalid.
+        # platform specific env changes to apply (if any)
         combine_env = env_dct.copy()
-        chng = EnvChangeSet(self.FORCE_LIBRARY_PATH_ENV_NAME, LIBKRUNTIME_DIR)
-        chng.apply(combine_env)
+        changes = self.bench_env_changes()
+        EnvChange.apply_all(changes, combine_env)
 
         return self.change_user_args(BENCHMARK_USER) + \
             self.process_priority_args() + self.isolate_process_args() + \
@@ -243,12 +242,28 @@ class BasePlatform(object):
     def _save_power(self):
         pass
 
+    @abstractmethod
+    def bench_env_changes(self):
+        pass
+
+    @abstractmethod
+    def sanity_checks(self):
+        pass
+
 
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
 
     FORCE_LIBRARY_PATH_ENV_NAME = "LD_LIBRARY_PATH"
     REBOOT = "reboot"
+
+    def bench_env_changes(self):
+        # Force libkruntime into linker path.
+        # We are working on the assumption that no-one else uses
+        # LD_LIBRARY_PATH (or equivalent) elsewhere. EnvChangeSet will check
+        # this and crash out if this assumption is invalid.
+        change = EnvChangeSet(self.FORCE_LIBRARY_PATH_ENV_NAME, LIBKRUNTIME_DIR)
+        return [change]
 
     def unbuffer_fd(self, fd):
         import fcntl
@@ -270,15 +285,31 @@ class UnixLikePlatform(BasePlatform):
     def _change_user_args(self, user="root"):
         return [self.CHANGE_USER_CMD, "-u", user]
 
+    def sanity_checks(self):
+        # XXX add user change platform check here
+        pass
+
 
 class OpenBSDPlatform(UnixLikePlatform):
     CHANGE_USER_CMD = "doas"
     TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
     GET_SETPERF_CMD = "sysctl hw.setperf"
 
+    # flags to set OpenBSD MALLOC_OPTIONS to. We disable anything that could
+    # possibly introduce non-determinism.
+    # 's' first acts to reset free page cache to default.
+    # See malloc.conf(5) and src/lib/libc/stdlib/malloc.c for more info.
+    MALLOC_OPTS = "sfghjpru"
+
     def __init__(self, mailer):
         self.temperature_sensors = []
         UnixLikePlatform.__init__(self, mailer)
+
+    def bench_env_changes(self):
+        # Force malloc flags
+        changes = UnixLikePlatform.bench_env_changes(self)
+        changes.append(EnvChangeSet("MALLOC_OPTIONS", self.MALLOC_OPTS))
+        return changes
 
     def get_reboot_cmd(self):
         cmd = self.change_user_args()
@@ -360,6 +391,21 @@ class OpenBSDPlatform(UnixLikePlatform):
 
     def _save_power(self):
         run_shell_cmd("apm -C")
+
+    def sanity_checks(self):
+        UnixLikePlatform.sanity_checks(self)
+        self._malloc_options_sanity_check()
+
+    def _malloc_options_sanity_check(self):
+        """Checks MALLOC_OPTIONS are set"""
+
+        from krun import EntryPoint
+        ep = EntryPoint("check_openbsd_malloc_options", subdir=MISC_SANITY_CHECK_DIR)
+
+        from krun.vm_defs import NativeCodeVMDef, SANITY_CHECK_HEAP_KB
+        vd = NativeCodeVMDef()
+
+        util.sanity_check(self, ep, vd, "OpenBSD malloc options")
 
 
 class LinuxPlatform(UnixLikePlatform):

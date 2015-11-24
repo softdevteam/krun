@@ -1,7 +1,7 @@
 import pytest
 import krun.platform
 import sys
-from krun.tests import BaseKrunTest
+from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import run_shell_cmd
 
 def make_dummy_get_sysctl_temperature_output_fn(sysctl_output):
@@ -101,3 +101,19 @@ class TestOpenBSDPlatform(BaseKrunTest):
         line3 = lines[2].strip()
         assert line3.startswith("Performance adjustment mode: auto")
         # Would have been "manual" if we were still in "high-performance" mode.
+
+    def test_bench_cmdline_adjust0001(self, platform):
+        expect = ['doas', '-u', 'krun', 'nice', '-20', 'env',
+                  'LD_LIBRARY_PATH=', 'MALLOC_OPTIONS=sdfghjpru']
+
+        args = subst_env_arg(platform.bench_cmdline_adjust([], {}), "LD_LIBRARY_PATH")
+        assert args == expect
+
+    def test_bench_cmdline_adjust0002(self, platform):
+        expect = ['doas', '-u', 'krun', 'nice', '-20', 'env',
+                  'MYENV=some_value',
+                  'LD_LIBRARY_PATH=', 'MALLOC_OPTIONS=sdfghjpru', 'myarg']
+
+        args = subst_env_arg(platform.bench_cmdline_adjust(
+            ["myarg"], {"MYENV": "some_value"}), "LD_LIBRARY_PATH")
+        assert args == expect

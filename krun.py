@@ -17,10 +17,10 @@ from krun.results import Results
 from krun.scheduler import ExecutionScheduler
 from krun import ABS_TIME_FORMAT
 from krun.mail import Mailer
+from krun.util import MISC_SANITY_CHECK_DIR
 
 HERE = os.path.abspath(os.getcwd())
 DIR = os.path.abspath(os.path.dirname(__file__))
-MISC_SANITY_CHECK_DIR = os.path.join(DIR, "misc_sanity_checks")
 
 CONSOLE_FORMATTER = PLAIN_FORMATTER = logging.Formatter(
     '[%(asctime)s: %(levelname)s] %(message)s',
@@ -72,6 +72,12 @@ def sanity_checks(config, platform):
     else:
         warn("Not running user change sanity check due to developer mode")
 
+    # platform sanity checks
+    if not platform.developer_mode:
+        platform.sanity_checks()
+    else:
+        warn("Not running platform sanity check due to developer mode")
+
 
 # This can be modularised if we add more misc sanity checks
 def sanity_check_user_change(platform):
@@ -80,7 +86,8 @@ def sanity_check_user_change(platform):
 
     debug("running user change sanity check")
 
-    from krun.vm_defs import PythonVMDef, SANITY_CHECK_HEAP_KB
+    from krun.vm_defs import PythonVMDef
+    from krun.util import SANITY_CHECK_HEAP_KB
     from krun import EntryPoint
 
     bench_name = "user change"

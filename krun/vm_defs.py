@@ -14,7 +14,7 @@ DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
 VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
-SANITY_CHECK_HEAP_KB = 1024 * 1024  # 1GB
+from krun.util import SANITY_CHECK_HEAP_KB
 
 # Pipe buffer sizes vary. I've seen reports on the Internet ranging from a
 # page size (Linux pre-2.6.11) to 64K (Linux in 2015). Ideally we would

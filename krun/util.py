@@ -1,9 +1,14 @@
 import json
 import sys
+import os
 from subprocess import Popen, PIPE
-from logging import error
+from logging import error, debug
 
 FLOAT_FORMAT = ".6f"
+
+DIR = os.path.abspath(os.path.dirname(__file__))
+SANITY_CHECK_HEAP_KB = 1024 * 1024  # 1GB
+MISC_SANITY_CHECK_DIR = os.path.join(DIR, "..", "misc_sanity_checks")
 
 class ExecutionFailed(Exception):
     pass
@@ -58,3 +63,22 @@ def check_and_parse_execution_results(stdout, stderr, rc):
         raise ExecutionFailed(err_s)
 
     return iterations_results
+
+def sanity_check(platform, entry_point, vm_def, check_name):
+    """Run a dummy benchmark which crashes if the it doesn't appear to be
+    running as the krun user"""
+
+    debug("running '%s' sanity check" % check_name)
+
+    vm_def.set_platform(platform)
+    iterations = 1
+    param = 666
+
+    stdout, stderr, rc = \
+        vm_def.run_exec(entry_point, check_name, iterations,
+                        param, SANITY_CHECK_HEAP_KB)
+
+    try:
+        _ = check_and_parse_execution_results(stdout, stderr, rc)
+    except ExecutionFailed as e:
+        fatal("%s sanity check failed: %s" % (check_name, e.message))
