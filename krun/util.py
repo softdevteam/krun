@@ -7,8 +7,10 @@ from logging import error, debug
 FLOAT_FORMAT = ".6f"
 
 DIR = os.path.abspath(os.path.dirname(__file__))
+
 SANITY_CHECK_HEAP_KB = 1024 * 1024  # 1GB
-MISC_SANITY_CHECK_DIR = os.path.join(DIR, "..", "misc_sanity_checks")
+PLATFORM_SANITY_CHECK_DIR = os.path.join(DIR, "..", "platform_sanity_checks")
+VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
 
 class ExecutionFailed(Exception):
     pass
@@ -64,9 +66,9 @@ def check_and_parse_execution_results(stdout, stderr, rc):
 
     return iterations_results
 
-def sanity_check(platform, entry_point, vm_def, check_name):
-    """Run a dummy benchmark which crashes if the it doesn't appear to be
-    running as the krun user"""
+def spawn_sanity_check(platform, entry_point, vm_def,
+                       check_name, force_dir=None):
+    """Run a dummy benchmark which crashes if some property is not satisfied"""
 
     debug("running '%s' sanity check" % check_name)
 
@@ -76,7 +78,7 @@ def sanity_check(platform, entry_point, vm_def, check_name):
 
     stdout, stderr, rc = \
         vm_def.run_exec(entry_point, check_name, iterations,
-                        param, SANITY_CHECK_HEAP_KB)
+                        param, SANITY_CHECK_HEAP_KB, force_dir=force_dir)
 
     try:
         _ = check_and_parse_execution_results(stdout, stderr, rc)

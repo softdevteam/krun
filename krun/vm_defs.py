@@ -7,14 +7,13 @@ from abc import ABCMeta, abstractmethod
 
 from logging import info, debug
 from krun import EntryPoint
-from krun.util import fatal
+from krun.util import fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR
 from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
+from krun.util import SANITY_CHECK_HEAP_KB
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
-VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
-from krun.util import SANITY_CHECK_HEAP_KB
 
 # Pipe buffer sizes vary. I've seen reports on the Internet ranging from a
 # page size (Linux pre-2.6.11) to 64K (Linux in 2015). Ideally we would
@@ -74,12 +73,18 @@ class BaseVMDef(object):
         # (useful for testing configurations.).
         self.dry_run = False
 
-    def _get_benchmark_path(self, benchmark, entry_point, sanity_check=False):
-        if not sanity_check:
-            return os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir,
-                                entry_point.target)
+    def _get_benchmark_path(self, benchmark, entry_point, force_dir=None):
+        if force_dir is not None:
+            # Forcing a directory! Used for sanity checks.
+            return os.path.join(force_dir, entry_point.target)
         else:
-            return os.path.join(VM_SANITY_CHECKS_DIR, entry_point.target)
+            if entry_point.subdir is not None:
+                return os.path.join(
+                    BENCHMARKS_DIR, benchmark, entry_point.subdir,
+                    entry_point.target)
+            else:
+                return os.path.join(
+                    BENCHMARKS_DIR, benchmark, entry_point.target)
 
     def set_platform(self, platform):
         self.platform = platform
@@ -89,7 +94,7 @@ class BaseVMDef(object):
 
     @abstractmethod
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
-                 sanity_check=False):
+                 force_dir=None):
         pass
 
     def _run_exec(self, args, heap_lim_k, bench_env_changes=None):
@@ -196,29 +201,6 @@ class BaseVMDef(object):
     def check_benchmark_files(self, benchmark, entry_point):
         pass
 
-    def run_vm_sanity_check(self, entry_point):
-        """Runs a VM specific sanity check (fake benchmark)."""
-
-        # Use the same mechanism as the real benchmarks would use.
-        iterations, param = 1, 666
-        stdout, stderr, rc = self.run_exec(
-            entry_point, None, iterations, param, SANITY_CHECK_HEAP_KB,
-            sanity_check=True)
-
-        err = rc != 0
-        try:
-            ls = json.loads(stdout)
-        except ValueError:
-            err = True
-
-        if not err and not isinstance(ls, list):
-            err = True
-
-        if err:
-            fatal("VM sanity check failed '%s'\n"
-                  "return code: %s\nstdout:%s\nstderr: %s" %
-                  (entry_point.target, rc, stdout, stderr))
-
     def __eq__(self, other):
         return isinstance(other, self.__class__)
 
@@ -232,9 +214,9 @@ class NativeCodeVMDef(BaseVMDef):
         BaseVMDef.__init__(self, iter_runner)
 
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
-                 sanity_check=False):
+                 force_dir=None):
         benchmark_path = self._get_benchmark_path(benchmark, entry_point,
-                                                  sanity_check=sanity_check)
+                                                  force_dir=force_dir)
         args = [self.iterations_runner,
                 benchmark_path, str(iterations), str(param)]
         return self._run_exec(args, heap_lim_k)
@@ -253,9 +235,9 @@ class GenericScriptingVMDef(BaseVMDef):
         BaseVMDef.__init__(self, fp_iterations_runner)
 
     def _generic_scripting_run_exec(self, entry_point, benchmark, iterations,
-                                    param, heap_lim_k, sanity_check=False):
+                                    param, heap_lim_k, force_dir=None):
         script_path = self._get_benchmark_path(benchmark, entry_point,
-                                               sanity_check=sanity_check)
+                                               force_dir=force_dir)
         args = [self.vm_path] + self.extra_vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
         return self._run_exec(args, heap_lim_k)
 
@@ -277,14 +259,13 @@ class JavaVMDef(BaseVMDef):
         BaseVMDef.__init__(self, "IterationsRunner")
 
     def run_exec(self, entry_point, benchmark, iterations,
-                 param, heap_lim_k, sanity_check=False):
-        args = [self.vm_path] + self.extra_vm_args + [self.iterations_runner, entry_point.target, str(iterations), str(param)]
+                 param, heap_lim_k, force_dir=None):
+        """Running Java experiments is different due to the way that the JVM
+        doesn't simply accept the path to a program to run. We have to set
+        the CLASSPATH and then provide a class name instead"""
 
-        if not sanity_check:
-            bench_dir = os.path.abspath(
-                os.path.join(os.getcwd(), BENCHMARKS_DIR, benchmark, entry_point.subdir))
-        else:
-            bench_dir = VM_SANITY_CHECKS_DIR
+        bench_dir = os.path.dirname(self._get_benchmark_path(benchmark,
+                                             entry_point, force_dir=force_dir))
 
         # deal with CLASSPATH
         # This has to be added here as it is benchmark specific
@@ -293,7 +274,10 @@ class JavaVMDef(BaseVMDef):
             EnvChangeAppend("CLASSPATH", bench_dir),
         ]
 
-        args = [self.vm_path] + self.extra_vm_args + [self.iterations_runner, entry_point.target, str(iterations), str(param)]
+        args = [self.vm_path] + self.extra_vm_args
+        args += [self.iterations_runner,entry_point.target,
+                 str(iterations), str(param)]
+
         return self._run_exec(args, heap_lim_k,
                               bench_env_changes=bench_env_changes)
 
@@ -348,16 +332,17 @@ class GraalVMDef(JavaVMDef):
 
         self.extra_vm_args.append("-jvmci")
 
-    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k, sanity_check=False):
+    def run_exec(self, entry_point, benchmark, iterations, param,
+                 heap_lim_k, force_dir=None):
         return JavaVMDef.run_exec(self, entry_point, benchmark,
-                                  iterations, param, heap_lim_k, sanity_check=sanity_check)
+                                  iterations, param, heap_lim_k,
+                                  force_dir=force_dir)
 
     def _check_jvmci_server_enabled(self):
         """Runs fake benchmark crashing if the Graal JVMCI JIT is disabled"""
 
-        info("Running JavaCheckJVMCIServerEnabled sanity check")
-        ep = EntryPoint("JavaCheckJVMCIServerEnabled")
-        self.run_vm_sanity_check(ep)
+        ep = EntryPoint("JavaCheckJVMCIServerEnabled", subdir=VM_SANITY_CHECKS_DIR)
+        spawn_sanity_check(self.platform, ep, self, "JavaCheckJVMCIServerEnabled")
 
     def sanity_checks(self):
         JavaVMDef.sanity_checks(self)
@@ -371,31 +356,39 @@ class PythonVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py")
 
-    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k):
+    def run_exec(self, entry_point, benchmark, iterations,
+                 param, heap_lim_k, force_dir=None):
         # heap_lim_k unused.
         # Python reads the rlimit structure to decide its heap limit.
         return self._generic_scripting_run_exec(entry_point, benchmark,
-                                                iterations, param, heap_lim_k)
+                                                iterations, param, heap_lim_k,
+                                                force_dir=force_dir)
 
 class LuaVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.lua")
 
-    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k):
+    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
+                 force_dir=None):
         # I was unable to find any special switches to limit lua's heap size.
         # Looking at implementationsi:
         #  * luajit uses anonymous mmap() to allocate memory, fiddling
         #    with rlimits prior.
         #  * Stock lua doesn't seem to do anything special. Just realloc().
-        return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, heap_lim_k)
+        return self._generic_scripting_run_exec(interpreter, benchmark,
+                                                iterations, param, heap_lim_k,
+                                                force_dir=force_dir)
 
 class PHPVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.php")
         self.extra_vm_args += ["-d", lambda heap_lim_k: "memory_limit=%sK" % heap_lim_k]
 
-    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k):
-        return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, heap_lim_k)
+    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
+                 force_dir=None):
+        return self._generic_scripting_run_exec(interpreter, benchmark,
+                                                iterations, param, heap_lim_k,
+                                                force_dir=force_dir)
 
 class RubyVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path):
@@ -406,8 +399,11 @@ class JRubyVMDef(RubyVMDef):
         RubyVMDef.__init__(self, vm_path)
         self.extra_vm_args += [lambda heap_lim_k: "-J-Xmx%sK" % heap_lim_k]
 
-    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k):
-        return self._generic_scripting_run_exec(interpreter, benchmark, iterations, param, heap_lim_k)
+    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
+                 force_dir=None):
+        return self._generic_scripting_run_exec(interpreter, benchmark,
+                                                iterations, param, heap_lim_k,
+                                                force_dir=force_dir)
 
 class JRubyTruffleVMDef(JRubyVMDef):
     def __init__(self, vm_path, java_path):
@@ -417,17 +413,18 @@ class JRubyTruffleVMDef(JRubyVMDef):
         self.extra_vm_args += ['-X+T', '-J-server']
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
-                 sanity_check=False):
+                 force_dir=None):
         return self._generic_scripting_run_exec(
             interpreter, benchmark, iterations, param, heap_lim_k,
-            sanity_check=sanity_check)
+            force_dir=force_dir)
 
     def _check_truffle_enabled(self):
         """Runs fake benchmark crashing if the Truffle is disabled in JRuby"""
 
         info("Running jruby_check_truffle_enabled sanity check")
         ep = EntryPoint("jruby_check_graal_enabled.rb")
-        self.run_vm_sanity_check(ep)
+        spawn_sanity_check(self.platform, ep, self,
+                           "jruby_check_graal_enabled.rb", force_dir=VM_SANITY_CHECKS_DIR)
 
     def sanity_checks(self):
         JRubyVMDef.sanity_checks(self)
@@ -447,10 +444,14 @@ class V8VMDef(JavascriptVMDef):
         self.extra_vm_args += ["--max_old_space_size", lambda heap_lim_k: "%s" % int(heap_lim_k / 1024)] # as MB
 
 
-    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k):
+    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
+                 force_dir=None):
         # Duplicates generic implementation. Need to pass args differently.
 
-        script_path = os.path.join(BENCHMARKS_DIR, benchmark, entry_point.subdir, entry_point.target)
+        script_path = self._get_benchmark_path(benchmark, entry_point,
+                                               force_dir=force_dir)
+
+        # Note the double minus before arguments.
         args = [self.vm_path] + self.extra_vm_args + \
             [self.iterations_runner, '--', script_path, str(iterations), str(param)]
 

@@ -17,7 +17,6 @@ from krun.results import Results
 from krun.scheduler import ExecutionScheduler
 from krun import ABS_TIME_FORMAT
 from krun.mail import Mailer
-from krun.util import MISC_SANITY_CHECK_DIR
 
 HERE = os.path.abspath(os.getcwd())
 DIR = os.path.abspath(os.path.dirname(__file__))
@@ -66,45 +65,11 @@ def sanity_checks(config, platform):
             debug("Running sanity check for VM %s" % vm_name)
             vm_info["vm_def"].sanity_checks()
 
-    # misc sanity checks
-    if not platform.developer_mode:
-        sanity_check_user_change(platform)
-    else:
-        warn("Not running user change sanity check due to developer mode")
-
-    # platform sanity checks
+    # platform specific sanity checks
     if not platform.developer_mode:
         platform.sanity_checks()
     else:
-        warn("Not running platform sanity check due to developer mode")
-
-
-# This can be modularised if we add more misc sanity checks
-def sanity_check_user_change(platform):
-    """Run a dummy benchmark which crashes if the it doesn't appear to be
-    running as the krun user"""
-
-    debug("running user change sanity check")
-
-    from krun.vm_defs import PythonVMDef
-    from krun.util import SANITY_CHECK_HEAP_KB
-    from krun import EntryPoint
-
-    bench_name = "user change"
-    iterations = 1
-    param = 666
-
-    ep = EntryPoint("check_user_change.py", subdir=MISC_SANITY_CHECK_DIR)
-    vd = PythonVMDef(sys.executable)  # run under the VM that runs *this*
-    vd.set_platform(platform)
-
-    stdout, stderr, rc = \
-        vd.run_exec(ep, bench_name, iterations, param, SANITY_CHECK_HEAP_KB)
-
-    try:
-        _ = util.check_and_parse_execution_results(stdout, stderr, rc)
-    except util.ExecutionFailed as e:
-        util.fatal("%s sanity check failed: %s" % (bench_name, e.message))
+        warn("Not running platform sanity checks due to developer mode")
 
 
 def create_arg_parser():
@@ -279,6 +244,10 @@ def main(parser):
         platform.starting_temperatures = platform.take_temperature_readings()
 
     attach_log_file(config, args.resume)
+
+    # Assign platform to VM defs -- needs to happen early for sanity checks
+    for vm_name, vm_info in config.VMS.items():
+        vm_info["vm_def"].set_platform(platform)
 
     sanity_checks(config, platform)
 

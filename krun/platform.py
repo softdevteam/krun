@@ -7,7 +7,8 @@ import random
 import sys
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
-from krun.util import fatal, run_shell_cmd, log_and_mail, MISC_SANITY_CHECK_DIR
+from krun.util import (fatal, run_shell_cmd, log_and_mail,
+                       PLATFORM_SANITY_CHECK_DIR)
 import krun.util as util
 from logging import warn, info, debug
 from time import localtime
@@ -286,8 +287,16 @@ class UnixLikePlatform(BasePlatform):
         return [self.CHANGE_USER_CMD, "-u", user]
 
     def sanity_checks(self):
-        # XXX add user change platform check here
-        pass
+        self._sanity_check_user_change()
+
+    def _sanity_check_user_change(self):
+        from krun.vm_defs import PythonVMDef
+        from krun import EntryPoint
+
+        ep = EntryPoint("check_user_change.py")
+        vd = PythonVMDef(sys.executable)  # run under the VM that runs *this*
+        util.spawn_sanity_check(self, ep, vd, "UNIX user change",
+                                force_dir=PLATFORM_SANITY_CHECK_DIR)
 
 
 class OpenBSDPlatform(UnixLikePlatform):
@@ -400,12 +409,13 @@ class OpenBSDPlatform(UnixLikePlatform):
         """Checks MALLOC_OPTIONS are set"""
 
         from krun import EntryPoint
-        ep = EntryPoint("check_openbsd_malloc_options", subdir=MISC_SANITY_CHECK_DIR)
+        ep = EntryPoint("check_openbsd_malloc_options")
 
         from krun.vm_defs import NativeCodeVMDef, SANITY_CHECK_HEAP_KB
         vd = NativeCodeVMDef()
 
-        util.sanity_check(self, ep, vd, "OpenBSD malloc options")
+        util.spawn_sanity_check(self, ep, vd, "OpenBSD malloc options",
+                                force_dir=PLATFORM_SANITY_CHECK_DIR)
 
 
 class LinuxPlatform(UnixLikePlatform):
