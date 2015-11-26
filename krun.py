@@ -246,8 +246,7 @@ def main(parser):
     attach_log_file(config, args.resume)
 
     # Assign platform to VM defs -- needs to happen early for sanity checks
-    for vm_name, vm_info in config.VMS.items():
-        vm_info["vm_def"].set_platform(platform)
+    util.assign_platform(config, platform)
 
     sanity_checks(config, platform)
 

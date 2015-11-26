@@ -82,3 +82,6 @@ class MockPlatform(BasePlatform):
 
     def bench_env_changes(args, env_dct):
         return []
+
+    def sanity_checks(self):
+        pass

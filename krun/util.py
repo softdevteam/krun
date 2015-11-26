@@ -84,3 +84,7 @@ def spawn_sanity_check(platform, entry_point, vm_def,
         _ = check_and_parse_execution_results(stdout, stderr, rc)
     except ExecutionFailed as e:
         fatal("%s sanity check failed: %s" % (check_name, e.message))
+
+def assign_platform(config, platform):
+    for vm_name, vm_info in config.VMS.items():
+        vm_info["vm_def"].set_platform(platform)
