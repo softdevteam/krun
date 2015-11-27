@@ -263,8 +263,8 @@ class UnixLikePlatform(BasePlatform):
         # We are working on the assumption that no-one else uses
         # LD_LIBRARY_PATH (or equivalent) elsewhere. EnvChangeSet will check
         # this and crash out if this assumption is invalid.
-        change = EnvChangeSet(self.FORCE_LIBRARY_PATH_ENV_NAME, LIBKRUNTIME_DIR)
-        return [change]
+        return [EnvChangeSet(self.FORCE_LIBRARY_PATH_ENV_NAME,
+                             LIBKRUNTIME_DIR)]
 
     def unbuffer_fd(self, fd):
         import fcntl

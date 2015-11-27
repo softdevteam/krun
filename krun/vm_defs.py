@@ -451,7 +451,11 @@ class V8VMDef(JavascriptVMDef):
         script_path = self._get_benchmark_path(benchmark, entry_point,
                                                force_dir=force_dir)
 
-        # Note the double minus before arguments.
+        # Note the double minus in the arguments.
+        # V8 requires you to indicate the end of VM arguments and the start of
+        # user program arguments with the '--' separator. This precludes the
+        # use of run_exec() from the superclass, hence the existence of this
+        # method.
         args = [self.vm_path] + self.extra_vm_args + \
             [self.iterations_runner, '--', script_path, str(iterations), str(param)]
 

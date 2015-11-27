@@ -98,7 +98,7 @@ class TestLinuxPlatform(BaseKrunTest):
 
     def test_bench_cmdline_adjust0002(self, platform):
         expect = ['sudo', '-u', 'krun', 'nice', '-20', 'taskset', '0x8',
-                       'env', 'MYENV=some_value', 'LD_LIBRARY_PATH=', 'myarg']
+                  'env', 'MYENV=some_value', 'LD_LIBRARY_PATH=', 'myarg']
 
         platform.isolated_cpu = 3
 

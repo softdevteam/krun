@@ -5,7 +5,9 @@ import pytest
 
 
 def subst_env_arg(lst, var):
-    """E.g. replace list elements like 'MYVAR=something' with 'MYVAR='"""
+    """Returns a copy of the list with elements starting with 'var=' changed to
+    literally 'var='. Used in tests where an environment variable argument to
+    env(1) contains a system-specific path."""
 
     find = var + "="
     new = []
