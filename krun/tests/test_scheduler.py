@@ -90,7 +90,9 @@ class TestScheduler(BaseKrunTest):
             pass
         monkeypatch.setattr(subprocess, 'call', dummy_shell_cmd)
         monkeypatch.setattr(krun.util, 'run_shell_cmd', dummy_shell_cmd)
-        sched = ExecutionScheduler(Config("krun/tests/example.krun"),
+        config = Config("krun/tests/example.krun")
+        krun.util.assign_platform(config, mock_platform)
+        sched = ExecutionScheduler(config,
                                    mock_platform.mailer,
                                    mock_platform, resume=False,
                                    reboot=False, dry_run=True,
@@ -130,7 +132,9 @@ class TestScheduler(BaseKrunTest):
         monkeypatch.setattr(os, "execv", dummy_execv)
         monkeypatch.setattr(subprocess, "call", dummy_shell_cmd)
         monkeypatch.setattr(krun.util, "run_shell_cmd", dummy_shell_cmd)
-        sched = ExecutionScheduler(Config("krun/tests/example.krun"),
+        config = Config("krun/tests/example.krun")
+        krun.util.assign_platform(config, mock_platform)
+        sched = ExecutionScheduler(config,
                                    mock_platform.mailer,
                                    mock_platform, resume=False,
                                    reboot=True, dry_run=True,

@@ -20,7 +20,6 @@ from krun.mail import Mailer
 
 HERE = os.path.abspath(os.getcwd())
 DIR = os.path.abspath(os.path.dirname(__file__))
-MISC_SANITY_CHECK_DIR = os.path.join(DIR, "misc_sanity_checks")
 
 CONSOLE_FORMATTER = PLAIN_FORMATTER = logging.Formatter(
     '[%(asctime)s: %(levelname)s] %(message)s',
@@ -40,6 +39,8 @@ def usage(parser):
 
 
 def sanity_checks(config, platform):
+    info("Running sanity checks")
+
     vms_that_will_run = []
     # check all necessary benchmark files exist
     for bench, bench_param in config.BENCHMARKS.items():
@@ -47,7 +48,7 @@ def sanity_checks(config, platform):
             for variant in vm_info["variants"]:
                 entry_point = config.VARIANTS[variant]
                 key = "%s:%s:%s" % (bench, vm_name, variant)
-                debug("Running sanity check for experiment %s" % key)
+                debug("Sanity check files for '%s'" % key)
 
                 if config.should_skip(key):
                     continue  # won't execute, so no check needed
@@ -63,41 +64,15 @@ def sanity_checks(config, platform):
             # In this case, sanity checks can't run for this VM, so skip them.
             debug("VM '%s' is not used, not sanity checking." % vm_name)
         else:
-            debug("Running sanity check for VM %s" % vm_name)
+            debug("Running VM sanity check for '%s'" % vm_name)
             vm_info["vm_def"].sanity_checks()
 
-    # misc sanity checks
+    # platform specific sanity checks
     if not platform.developer_mode:
-        sanity_check_user_change(platform)
+        debug("Running platform sanity checks")
+        platform.sanity_checks()
     else:
-        warn("Not running user change sanity check due to developer mode")
-
-
-# This can be modularised if we add more misc sanity checks
-def sanity_check_user_change(platform):
-    """Run a dummy benchmark which crashes if the it doesn't appear to be
-    running as the krun user"""
-
-    debug("running user change sanity check")
-
-    from krun.vm_defs import PythonVMDef, SANITY_CHECK_HEAP_KB
-    from krun import EntryPoint
-
-    bench_name = "user change"
-    iterations = 1
-    param = 666
-
-    ep = EntryPoint("check_user_change.py", subdir=MISC_SANITY_CHECK_DIR)
-    vd = PythonVMDef(sys.executable)  # run under the VM that runs *this*
-    vd.set_platform(platform)
-
-    stdout, stderr, rc = \
-        vd.run_exec(ep, bench_name, iterations, param, SANITY_CHECK_HEAP_KB)
-
-    try:
-        _ = util.check_and_parse_execution_results(stdout, stderr, rc)
-    except util.ExecutionFailed as e:
-        util.fatal("%s sanity check failed: %s" % (bench_name, e.message))
+        warn("Not running platform sanity checks due to developer mode")
 
 
 def create_arg_parser():
@@ -199,6 +174,8 @@ def main(parser):
         util.fatal('Krun configuration file %s does not exist.' % args.filename)
 
     config = Config(args.filename)
+    attach_log_file(config, args.resume)
+
     out_file = config.results_filename()
     out_file_exists = os.path.exists(out_file)
 
@@ -234,6 +211,7 @@ def main(parser):
     platform = detect_platform(mailer)
 
     if not args.develop:
+        info("Checking platform preliminaries")
         platform.check_preliminaries()
     else:
         # Needed to skip the use of certain tools and techniques.
@@ -271,7 +249,8 @@ def main(parser):
         debug("Taking fresh initial temperature readings")
         platform.starting_temperatures = platform.take_temperature_readings()
 
-    attach_log_file(config, args.resume)
+    # Assign platform to VM defs -- needs to happen early for sanity checks
+    util.assign_platform(config, platform)
 
     sanity_checks(config, platform)
 
@@ -316,7 +295,7 @@ def attach_log_file(config, resume):
     fh = logging.FileHandler(log_filename, mode=mode)
     fh.setFormatter(PLAIN_FORMATTER)
     logging.root.addHandler(fh)
-    return
+    info("Attached log file: %s" % log_filename)
 
 
 if __name__ == "__main__":

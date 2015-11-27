@@ -128,10 +128,6 @@ class ExecutionScheduler(object):
         else:
             self.results = Results(self.config, platform)
 
-        # Give VM objects access to the platform.
-        for vm_name, vm_info in self.config.VMS.items():
-            vm_info["vm_def"].set_platform(platform)
-
         self.log_path = self.config.log_filename(self.resume)
 
     def set_eta_avail(self):
