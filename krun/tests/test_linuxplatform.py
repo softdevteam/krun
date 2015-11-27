@@ -1,6 +1,6 @@
 import pytest
 import krun.platform
-from krun.tests import BaseKrunTest
+from krun.tests import BaseKrunTest, subst_env_arg
 import sys
 from StringIO import StringIO
 
@@ -86,3 +86,23 @@ class TestLinuxPlatform(BaseKrunTest):
 
         with pytest.raises(SystemExit):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
+
+    def test_bench_cmdline_adjust0001(self, platform):
+        expect = ['sudo', '-u', 'krun', 'nice', '-20', 'taskset', '0x8',
+                  'env', 'LD_LIBRARY_PATH=']
+
+        platform.isolated_cpu = 3
+
+        args = subst_env_arg(platform.bench_cmdline_adjust([], {}), "LD_LIBRARY_PATH")
+        assert args == expect
+
+    def test_bench_cmdline_adjust0002(self, platform):
+        expect = ['sudo', '-u', 'krun', 'nice', '-20', 'taskset', '0x8',
+                       'env', 'MYENV=some_value', 'LD_LIBRARY_PATH=', 'myarg']
+
+        platform.isolated_cpu = 3
+
+        args = subst_env_arg(platform.bench_cmdline_adjust(
+            ["myarg"], {"MYENV": "some_value"}), "LD_LIBRARY_PATH")
+
+        assert args == expect

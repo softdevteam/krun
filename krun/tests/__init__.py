@@ -4,6 +4,18 @@ from krun.platform import detect_platform
 import pytest
 
 
+def subst_env_arg(lst, var):
+    """E.g. replace list elements like 'MYVAR=something' with 'MYVAR='"""
+
+    find = var + "="
+    new = []
+    for i in lst:
+        if i.startswith(find):
+            i = find
+        new.append(i)
+    return new
+
+
 class BaseKrunTest(object):
     """Abstract class defining common functionality for Krun tests."""
 
