@@ -336,8 +336,7 @@ class ExecutionScheduler(object):
         if self.results.error_flag:
             warn("Errors/warnings occurred -- read the log!")
 
-        msg = "Completed in (roughly) %f seconds.\nLog file at: %s" % \
-            ((end_time - start_time), self.log_path)
+        msg = "Session completed. Log file at: '%s'" % (self.log_path)
         util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
                           bypass_limiter=True)
 
