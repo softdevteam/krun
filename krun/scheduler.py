@@ -270,8 +270,6 @@ class ExecutionScheduler(object):
         # Otherwise we get spurious dmesg changes.
         self.platform.collect_starting_dmesg()
 
-        start_time = time.time() # rough overall timer, not used for actual results
-
         while True:
             self.platform.wait_until_cool()
 
@@ -327,8 +325,6 @@ class ExecutionScheduler(object):
             if self.reboot and len(self) > 0:
                 info("Reboot in preparation for next execution")
                 self._reboot()
-
-        end_time = time.time() # rough overall timer, not used for actual results
 
         self.platform.save_power()
 
