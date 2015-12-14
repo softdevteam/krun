@@ -99,7 +99,7 @@ def test_results_filename():
     os.unlink(example)
 
 
-def test_should_skip():
+def test_skip0001():
     config = Config("krun/tests/skips.krun")
     expected = ["*:PyPy:*",
                 "*:CPython:*",
@@ -114,3 +114,61 @@ def test_should_skip():
         assert config.should_skip(triplet)
     assert config.should_skip("nbody:HHVM:default-php")
     assert not config.should_skip("nbody:MYVM:default-php")
+
+
+def test_skip0002():
+    config = Config()
+    config.SKIP = ["mybench:CPython:default-python"]
+
+    assert config.should_skip("mybench:CPython:default-python")
+    assert not config.should_skip("myotherbench:CPython:default-python")
+    assert not config.should_skip("mybench:PyPy:default-python")
+    assert not config.should_skip("mybench:CPython:special-python")
+
+
+def test_skip0003():
+    config = Config()
+    config.SKIP = ["*:CPython:default-python"]
+
+    assert config.should_skip("mybench:CPython:default-python")
+    assert config.should_skip("myotherbench:CPython:default-python")
+    assert not config.should_skip("mybench:PyPy:default-python")
+    assert not config.should_skip("mybench:CPython:special-python")
+
+
+def test_skip0004():
+    config = Config()
+    config.SKIP = ["mybench:*:default-python"]
+
+    assert config.should_skip("mybench:CPython:default-python")
+    assert not config.should_skip("myotherbench:CPython:default-python")
+    assert config.should_skip("mybench:PyPy:default-python")
+    assert not config.should_skip("mybench:CPython:special-python")
+
+def test_skip0005():
+    config = Config()
+    config.SKIP = ["mybench:CPython:*"]
+
+    assert config.should_skip("mybench:CPython:default-python")
+    assert not config.should_skip("myotherbench:CPython:default-python")
+    assert not config.should_skip("mybench:PyPy:default-python")
+    assert config.should_skip("mybench:CPython:special-python")
+
+
+def test_skip0006():
+    config = Config()
+    config.SKIP = ["*:*:*"]
+
+    assert config.should_skip("mybench:CPython:default-python")
+    assert config.should_skip("myotherbench:CPython:default-python")
+    assert config.should_skip("mybench:PyPy:default-python")
+    assert config.should_skip("mybench:CPython:special-python")
+
+
+def test_skip0007():
+    config = Config()
+
+    with pytest.raises(ValueError) as e:
+        config.should_skip("wobble")
+
+    assert e.value.message == "bad benchmark key: wobble"
