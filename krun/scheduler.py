@@ -333,10 +333,18 @@ class ExecutionScheduler(object):
         self.platform.save_power()
 
         info("Done: Results dumped to %s" % self.config.results_filename())
+        err_msg = "Errors/warnings occurred -- read the log!"
         if self.results.error_flag:
-            warn("Errors/warnings occurred -- read the log!")
+            warn(err_msg)
 
         msg = "Session completed. Log file at: '%s'" % (self.log_path)
+
+        if self.results.error_flag:
+            msg += "\n\n%s" % err_msg
+
+        if self.reboot:
+            msg += "\n\nDon't forget to disable Krun at boot."
+
         util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
                           bypass_limiter=True)
 
