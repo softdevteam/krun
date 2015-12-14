@@ -183,7 +183,7 @@ class BasePlatform(object):
 
     # And you may want to extend this
     def collect_audit(self):
-        self.audit["uname"] = run_shell_cmd("uname")[0]
+        self.audit["uname"] = run_shell_cmd("uname -a")[0]
         self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
 
     def bench_cmdline_adjust(self, args, env_dct):
