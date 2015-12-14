@@ -37,13 +37,6 @@ class BasePlatform(object):
         self.mailer = mailer
         self.audit = OrderedDict()
 
-        # We will be looking for changes in the dmesg output.
-        # In the past we have seen benchmarks trigger performance-related
-        # errors and warnings in the Linux dmesg. If that happens, we
-        # really want to know about it!
-        self.last_dmesg = self._collect_dmesg_lines()
-        self.last_dmesg_time = localtime()
-
         # Temperatures should always be a dict mapping a descriptive name of
         # the sensor to a platform dependent linear temperature measurement.
         # The starting temperatures will be multiplied by a constant factor to
@@ -51,6 +44,16 @@ class BasePlatform(object):
         self._starting_temperatures = {}  # accessed via property
         self.temperature_thresholds = {}
 
+        self.last_dmesg = None
+        self.last_dmesg_time = None
+
+    def collect_starting_dmesg(self):
+        # We will be looking for changes in the dmesg output.
+        # In the past we have seen benchmarks trigger performance-related
+        # errors and warnings in the Linux dmesg. If that happens, we
+        # really want to know about it!
+        self.last_dmesg = self._collect_dmesg_lines()
+        self.last_dmesg_time = localtime()
 
     @property
     def starting_temperatures(self):
