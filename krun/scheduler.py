@@ -266,6 +266,10 @@ class ExecutionScheduler(object):
             else:
                 time.sleep(STARTUP_WAIT_SECONDS)
 
+        # Important that the dmesg is collected after the above startup wait.
+        # Otherwise we get spurious dmesg changes.
+        self.platform.collect_starting_dmesg()
+
         start_time = time.time() # rough overall timer, not used for actual results
 
         while True:
