@@ -103,15 +103,14 @@ class TestOpenBSDPlatform(BaseKrunTest):
         # Would have been "manual" if we were still in "high-performance" mode.
 
     def test_bench_cmdline_adjust0001(self, platform):
-        expect = ['doas', '-u', 'krun', 'nice', '-20', 'env',
+        expect = ['nice', '-20', 'env',
                   'LD_LIBRARY_PATH=', 'MALLOC_OPTIONS=sfghjpru']
 
         args = subst_env_arg(platform.bench_cmdline_adjust([], {}), "LD_LIBRARY_PATH")
         assert args == expect
 
     def test_bench_cmdline_adjust0002(self, platform):
-        expect = ['doas', '-u', 'krun', 'nice', '-20', 'env',
-                  'MYENV=some_value',
+        expect = ['nice', '-20', 'env', 'MYENV=some_value',
                   'LD_LIBRARY_PATH=', 'MALLOC_OPTIONS=sfghjpru', 'myarg']
 
         args = subst_env_arg(platform.bench_cmdline_adjust(
