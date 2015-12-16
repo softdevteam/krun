@@ -366,8 +366,8 @@ class OpenBSDPlatform(UnixLikePlatform):
             self._check_apm_state()  # should work this time
 
     def _isolate_process_args(self):
-        warn("CPU isolation not yet implemented on OpenBSD")
-        return []  # XXX not implemented, not sure if possible
+        # We cannot isolate CPUs on OpenBSD
+        return []
 
     def _get_sysctl_temperature_output(self):
         # separate for test mocking
