@@ -1,7 +1,7 @@
 # Tools to deal with setting and updating an environment dict.
 
 from abc import ABCMeta, abstractmethod
-import logging
+from krun.util import fatal
 import os
 
 
@@ -26,7 +26,7 @@ class EnvChangeSet(EnvChange):
     def apply(self, env):
         cur_val = env.get(self.var, None)
         if cur_val is not None:
-            logging.fatal("Environment %s is already defined" % self.var)
+            fatal("Environment %s is already defined" % self.var)
         else:
             env[self.var] = self.val
 
