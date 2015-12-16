@@ -113,17 +113,8 @@ class BaseVMDef(object):
         # Apply benchmark specific environment changes
         EnvChange.apply_all(bench_env_changes, new_user_env)
 
-        # This is kind of awkward. We don't have the heap limit at
-        # VMDef construction time, so we have to substitute it in later.
-        actual_args = []
-        for a in args:
-            if callable(a):
-                a = a(heap_lim_k)
-            actual_args.append(a)
-
         # Apply platform specific argument transformations.
-        actual_args = self.platform.bench_cmdline_adjust(
-            actual_args, new_user_env)
+        actual_args = self.platform.bench_cmdline_adjust(args, new_user_env)
 
         debug("cmdline='%s'" % " ".join(actual_args))
 
@@ -255,7 +246,7 @@ class GenericScriptingVMDef(BaseVMDef):
 class JavaVMDef(BaseVMDef):
     def __init__(self, vm_path):
         self.vm_path = vm_path
-        self.extra_vm_args = [lambda heap_lim_k: "-Xmx%sK" % heap_lim_k]
+        self.extra_vm_args = []
         BaseVMDef.__init__(self, "IterationsRunner")
 
     def run_exec(self, entry_point, benchmark, iterations,
@@ -388,11 +379,6 @@ class LuaVMDef(GenericScriptingVMDef):
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  force_dir=None):
-        # I was unable to find any special switches to limit lua's heap size.
-        # Looking at implementationsi:
-        #  * luajit uses anonymous mmap() to allocate memory, fiddling
-        #    with rlimits prior.
-        #  * Stock lua doesn't seem to do anything special. Just realloc().
         return self._generic_scripting_run_exec(interpreter, benchmark,
                                                 iterations, param, heap_lim_k,
                                                 force_dir=force_dir)
@@ -413,10 +399,6 @@ class RubyVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.rb")
 
 class JRubyVMDef(RubyVMDef):
-    def __init__(self, vm_path):
-        RubyVMDef.__init__(self, vm_path)
-        self.extra_vm_args += [lambda heap_lim_k: "-J-Xmx%sK" % heap_lim_k]
-
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  force_dir=None):
         return self._generic_scripting_run_exec(interpreter, benchmark,
@@ -454,14 +436,6 @@ class JavascriptVMDef(GenericScriptingVMDef):
 
 
 class V8VMDef(JavascriptVMDef):
-    def __init__(self, vm_path):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.js")
-
-        # this is a best effort at limiting the heap space.
-        # V8 has a "new" and "old" heap. I can't see a way to limit the total of the two.
-        self.extra_vm_args += ["--max_old_space_size", lambda heap_lim_k: "%s" % int(heap_lim_k / 1024)] # as MB
-
-
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
                  force_dir=None):
         # Duplicates generic implementation. Need to pass args differently.
