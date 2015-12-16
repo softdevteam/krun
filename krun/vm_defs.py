@@ -368,6 +368,20 @@ class PythonVMDef(GenericScriptingVMDef):
                                                 iterations, param, heap_lim_k,
                                                 force_dir=force_dir)
 
+
+class PyPyVMDef(PythonVMDef):
+    def __init__(self, vm_path):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py")
+        # XXX: On OpenBSD the PyPy build fails to encode the rpath to libpypy-c.so
+        # into the VM executable, so we have to force it ourselves.
+        #
+        # For fairness, we apply the environment change to all platforms.
+        #
+        # Ideally fix in PyPy.
+        lib_dir = os.path.dirname(vm_path)
+        self.add_env_change(EnvChangeAppend("LD_LIBRARY_PATH", lib_dir))
+
+
 class LuaVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.lua")
