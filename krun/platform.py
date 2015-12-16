@@ -13,7 +13,7 @@ import krun.util as util
 from logging import warn, info, debug
 from time import localtime
 from abc import ABCMeta, abstractmethod, abstractproperty
-from krun.env import EnvChangeSet, EnvChange
+from krun.env import EnvChangeSet, EnvChange, EnvChangeAppend
 
 NICE_PRIORITY = -20
 BENCHMARK_USER = "krun"  # user is expected to have made this
@@ -266,8 +266,8 @@ class UnixLikePlatform(BasePlatform):
         # We are working on the assumption that no-one else uses
         # LD_LIBRARY_PATH (or equivalent) elsewhere. EnvChangeSet will check
         # this and crash out if this assumption is invalid.
-        return [EnvChangeSet(self.FORCE_LIBRARY_PATH_ENV_NAME,
-                             LIBKRUNTIME_DIR)]
+        return [EnvChangeAppend(self.FORCE_LIBRARY_PATH_ENV_NAME,
+                                LIBKRUNTIME_DIR)]
 
     def unbuffer_fd(self, fd):
         import fcntl

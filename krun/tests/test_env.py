@@ -1,22 +1,16 @@
 from krun.env import EnvChangeSet, EnvChangeAppend
 
 import logging, os
+import pytest
 
 
-def test_env_change_set(monkeypatch):
-    phony_log = []
-    def patch_fatal(text):
-        phony_log.append(text)
-    monkeypatch.setattr(logging, 'fatal', patch_fatal)
+def test_env_change_set(monkeypatch, caplog):
     env = EnvChangeSet("bach", 1685)
-    assert len(phony_log) == 0
     assert env.var == "bach"
     assert env.val == 1685
-    env.apply({"bach": 1695})
-    assert len(phony_log) == 1
-    assert phony_log[0] == "Environment bach is already defined"
-    assert env.var == "bach"
-    assert env.val == 1685
+    with pytest.raises(SystemExit):
+        env.apply({"bach": 1695})
+    assert "Environment bach is already defined" in caplog.text()
 
 
 def test_env_change_set_apply():
