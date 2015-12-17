@@ -9,6 +9,8 @@ FLOAT_FORMAT = ".6f"
 DIR = os.path.abspath(os.path.dirname(__file__))
 
 SANITY_CHECK_HEAP_KB = 1024 * 1024  # 1GB
+SANITY_CHECK_STACK_KB = 8192
+
 PLATFORM_SANITY_CHECK_DIR = os.path.join(DIR, "..", "platform_sanity_checks")
 VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
 
@@ -78,7 +80,8 @@ def spawn_sanity_check(platform, entry_point, vm_def,
 
     stdout, stderr, rc = \
         vm_def.run_exec(entry_point, check_name, iterations,
-                        param, SANITY_CHECK_HEAP_KB, force_dir=force_dir)
+                        param, SANITY_CHECK_HEAP_KB, SANITY_CHECK_STACK_KB,
+                        force_dir=force_dir)
 
     try:
         _ = check_and_parse_execution_results(stdout, stderr, rc)

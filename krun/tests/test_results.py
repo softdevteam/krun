@@ -4,6 +4,8 @@ from krun.tests import BaseKrunTest
 
 import os
 
+TEST_DIR = os.path.abspath(os.path.dirname(__file__))
+
 
 class TestResults(BaseKrunTest):
     """Test the results data structure and file."""
@@ -20,9 +22,11 @@ class TestResults(BaseKrunTest):
     def test_dump_config(self):
         """Simulates krun.py --dump-config RESULTS_FILE.json.bz2
         """
-        results = Results(None, None,
-                          results_file="krun/tests/quick_results.json.bz2")
-        with open("krun/tests/quick.krun") as fp:
+
+        res_path = os.path.join(TEST_DIR, "quick_results.json.bz2")
+        conf_path = os.path.join(TEST_DIR, "quick.krun")
+        results = Results(None, None, results_file=res_path)
+        with open(conf_path) as fp:
             config = fp.read()
             assert config == results.config.text
 

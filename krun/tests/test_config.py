@@ -8,7 +8,7 @@ from distutils.spawn import find_executable
 
 
 JAVA = find_executable("java")
-
+TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 
 def touch(fname):
     with open(fname, 'a'):
@@ -16,7 +16,8 @@ def touch(fname):
 
 
 def test_str():
-    config = Config("krun/tests/example.krun")
+    path = os.path.join(TEST_DIR, "example.krun")
+    config = Config(path)
     assert config.text == str(config)
 
 def test_eq():
@@ -28,18 +29,13 @@ def test_eq():
 
 def test_log_filename(monkeypatch):
     example_config = Config("krun/tests/example.krun")
-    touch("krun/tests/.krun")
-    empty_config = Config("krun/tests/.krun")
     tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT)
     assert example_config.log_filename(False) == "krun/tests/example" + "_" + tstamp + ".log"
-    assert empty_config.log_filename(False) == "krun/tests/_" + tstamp + ".log"
     def mock_mtime(path):
         return 1445964109.9363003
     monkeypatch.setattr(os.path, 'getmtime', mock_mtime)
     tstamp = '20151027_164149'
     assert example_config.log_filename(True) == "krun/tests/example" + "_" + tstamp + ".log"
-    assert empty_config.log_filename(True) == "krun/tests/_" + tstamp + ".log"
-    os.unlink("krun/tests/.krun")
 
 
 def test_read_config_from_file():
@@ -88,15 +84,11 @@ def test_read_corrupt_config():
 
 
 def test_results_filename():
-    empty, example = ".krun", "example.krun"
-    touch(empty)
+    example = os.path.join(TEST_DIR, "example.krun")
     touch(example)
-    empty_config = Config(empty)
     example_config = Config(example)
-    assert empty_config.results_filename() == "_results.json.bz2"
-    assert example_config.results_filename() == "example_results.json.bz2"
-    os.unlink(empty)
-    os.unlink(example)
+    # not exact match due to absolute path
+    assert example_config.results_filename().endswith("example_results.json.bz2")
 
 
 def test_skip0001():
