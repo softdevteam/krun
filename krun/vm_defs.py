@@ -10,10 +10,12 @@ from krun import EntryPoint
 from krun.util import fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR
 from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
 from krun.util import SANITY_CHECK_HEAP_KB
+from distutils.spawn import find_executable
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
+BENCHMARK_USER = "krun"  # user is expected to have made this
 
 # Pipe buffer sizes vary. I've seen reports on the Internet ranging from a
 # page size (Linux pre-2.6.11) to 64K (Linux in 2015). Ideally we would
@@ -26,6 +28,10 @@ PIPE_BUF_SZ = 1024 * 16
 
 SELECT_TIMEOUT = 1.0
 
+WRAPPER_SCRIPT = os.sep + os.path.join("tmp", "krun_wrapper.dash")
+DASH = find_executable("dash")
+if DASH is None:
+    fatal("dash shell not found")
 
 # !!!
 # Don't mutate any lists passed down from the user's config file!
@@ -97,6 +103,19 @@ class BaseVMDef(object):
                  force_dir=None):
         pass
 
+    @staticmethod
+    def make_wrapper_script(args, heap_lim_k):
+        """Make lines for the wrapper script.
+        Separate for testing purposes"""
+
+        return [
+            "#!%s" % DASH,
+            "ulimit -d %s || exit $?" % heap_lim_k,
+            # XXX stack limit
+            " ".join(args),
+            "exit $?",
+        ]
+
     def _run_exec(self, args, heap_lim_k, bench_env_changes=None):
         """ Deals with actually shelling out """
 
@@ -113,34 +132,39 @@ class BaseVMDef(object):
         # Apply benchmark specific environment changes
         EnvChange.apply_all(bench_env_changes, new_user_env)
 
-        # This is kind of awkward. We don't have the heap limit at
-        # VMDef construction time, so we have to substitute it in later.
-        actual_args = []
-        for a in args:
-            if callable(a):
-                a = a(heap_lim_k)
-            actual_args.append(a)
-
         # Apply platform specific argument transformations.
-        actual_args = self.platform.bench_cmdline_adjust(
-            actual_args, new_user_env)
-
-        debug("cmdline='%s'" % " ".join(actual_args))
+        args = self.platform.bench_cmdline_adjust(args, new_user_env)
 
         if self.dry_run:
             info("Dry run. Skipping.")
             return ("", "", 0)
+
+        # We write out a wrapper script whose job is to enforce ulimits
+        # before executing the VM.
+        debug("Writing out wrapper script to %s" % WRAPPER_SCRIPT)
+        lines = BaseVMDef.make_wrapper_script(args, heap_lim_k)
+        with open(WRAPPER_SCRIPT, "w") as fh:
+            for line in lines:
+                fh.write(line + "\n")
+
+        debug("Wrapper script:\n%s" % ("\n".join(lines)))
+
+        wrapper_args = self.platform.change_user_args(BENCHMARK_USER) + \
+            [DASH, WRAPPER_SCRIPT]
 
         # We pass the empty environment dict here.
         # This is the *outer* environment that the current user will invoke the
         # command with. Command line arguments will have been appended *inside*
         # to adjust the new user's environment once the user switch has
         # occurred.
+        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
         p = subprocess.Popen(
-            actual_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            wrapper_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env={})
 
-        return self._run_exec_capture(p)
+        rv = self._run_exec_capture(p)
+        os.unlink(WRAPPER_SCRIPT)
+        return rv
 
     def _run_exec_capture(self, child_pipe):
         """Allows the subprocess (whose pipes we have handles on) to run
@@ -255,7 +279,7 @@ class GenericScriptingVMDef(BaseVMDef):
 class JavaVMDef(BaseVMDef):
     def __init__(self, vm_path):
         self.vm_path = vm_path
-        self.extra_vm_args = [lambda heap_lim_k: "-Xmx%sK" % heap_lim_k]
+        self.extra_vm_args = []
         BaseVMDef.__init__(self, "IterationsRunner")
 
     def run_exec(self, entry_point, benchmark, iterations,
@@ -388,11 +412,6 @@ class LuaVMDef(GenericScriptingVMDef):
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  force_dir=None):
-        # I was unable to find any special switches to limit lua's heap size.
-        # Looking at implementationsi:
-        #  * luajit uses anonymous mmap() to allocate memory, fiddling
-        #    with rlimits prior.
-        #  * Stock lua doesn't seem to do anything special. Just realloc().
         return self._generic_scripting_run_exec(interpreter, benchmark,
                                                 iterations, param, heap_lim_k,
                                                 force_dir=force_dir)
@@ -413,10 +432,6 @@ class RubyVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.rb")
 
 class JRubyVMDef(RubyVMDef):
-    def __init__(self, vm_path):
-        RubyVMDef.__init__(self, vm_path)
-        self.extra_vm_args += [lambda heap_lim_k: "-J-Xmx%sK" % heap_lim_k]
-
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  force_dir=None):
         return self._generic_scripting_run_exec(interpreter, benchmark,
@@ -454,14 +469,6 @@ class JavascriptVMDef(GenericScriptingVMDef):
 
 
 class V8VMDef(JavascriptVMDef):
-    def __init__(self, vm_path):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.js")
-
-        # this is a best effort at limiting the heap space.
-        # V8 has a "new" and "old" heap. I can't see a way to limit the total of the two.
-        self.extra_vm_args += ["--max_old_space_size", lambda heap_lim_k: "%s" % int(heap_lim_k / 1024)] # as MB
-
-
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
                  force_dir=None):
         # Duplicates generic implementation. Need to pass args differently.

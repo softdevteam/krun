@@ -16,7 +16,6 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from krun.env import EnvChangeSet, EnvChange, EnvChangeAppend
 
 NICE_PRIORITY = -20
-BENCHMARK_USER = "krun"  # user is expected to have made this
 DIR = os.path.abspath(os.path.dirname(__file__))
 LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkruntime")
 
@@ -190,18 +189,19 @@ class BasePlatform(object):
         """Prepends various arguments to benchmark invocation.
 
         Currently deals with:
-          * Changing user
           * CPU pinning (if available)
           * Adding libkruntime to linker path
-          * Process priority"""
+          * Process priority
+
+        It does not deal with changing user, as this is done one
+        level up in the wrapper script."""
 
         # platform specific env changes to apply (if any)
         combine_env = env_dct.copy()
         changes = self.bench_env_changes()
         EnvChange.apply_all(changes, combine_env)
 
-        return self.change_user_args(BENCHMARK_USER) + \
-            self.process_priority_args() + self.isolate_process_args() + \
+        return self.process_priority_args() + self.isolate_process_args() + \
             self.adjust_env_cmd(combine_env) + args
 
     @abstractmethod

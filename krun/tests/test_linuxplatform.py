@@ -88,7 +88,7 @@ class TestLinuxPlatform(BaseKrunTest):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_bench_cmdline_adjust0001(self, platform):
-        expect = ['sudo', '-u', 'krun', 'nice', '-20', 'taskset', '0x8',
+        expect = ['nice', '-20', 'taskset', '0x8',
                   'env', 'LD_LIBRARY_PATH=']
 
         platform.isolated_cpu = 3
@@ -97,7 +97,7 @@ class TestLinuxPlatform(BaseKrunTest):
         assert args == expect
 
     def test_bench_cmdline_adjust0002(self, platform):
-        expect = ['sudo', '-u', 'krun', 'nice', '-20', 'taskset', '0x8',
+        expect = ['nice', '-20', 'taskset', '0x8',
                   'env', 'MYENV=some_value', 'LD_LIBRARY_PATH=', 'myarg']
 
         platform.isolated_cpu = 3
