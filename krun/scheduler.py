@@ -83,14 +83,11 @@ class ExecutionJob(object):
 
         # Set heap limit
         heap_limit_kb = self.sched.config.HEAP_LIMIT
-        heap_limit_b = heap_limit_kb * 1024  # resource module speaks in bytes
-        heap_t = (heap_limit_b, heap_limit_b)
-        resource.setrlimit(resource.RLIMIT_DATA, heap_t)
-        assert resource.getrlimit(resource.RLIMIT_DATA) == heap_t
+        stack_limit_kb = self.sched.config.STACK_LIMIT
 
         stdout, stderr, rc = vm_def.run_exec(
             entry_point, self.benchmark, self.vm_info["n_iterations"],
-            self.parameter, heap_limit_kb)
+            self.parameter, heap_limit_kb, stack_limit_kb)
 
         if not dry_run:
             try:

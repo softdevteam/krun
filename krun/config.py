@@ -4,7 +4,10 @@ import os.path
 import time
 
 from krun import LOGFILE_FILENAME_TIME_FORMAT
+from krun.util import fatal
 
+# XXX Add the rest of the required fields
+CHECK_FIELDS = ["HEAP_LIMIT", "STACK_LIMIT"]
 
 class Config(object):
     """All configuration for a Krun benchmark.
@@ -12,6 +15,7 @@ class Config(object):
     """
 
     def __init__(self, config_file=None):
+        # config defaults go here
         self.MAIL_TO = list()
         self.MAX_MAILS = 5
         self.VMS = dict()
@@ -20,6 +24,9 @@ class Config(object):
         self.SKIP = list()
         self.N_EXECUTIONS = 1
         self.filename = config_file
+        self.HEAP_LIMIT = None
+        self.STACK_LIMIT = None
+
         if config_file is not None:
             self.read_from_file(config_file)
 
@@ -42,6 +49,11 @@ class Config(object):
         except Exception as e:
             error("error importing config file:\n%s" % str(e))
             raise
+
+        for key in CHECK_FIELDS:
+            if key not in config_dict:
+                fatal("Config file is missing a %s" % key)
+
         self.__dict__.update(config_dict)
         self.filename = config_file
         with open(config_file, "r") as fp:
