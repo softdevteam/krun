@@ -12,6 +12,7 @@ DIR = os.getcwd()
 JKRUNTIME_DIR = os.path.join(DIR, "krun", "libkruntime", "")
 
 HEAP_LIMIT = 2097152  # K == 2Gb
+STACK_LIMIT = 8192
 
 # Variant name -> EntryPoint
 VARIANTS = {
