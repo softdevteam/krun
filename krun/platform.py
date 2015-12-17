@@ -5,6 +5,7 @@ import os
 import difflib
 import random
 import sys
+from distutils.spawn import find_executable
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
 from krun.util import (fatal, run_shell_cmd, log_and_mail,
@@ -156,10 +157,6 @@ class BasePlatform(object):
             time.sleep(BasePlatform.TEMP_POLL_FREQ)
 
     # When porting to a new platform, implement the following:
-    @abstractproperty
-    def CHANGE_USER_CMD(self):
-        pass
-
     @abstractmethod
     def take_temperature_readings(self):
         pass
@@ -261,6 +258,13 @@ class UnixLikePlatform(BasePlatform):
     FORCE_LIBRARY_PATH_ENV_NAME = "LD_LIBRARY_PATH"
     REBOOT = "reboot"
 
+    def __init__(self, mailer):
+        self.change_user_cmd = find_executable("sudo")
+        if self.change_user_cmd is None:
+            fatal("Could not find sudo!")
+
+        BasePlatform.__init__(self, mailer)
+
     def bench_env_changes(self):
         # Force libkruntime into linker path.
         # We are working on the assumption that no-one else uses
@@ -287,7 +291,7 @@ class UnixLikePlatform(BasePlatform):
         return args
 
     def _change_user_args(self, user="root"):
-        return [self.CHANGE_USER_CMD, "-u", user]
+        return [self.change_user_cmd, "-u", user]
 
     def sanity_checks(self):
         self._sanity_check_user_change()
@@ -303,7 +307,6 @@ class UnixLikePlatform(BasePlatform):
 
 
 class OpenBSDPlatform(UnixLikePlatform):
-    CHANGE_USER_CMD = "doas"
     TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
     GET_SETPERF_CMD = "sysctl hw.setperf"
 
@@ -428,7 +431,6 @@ class LinuxPlatform(UnixLikePlatform):
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
     PERF_SAMPLE_RATE = "/proc/sys/kernel/perf_event_max_sample_rate"
-    CHANGE_USER_CMD = "sudo"
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
     ASLR_FILE = "/proc/sys/kernel/randomize_va_space"
@@ -490,7 +492,7 @@ class LinuxPlatform(UnixLikePlatform):
         for cpu_n in xrange(self.num_cpus):
             debug("Set CPU%d governor to 'ondemand'" % cpu_n)
             cmd = "%s cpufreq-set -c %d -g ondemand" % \
-                (self.CHANGE_USER_CMD, cpu_n)
+                (self.change_user_cmd, cpu_n)
             stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
 
             if rc != 0:
@@ -601,7 +603,7 @@ class LinuxPlatform(UnixLikePlatform):
 
         if sr != 1:
             cmd = "%s sh -c 'echo 1 > %s'" % \
-                (LinuxPlatform.CHANGE_USER_CMD, LinuxPlatform.PERF_SAMPLE_RATE)
+                (LinuxPlatform.change_user_cmd, LinuxPlatform.PERF_SAMPLE_RATE)
             stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
 
             if rc != 0:
@@ -683,7 +685,7 @@ class LinuxPlatform(UnixLikePlatform):
             if v != "performance":
                 info("changing CPU governor for CPU %s" % cpu_n)
                 cmd = "%s cpufreq-set -c %d -g performance" % \
-                    (self.CHANGE_USER_CMD, cpu_n)
+                    (self.change_user_cmd, cpu_n)
                 stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
                 changed = True
 
@@ -693,7 +695,7 @@ class LinuxPlatform(UnixLikePlatform):
                           "governor using:\n  '%s'\n"
                           "however this command failed. Is %s configured "
                           "and is cpufrequtils installed?"
-                          % (cpu_n, v, cmd, self.CHANGE_USER_CMD))
+                          % (cpu_n, v, cmd, self.change_user_cmd))
         if changed:
             self._check_cpu_governor()  # just to be sure
 
@@ -744,7 +746,7 @@ class LinuxPlatform(UnixLikePlatform):
             # ASLR is off, but we can try to enable it
             info("Turning ASLR off")
             cmd = "%s sh -c 'echo 0 > %s'" % \
-                (self.CHANGE_USER_CMD, self.ASLR_FILE)
+                (self.change_user_cmd, self.ASLR_FILE)
             stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
 
             if rc != 0:

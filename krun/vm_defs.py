@@ -123,7 +123,7 @@ class BaseVMDef(object):
             bench_env_changes = []
 
         # Environment *after* user change.
-        # Starts empty, but user change command (e.g. sudo/doas) may introduce some.
+        # Starts empty, but user change command (i.e. sudo) may introduce some.
         new_user_env = {}
 
         # Apply vm specific environment changes
