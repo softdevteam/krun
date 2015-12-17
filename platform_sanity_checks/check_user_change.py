@@ -11,8 +11,8 @@ def run_iter(n):
     syscall_user = pwd.getpwuid(os.geteuid())[0]
 
     ok = True
-    # OpenBSD doas(1) doesn't allow $USER through by default.
-    if env_user is not None and env_user != KRUN_USER:
+
+    if env_user != KRUN_USER:
         ok = False
 
     if syscall_user != KRUN_USER:
