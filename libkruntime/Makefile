@@ -14,4 +14,4 @@ libkruntime.so: libkruntime.c
 		-o libkruntime.so
 
 clean:
-	-rm libkruntime.so
+	rm -f libkruntime.so

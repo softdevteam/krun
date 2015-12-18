@@ -24,5 +24,5 @@ iterations_runner_c: iterations_runner.c
 		${LDFLAGS}
 
 clean:
-	-rm BaseKrunEntry.class IterationsRunner.class
-	-rm iterations_runner_c
+	rm -f BaseKrunEntry.class IterationsRunner.class
+	rm -f iterations_runner_c

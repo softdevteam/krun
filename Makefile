@@ -26,3 +26,4 @@ clean:
 	cd iterations_runners && ${MAKE} clean
 	cd libkruntime && ${MAKE} clean
 	cd vm_sanity_checks && ${MAKE} clean
+	cd platform_sanity_checks && ${MAKE} clean
