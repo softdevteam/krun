@@ -11,4 +11,4 @@ check_openbsd_malloc_options: check_openbsd_malloc_options.c
 		; fi
 
 clean:
-	-rm check_openbsd_malloc_options
+	rm -f check_openbsd_malloc_options
