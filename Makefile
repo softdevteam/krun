@@ -6,9 +6,9 @@ PASS_DOWN_ARGS =	ENABLE_JAVA=${ENABLE_JAVA} JAVAC=${JAVAC} \
 			CC=${CC} CFLAGS=${CFLAGS} CPPFLAGS=${CPPFLAGS} \
 			LDFLAGS=${LDFLAGS}
 
-.PHONY: libkruntime vm-sanity-checks clean
-
 all: iterations-runners libkruntime vm-sanity-checks platform-sanity-checks
+
+.PHONY: libkruntime vm-sanity-checks clean
 
 iterations-runners: libkruntime
 	cd iterations_runners && ${MAKE} ${PASS_DOWN_ARGS}

@@ -4,9 +4,9 @@ ifeq (${ENABLE_JAVA},1)
 LIBKRUNTIME_CFLAGS += -DWITH_JAVA=1
 endif
 
-.PHONY: clean
-
 all: libkruntime.so
+
+.PHONY: clean
 
 libkruntime.so: libkruntime.c
 	${CC} ${JAVA_CPPFLAGS} ${JAVA_CFLAGS} ${LIBKRUNTIME_CFLAGS} ${CFLAGS} \

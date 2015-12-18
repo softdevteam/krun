@@ -8,9 +8,9 @@ ifeq ($(OS),Linux)
 	C_ITER_RUNNER_LDFLAGS += -ldl
 endif
 
-.PHONY: clean
-
 all: iterations_runner_c IterationsRunner.class BaseKrunEntry.class
+
+.PHONY: clean
 
 IterationsRunner.class BaseKrunEntry.class: iterations_runner.java
 	if [ "${ENABLE_JAVA}" = "1" ]; then \
