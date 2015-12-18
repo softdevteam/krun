@@ -9,4 +9,4 @@ JavaCheckJVMCIServerEnabled.class: JavaCheckJVMCIServerEnabled.java
 	fi
 
 clean:
-	-rm *.class
+	rm -f *.class
