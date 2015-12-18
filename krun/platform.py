@@ -603,7 +603,7 @@ class LinuxPlatform(UnixLikePlatform):
 
         if sr != 1:
             cmd = "%s sh -c 'echo 1 > %s'" % \
-                (LinuxPlatform.change_user_cmd, LinuxPlatform.PERF_SAMPLE_RATE)
+                (self.change_user_cmd, LinuxPlatform.PERF_SAMPLE_RATE)
             stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
 
             if rc != 0:
