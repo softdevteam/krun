@@ -36,7 +36,6 @@ If you are using a Linux system, you will need to set some kernel arguments.
 If your Linux bootloader is Grub, you can follow these steps:
 
   * Edit /etc/default/grub (e.g. `sudo gedit /etc/default/grub`)
-  * Add `isolcpus=X` to `GRUB_CMDLINE_LINUX_DEFAULT` (where `X` is an integer > 0)
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
   * Run `sudo update-grub`
 
@@ -306,7 +305,6 @@ will cause Krun to run with the following modifications:
   * Krun will not run the system prerequisite checks. Checks relating to CPU
     governers,  CPU scalers, CPU temperatures, tickless kernel, etc.
   * Krun will not attempt to switch user to run benchmarks.
-  * Krun will not force the benchmark on to an isolated core.
 
 This makes it easier to develop krun on (e.g.) a personal laptop which has not
 been prepared for reliable benchmarking.

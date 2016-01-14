@@ -88,19 +88,14 @@ class TestLinuxPlatform(BaseKrunTest):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_bench_cmdline_adjust0001(self, platform):
-        expect = ['nice', '-20', 'taskset', '0x8',
-                  'env', 'LD_LIBRARY_PATH=']
-
-        platform.isolated_cpu = 3
+        expect = ['nice', '-20', 'env', 'LD_LIBRARY_PATH=']
 
         args = subst_env_arg(platform.bench_cmdline_adjust([], {}), "LD_LIBRARY_PATH")
         assert args == expect
 
     def test_bench_cmdline_adjust0002(self, platform):
-        expect = ['nice', '-20', 'taskset', '0x8',
-                  'env', 'MYENV=some_value', 'LD_LIBRARY_PATH=', 'myarg']
-
-        platform.isolated_cpu = 3
+        expect = ['nice', '-20', 'env', 'MYENV=some_value',
+                  'LD_LIBRARY_PATH=', 'myarg']
 
         args = subst_env_arg(platform.bench_cmdline_adjust(
             ["myarg"], {"MYENV": "some_value"}), "LD_LIBRARY_PATH")

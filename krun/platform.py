@@ -198,7 +198,7 @@ class BasePlatform(object):
         changes = self.bench_env_changes()
         EnvChange.apply_all(changes, combine_env)
 
-        return self.process_priority_args() + self.isolate_process_args() + \
+        return self.process_priority_args() + \
             self.adjust_env_cmd(combine_env) + args
 
     @abstractmethod
@@ -211,17 +211,6 @@ class BasePlatform(object):
             return []
         else:
             return self._change_user_args(user)
-
-    @abstractmethod
-    def _isolate_process_args(self):
-        pass
-
-    def isolate_process_args(self):
-        if self.developer_mode:
-            warn("Not forcing onto isolated core due to developer mode")
-            return []  # don't use isolated core at all
-        else:
-            return self._isolate_process_args()
 
     @abstractmethod
     def process_priority_args(self):
@@ -368,10 +357,6 @@ class OpenBSDPlatform(UnixLikePlatform):
             out, _, _ = run_shell_cmd("apm -H")
             self._check_apm_state()  # should work this time
 
-    def _isolate_process_args(self):
-        # We cannot isolate CPUs on OpenBSD
-        return []
-
     def _get_sysctl_temperature_output(self):
         # separate for test mocking
         return run_shell_cmd(self.TEMP_SENSORS_CMD)[0]
@@ -438,7 +423,6 @@ class LinuxPlatform(UnixLikePlatform):
     def __init__(self, mailer):
         self.zones = self._find_thermal_zones()
         self.num_cpus = self._get_num_cpus()
-        self.isolated_cpu = None  # Detected later
         UnixLikePlatform.__init__(self, mailer)
 
 
@@ -458,17 +442,6 @@ class LinuxPlatform(UnixLikePlatform):
         fatal("%s"
               "Set `%s` in the kernel arguments.\n"
               "%s" % (prefix, arg, suffix))
-
-    def _isolate_process_args(self):
-        """Adjusts benchmark invocation to pin to a CPU core with taskset"""
-
-        # The core mask is a bitfield, each bit representing a CPU. When
-        # a bit is set, it means the task may run on the corresponding core.
-        # E.g. a mask of 0x3 (0b11) means the process can run on cores
-        # 1 and 2. We want to pin the process to one CPU, so we only ever
-        # set one bit.
-        coremask = 1 << self.isolated_cpu
-        return ["taskset", hex(coremask)]
 
     def _find_thermal_zones(self):
         return [x for x in os.listdir(LinuxPlatform.THERMAL_BASE) if
@@ -503,8 +476,6 @@ class LinuxPlatform(UnixLikePlatform):
     def check_preliminaries(self):
         """Checks the system is in a suitable state for benchmarking"""
 
-        self._check_taskset_installed()
-        self._check_cpu_isolated()
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
@@ -610,60 +581,6 @@ class LinuxPlatform(UnixLikePlatform):
                 fatal("perf profiler sample rate >1 p/s. "
                       "Krun was unable to adjust it.\nFailing command:\n  %s"
                       % cmd)
-
-
-    def _check_taskset_installed(self):
-        from distutils.spawn import find_executable
-        if not find_executable("taskset"):
-            fatal("taskset not installed. Krun needs this to pin the benchmarks to an isolated CPU")
-
-    def _check_cpu_isolated(self):
-        """Attempts to detect an isolated CPU to run benchmarks on"""
-
-        # XXX Isolating the CPU will not prevent kernel threads running.
-        # We *may* be able to prevent atleast some kernel threads running,
-        # but it seems cset (the facility to do this on Linux) is currently
-        # broken on Debian (and perhaps elsewhere too). Bug filed at Debian:
-        # http://www.mail-archive.com/debian-bugs-dist%40lists.debian.org/msg1349750.html
-
-        with open(LinuxPlatform.KERNEL_ARGS_FILE) as fh:
-            all_args = fh.read().strip()
-
-        args = all_args.split(" ")
-        for arg in args:
-            if '=' not in arg:
-                continue
-
-            k, v = arg.split("=", 1)
-
-            if k != "isolcpus":
-                continue
-            else:
-                if "," in v:
-                    debug("Multiple isolated CPUs detected: %s" % v)
-                    vs = v.split(",")
-                    isol_cpu = int(random.choice(vs))
-                    debug("Chose (at random) to isolate CPU %d" % isol_cpu)
-                else:
-                    isol_cpu = int(v)
-                    debug("Detected sole isolated CPU %d" % isol_cpu)
-                break
-        else:
-            self._fatal_kernel_arg(
-                "isolcpus=X",
-                "Krun failed to detect an isolated CPU!",
-                "Choose X > 0. When the system comes up, check `ps -Pef`.")
-
-        if isol_cpu == 0:
-            self._fatal_kernel_arg(
-                "isolcpus=X",
-                "Krun detected CPU 0 as the isolated CPU.\n"
-                "We reccommend using another CPU in case the first CPU "
-                "is ever special-cased in the kernel.",
-                "Choose X > 0")
-
-        self.isolated_cpu = isol_cpu
-
 
     def _check_cpu_governor(self):
         """Checks the right CPU governor is in effect
