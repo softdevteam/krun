@@ -164,3 +164,44 @@ def test_skip0007():
         config.should_skip("wobble")
 
     assert e.value.message == "bad benchmark key: wobble"
+
+def test_skip0008():
+    config = Config()
+    config.SKIP = ["*:SomeVM:*", "fasta:JRubyTruffle:default-ruby"]
+
+    assert config.should_skip("fasta:JRubyTruffle:default-ruby")
+
+def test_skip0009():
+    config = Config()
+    config.SKIP = ["*:SomeVM:*",
+                   "fasta:JRubyTruffle:default-ruby",
+                   "bench:*:*",
+                   "bench:vm:skipvariant",
+                   "*:*:skipvariant",
+                   ]
+
+    assert config.should_skip("fasta:JRubyTruffle:default-ruby")
+    assert not config.should_skip("fasta:JRubyTruffle:default-ruby2")
+    assert config.should_skip("bench:lala:hihi")
+    assert config.should_skip("bench:lala:hihi2")
+    assert not config.should_skip("bench1:lala:hihi")
+    assert config.should_skip("bench1:lala:skipvariant")
+    assert config.should_skip("bench1:lala2:skipvariant")
+
+def test_skip0010():
+    config = Config()
+    config.SKIP = ["*:SomeVM:*",
+                   "fasta:JRubyTruffle:default-ruby",
+                   "bench:*:*",
+                   "bench:vm:skipvariant",
+                   "*:*:skipvariant",
+                   "*:*:*",  # everything should be skipped due to this
+                   ]
+
+    import uuid
+    def rand_str():
+        return uuid.uuid4().hex
+
+    for i in xrange(25):
+        key = "%s:%s:%s" % tuple([rand_str() for x in xrange(3)])
+        assert config.should_skip(key)
