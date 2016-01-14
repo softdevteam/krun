@@ -24,7 +24,7 @@ class TestScheduler(BaseKrunTest):
 
 
     def test_add_del_job(self, mock_platform):
-        sched = ExecutionScheduler(Config("krun/tests/example.krun"),
+        sched = ExecutionScheduler(Config(os.path.join(TEST_DIR, "example.krun")),
                                    mock_platform.mailer,
                                    mock_platform, resume=False,
                                    reboot=True, dry_run=False,
@@ -40,7 +40,7 @@ class TestScheduler(BaseKrunTest):
 
 
     def test_build_schedule(self, mock_platform):
-        sched = ExecutionScheduler(Config("krun/tests/example.krun"),
+        sched = ExecutionScheduler(Config(os.path.join(TEST_DIR, "example.krun")),
                                    mock_platform.mailer,
                                    mock_platform, resume=False,
                                    reboot=True, dry_run=True,
@@ -60,7 +60,7 @@ class TestScheduler(BaseKrunTest):
 
 
     def test_part_complete_schedule(self, mock_platform):
-        sched = ExecutionScheduler(Config("krun/tests/quick.krun"),
+        sched = ExecutionScheduler(Config(os.path.join(TEST_DIR, "quick.krun")),
                                    mock_platform.mailer,
                                    mock_platform, resume=True,
                                    reboot=True, dry_run=True,
@@ -72,7 +72,7 @@ class TestScheduler(BaseKrunTest):
     def test_etas_dont_agree_with_schedule(self, mock_platform):
         """ETAs don't exist for all jobs for which there is iterations data"""
 
-        sched = ExecutionScheduler(Config("krun/tests/broken_etas.krun"),
+        sched = ExecutionScheduler(Config(os.path.join(TEST_DIR, "broken_etas.krun")),
                                    mock_platform.mailer, mock_platform,
                                    resume=True, reboot=False, dry_run=True,
                                    started_by_init=False)
@@ -85,12 +85,12 @@ class TestScheduler(BaseKrunTest):
 
 
     def test_run_schedule(self, monkeypatch, mock_platform):
-        json_file = "krun/tests/example_results.json.bz2"
+        json_file = os.path.join(TEST_DIR, "example_results.json.bz2")
         def dummy_shell_cmd(text):
             pass
         monkeypatch.setattr(subprocess, 'call', dummy_shell_cmd)
         monkeypatch.setattr(krun.util, 'run_shell_cmd', dummy_shell_cmd)
-        config = Config("krun/tests/example.krun")
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
         sched = ExecutionScheduler(config,
                                    mock_platform.mailer,
@@ -102,7 +102,7 @@ class TestScheduler(BaseKrunTest):
         sched.run()
         assert len(sched) == 0
 
-        results = Results(Config("krun/tests/example.krun"),
+        results = Results(Config(os.path.join(TEST_DIR, "example.krun")),
                           mock_platform, results_file=json_file)
 
         for k, execs in results.data.iteritems():
@@ -132,7 +132,7 @@ class TestScheduler(BaseKrunTest):
         monkeypatch.setattr(os, "execv", dummy_execv)
         monkeypatch.setattr(subprocess, "call", dummy_shell_cmd)
         monkeypatch.setattr(krun.util, "run_shell_cmd", dummy_shell_cmd)
-        config = Config("krun/tests/example.krun")
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
         sched = ExecutionScheduler(config,
                                    mock_platform.mailer,
@@ -144,7 +144,7 @@ class TestScheduler(BaseKrunTest):
         with pytest.raises(AssertionError):
             sched.run()
         assert len(sched) == 7
-        os.unlink("krun/tests/example_results.json.bz2")
+        os.unlink(os.path.join(TEST_DIR, "example_results.json.bz2"))
 
     def test_queue_len0001(self, mock_platform):
         config_path = os.path.join(TEST_DIR, "more_complicated.krun")
