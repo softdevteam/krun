@@ -205,3 +205,11 @@ def test_skip0010():
     for i in xrange(25):
         key = "%s:%s:%s" % tuple([rand_str() for x in xrange(3)])
         assert config.should_skip(key)
+
+def test_temp_read_pause0001():
+    config = Config()
+    assert config.TEMP_READ_PAUSE == 60  # default
+
+def test_temp_read_pause0002():
+    config = Config(os.path.join(TEST_DIR, "example.krun"))
+    assert config.TEMP_READ_PAUSE == 1

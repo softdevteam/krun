@@ -48,3 +48,5 @@ SKIP=[
 ]
 
 N_EXECUTIONS = 2  # Number of fresh processes.
+
+TEMP_READ_PAUSE = 1
