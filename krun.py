@@ -9,6 +9,7 @@ usage: runner.py <config_file.krun>
 import argparse, json, logging, os, sys
 from logging import debug, info, warn
 import locale
+import time
 
 import krun.util as util
 from krun.config import Config
@@ -245,6 +246,16 @@ def main(parser):
         _, _, rc = util.run_shell_cmd("touch " + args.filename)
         if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)
+
+
+        info(("Wait %s secs to allow system to cool prior to "
+             "collecting initial temperature readings") %
+             config.TEMP_READ_PAUSE)
+
+        if args.develop or args.dry_run:
+            info("SIMULATED: time.sleep(%s)" % config.TEMP_READ_PAUSE)
+        else:
+            time.sleep(config.TEMP_READ_PAUSE)
 
         debug("Taking fresh initial temperature readings")
         platform.starting_temperatures = platform.take_temperature_readings()

@@ -26,6 +26,7 @@ class Config(object):
         self.filename = config_file
         self.HEAP_LIMIT = None
         self.STACK_LIMIT = None
+        self.TEMP_READ_PAUSE = 60
 
         if config_file is not None:
             self.read_from_file(config_file)
