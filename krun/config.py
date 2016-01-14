@@ -74,6 +74,8 @@ class Config(object):
         return self.filename[:-5] + "_results.json.bz2"
 
     def should_skip(self, this_key):
+        """Decides if 'this_key' is a benchmark key that will be skipped"""
+
         this_elems = this_key.split(":")
         if len(this_elems) != 3:
             raise ValueError("bad benchmark key: %s" % this_key)
@@ -84,11 +86,14 @@ class Config(object):
             # Should be triples of: bench * vm * variant
             assert len(skip_elems) == 3 and len(this_elems) == 3
 
+            # Don't mutate this_elems directly, as we need it
+            # fresh for future iterations.
+            this_elems_copy = this_elems[:]
             for i in range(3):
                 if skip_elems[i] == "*":
-                    this_elems[i] = "*"
+                    this_elems_copy[i] = "*"
 
-            if skip_elems == this_elems:
+            if skip_elems == this_elems_copy:
                 return True # skip
 
         return False
