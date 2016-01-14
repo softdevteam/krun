@@ -215,7 +215,7 @@ def main(parser):
         platform.check_preliminaries()
     else:
         # Needed to skip the use of certain tools and techniques.
-        # E.g. taskset on Linux, and switching user.
+        # E.g. switching user.
         warn("Not checking platform prerequisites due to developer mode")
         platform.developer_mode = True
 

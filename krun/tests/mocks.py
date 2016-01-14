@@ -59,9 +59,6 @@ class MockPlatform(BasePlatform):
     def change_user_args(self, user="root"):
         return "sudo"
 
-    def isolate_process_args(self):
-        pass
-
     def process_priority_args(self):
         return []
 
@@ -69,9 +66,6 @@ class MockPlatform(BasePlatform):
         return ""
 
     def _change_user_args(self):
-        return []
-
-    def _isolate_process_args(self):
         return []
 
     def _save_power(self):
