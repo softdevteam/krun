@@ -1,0 +1,95 @@
+import os
+import sys
+from krun.vm_defs import (PythonVMDef, LuaVMDef, JavaVMDef, GraalVMDef,
+		          PHPVMDef, JRubyTruffleVMDef, V8VMDef, NativeCodeVMDef,
+			  find_internal_jvmci_java_bin, PyPyVMDef)
+from krun import EntryPoint
+
+MAIL_TO = []
+MAX_MAILS = 2
+
+JDK8_HOME = "dummy"
+JDK8_BIN = os.path.join(JDK8_HOME, "bin", "java")
+
+HEAP_LIMIT = 2097152  # K == 2Gb
+STACK_LIMIT = 8192  # K
+
+VARIANTS = {
+    "default-c": EntryPoint("bench.so", subdir="c"),
+    "default-java": EntryPoint("KrunEntry", subdir="java"),
+    "default-lua": EntryPoint("bench.lua", subdir="lua"),
+    "default-python": EntryPoint("bench.py", subdir="python"),
+    "default-php": EntryPoint("bench.php", subdir="php"),
+    "default-ruby": EntryPoint("bench.rb", subdir="ruby"),
+    "default-javascript": EntryPoint("bench.js", subdir="javascript"),
+}
+
+ITERATIONS_ALL_VMS = 2000
+
+VMS = {
+    'C': {
+        'vm_def': NativeCodeVMDef(),
+        'variants': ['default-c'],
+        'n_iterations': ITERATIONS_ALL_VMS,
+
+    },
+	'PyPy': {
+		'vm_def': PyPyVMDef('work/pypy/pypy/goal/pypy-c'),
+		'variants': ['default-python'],
+		'n_iterations': ITERATIONS_ALL_VMS,
+	},
+	'Hotspot': {
+		'vm_def': JavaVMDef(JDK8_BIN),
+		'variants': ['default-java'],
+		'n_iterations': ITERATIONS_ALL_VMS,
+	},
+	'LuaJIT': {
+		'vm_def': LuaVMDef('work/luajit/src/luajit'),
+		'variants': ['default-lua'],
+		'n_iterations': ITERATIONS_ALL_VMS,
+	},
+	'V8': {
+		'vm_def': V8VMDef('work/v8/out/native/d8'),
+		'variants': ['default-javascript'],
+		'n_iterations': ITERATIONS_ALL_VMS,
+	},
+	'CPython': {
+		'vm_def': PythonVMDef('work/cpython-inst/bin/python'),
+		'variants': ['default-python'],
+		'n_iterations': ITERATIONS_ALL_VMS,
+	},
+    'Graal': {
+        'vm_def': "dummy",
+        'variants': ['default-java'],
+        'n_iterations': ITERATIONS_ALL_VMS,
+    },
+    'HHVM': {
+        'vm_def': PHPVMDef('work/hhvm/hphp/hhvm/php'),
+        'variants': ['default-php'],
+        'n_iterations': ITERATIONS_ALL_VMS,
+    },
+    'JRubyTruffle' : {
+        'vm_def': JRubyTruffleVMDef('work/jruby/bin/jruby', java_path="dummy"),
+        'variants': ['default-ruby'],
+        'n_iterations': ITERATIONS_ALL_VMS,
+    },
+}
+
+
+BENCHMARKS = {
+    'binarytrees': 25,
+    'richards': 500,
+    'spectralnorm': 3,
+    'nbody': 15,
+    'fasta': 100,
+    'fannkuch_redux': 200,
+}
+
+SKIP= [
+    "fasta:JRubyTruffle:default-ruby",
+    "richards:HHVM:default-php",
+    "spectralnorm:JRubyTruffle:default-ruby",
+    "*:CPython:*",
+]
+
+N_EXECUTIONS = 2

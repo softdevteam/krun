@@ -2,6 +2,10 @@ from krun.tests.mocks import MockPlatform, MockMailer
 from abc import ABCMeta
 from krun.platform import detect_platform
 import pytest
+import os
+
+
+TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def subst_env_arg(lst, var):

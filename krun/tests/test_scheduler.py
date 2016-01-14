@@ -6,7 +6,7 @@ from krun.tests import BaseKrunTest
 import krun.util
 
 import os, pytest, subprocess
-
+from krun.tests import TEST_DIR
 
 class TestScheduler(BaseKrunTest):
     """Test the job scheduler."""
@@ -145,3 +145,13 @@ class TestScheduler(BaseKrunTest):
             sched.run()
         assert len(sched) == 7
         os.unlink("krun/tests/example_results.json.bz2")
+
+    def test_queue_len0001(self, mock_platform):
+        config_path = os.path.join(TEST_DIR, "more_complicated.krun")
+        sched = ExecutionScheduler(Config(config_path),
+                                   mock_platform.mailer,
+                                   mock_platform, resume=False,
+                                   reboot=True, dry_run=False,
+                                   started_by_init=False)
+        sched.build_schedule()
+        assert len(sched) == 90  # tking into account skips

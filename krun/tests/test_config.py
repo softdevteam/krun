@@ -8,7 +8,7 @@ from distutils.spawn import find_executable
 
 
 JAVA = find_executable("java")
-TEST_DIR = os.path.abspath(os.path.dirname(__file__))
+from krun.tests import TEST_DIR
 
 def touch(fname):
     with open(fname, 'a'):
