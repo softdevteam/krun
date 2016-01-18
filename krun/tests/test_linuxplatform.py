@@ -27,6 +27,7 @@ class TestLinuxPlatform(BaseKrunTest):
             "CONFIG_NO_HZ_PERIODIC": "n",
             "CONFIG_NO_HZ_IDLE": "n",
             "CONFIG_NO_HZ_FULL": "y",
+            "CONFIG_NO_HZ_FULL_ALL": "y",
         }
 
         mock_open_kernel_config_file = mk_dummy_kernel_config_fn(opts)
@@ -43,6 +44,7 @@ class TestLinuxPlatform(BaseKrunTest):
             "CONFIG_NO_HZ_PERIODIC": "n",
             "CONFIG_NO_HZ_IDLE": "y",
             "CONFIG_NO_HZ_FULL": "n",
+            "CONFIG_NO_HZ_FULL_ALL": "n",
         }
 
         mock_open_kernel_config_file = mk_dummy_kernel_config_fn(opts)
@@ -54,12 +56,14 @@ class TestLinuxPlatform(BaseKrunTest):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_tickless0003(self, monkeypatch, platform):
-        """A kernel config indicating >1 active tickless mode should exit"""
+        """A kernel config making no sense, should exit"""
 
+        # This contrived input appears to have two different tick modes enabled
         opts = {
-            "CONFIG_NO_HZ_PERIODIC": "y",
+            "CONFIG_NO_HZ_PERIODIC": "n",
             "CONFIG_NO_HZ_IDLE": "y",
-            "CONFIG_NO_HZ_FULL": "n",
+            "CONFIG_NO_HZ_FULL": "y",
+            "CONFIG_NO_HZ_FULL_ALL": "y",
         }
 
         mock_open_kernel_config_file = mk_dummy_kernel_config_fn(opts)
@@ -71,12 +75,13 @@ class TestLinuxPlatform(BaseKrunTest):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_tickless0004(self, monkeypatch, platform):
-        """A kernel config indicating no active tickless mode should exit"""
+        """A kernel config indicating no tick mode should exit"""
 
         opts = {
             "CONFIG_NO_HZ_PERIODIC": "n",
             "CONFIG_NO_HZ_IDLE": "n",
             "CONFIG_NO_HZ_FULL": "n",
+            "CONFIG_NO_HZ_FULL_ALL": "n",
         }
 
         mock_open_kernel_config_file = mk_dummy_kernel_config_fn(opts)
@@ -86,6 +91,34 @@ class TestLinuxPlatform(BaseKrunTest):
 
         with pytest.raises(SystemExit):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
+
+    def test_tickless0005(self, monkeypatch, platform, caplog):
+        """Adaptive-tick mode CPUs should not be overridden"""
+
+        def dummy_get_kernel_cmdline(_self):
+            # nohz_full overrides adaptive-tick CPU list
+            return "BOOT_IMAGE=/boot/blah nohz_full=1"
+
+        opts = {
+            "CONFIG_NO_HZ_PERIODIC": "n",
+            "CONFIG_NO_HZ_IDLE": "n",
+            "CONFIG_NO_HZ_FULL": "y",
+            "CONFIG_NO_HZ_FULL_ALL": "y",
+        }
+
+        mock_open_kernel_config_file = mk_dummy_kernel_config_fn(opts)
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_open_kernel_config_file",
+                            mock_open_kernel_config_file)
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_get_kernel_cmdline",
+                            dummy_get_kernel_cmdline)
+
+        with pytest.raises(SystemExit):
+            krun.platform.LinuxPlatform._check_tickless_kernel(platform)
+
+        assert "Adaptive-ticks CPUs overridden on kernel command line" \
+            in caplog.text()
 
     def test_bench_cmdline_adjust0001(self, platform):
         expect = ['nice', '-20', 'env', 'LD_LIBRARY_PATH=']
