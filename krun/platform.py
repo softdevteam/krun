@@ -420,6 +420,31 @@ class LinuxPlatform(UnixLikePlatform):
     KERNEL_ARGS_FILE = "/proc/cmdline"
     ASLR_FILE = "/proc/sys/kernel/randomize_va_space"
 
+    # Expected tickless kernel config
+    #
+    # Futher info:
+    #   http://lwn.net/Articles/549580/
+    #   https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt
+    EXPECT_TICKLESS_CONFIG = {
+        # Scheduler ticks always occur. Rare in modern linux.
+        "CONFIG_NO_HZ_PERIODIC": False,
+
+        # Omit scheduler ticks when CPU is idle.
+        "CONFIG_NO_HZ_IDLE": False,
+
+        # Omit scheduler ticks when an adaptive tick CPU has only one
+        # runnable process. This enbles the tickless functionality, but the
+        # system admin must manually specify on adaptive-tick CPUs via
+        # the kernel command line. By default, no CPUs are adaptive tick,
+        # so we insist also upon CONFIG_NO_HZ_FULL_ALL.
+        "CONFIG_NO_HZ_FULL": True,
+
+        # Same as CONFIG_NO_HZ_FULL, but forces all CPUs apart from the
+        # boot CPU into adaptive tick mode. This is what we want to
+        # see enabled. Note that you cannot have all CPUs in adaptive-tick.
+        "CONFIG_NO_HZ_FULL_ALL": True,
+    }
+
     def __init__(self, mailer):
         self.zones = self._find_thermal_zones()
         self.num_cpus = self._get_num_cpus()
@@ -506,24 +531,18 @@ class LinuxPlatform(UnixLikePlatform):
 
         return open(config_path, "r")
 
+    def _get_kernel_cmdline(self):
+        with open(self.KERNEL_ARGS_FILE, "r") as fh:
+            cmdline = fh.read().strip()
+        return cmdline
+
     def _check_tickless_kernel(self):
         """Check the Linux kernel was built for full tickless operation."""
 
         debug("Checking linux kernel is tickless")
 
-        # These are the variables of interest. They are described well here:
-        # http://lwn.net/Articles/549580/
-        # and here:
-        # https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt
-        modes = {
-            # Scheduler ticks always occur. Rare in modern linux.
-            "CONFIG_NO_HZ_PERIODIC": False,
-            # Omit scheduler ticks when CPU is idle.
-            "CONFIG_NO_HZ_IDLE": False,
-            # Omit scheduler ticks when CPU has only one runnable process.
-            # This is the one we want to see enabled.
-            "CONFIG_NO_HZ_FULL": False,
-        }
+        # Start with all keys mapping to False
+        modes = {k: False for k in self.EXPECT_TICKLESS_CONFIG.iterkeys()}
 
         # Walk kernel config looking for a lines describing tickless operation
         fh = LinuxPlatform._open_kernel_config_file()
@@ -547,19 +566,19 @@ class LinuxPlatform(UnixLikePlatform):
 
         tickless_info_msg = LinuxPlatform._tickless_config_info_str(modes)
 
-        # These settings should be mutually exclusive.
-        enabled = [x for x in modes.itervalues() if x]
-        if len(enabled) != 1:
-            msg = "Tickless settings in kernel make no sense.\n"
-            msg += tickless_info_msg + "\n"
-            msg += "Only one of the three should be set."
+        if modes != self.EXPECT_TICKLESS_CONFIG:
+            msg = "Linux kernel tickless settings are not as expected.\n"
+            msg += "Did you install a tickless kernel?\n"
+            msg += "Expect: %s\n" % self.EXPECT_TICKLESS_CONFIG
+            msg += "Got: %s\n" % modes
             fatal(msg)
 
-
-        if not modes["CONFIG_NO_HZ_FULL"]:
-            msg = "Linux kernel is not tickless.\n"
-            msg += tickless_info_msg + "\n"
-            msg += "Please compile and boot a tickless kernel (CONFIG_HZ_FULL=y)"
+        # Finally, check the adaptive tick CPUs were not overrideen
+        cmdline = self._get_kernel_cmdline()
+        if "nohz_full" in cmdline:
+            msg = "Adaptive-ticks CPUs overridden on kernel command line:\n"
+            msg += "%s\n" % cmdline
+            msg += "Please remove 'nohz_full' from the kernel command line"
             fatal(msg)
 
         debug(tickless_info_msg)
