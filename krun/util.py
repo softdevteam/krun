@@ -103,7 +103,7 @@ def get_session_info(config):
 
     platform = detect_platform(None)
     sched = ExecutionScheduler(config, None, platform)
-    skipped_keys = sched.build_schedule()
+    non_skipped_keys, skipped_keys = sched.build_schedule()
 
     n_proc_execs = 0
     n_in_proc_iters = 0
@@ -121,6 +121,7 @@ def get_session_info(config):
         "n_proc_execs": n_proc_execs,
         "n_in_proc_iters": n_in_proc_iters,
         "skipped_keys": skipped_keys,
+        "non_skipped_keys": non_skipped_keys,
     }
 
 
@@ -134,7 +135,17 @@ def print_session_info(config):
 
     print("Counts:")
     print("  Total process executions:    %10d" % info["n_proc_execs"])
-    print("  Total in-process iterations: %10d\n" % info["n_in_proc_iters"])
+    print("  Total in-process iterations: %10d" % info["n_in_proc_iters"])
+    print("  Total unique benchmark keys: %10d\n"
+          % len(info["non_skipped_keys"]))
+
+    print("Non-skipped keys:")
+    if len(info["non_skipped_keys"]) > 0:
+        for k in info["non_skipped_keys"]:
+            print("  %s" % k)
+    else:
+        print("  All keys skipped!")
+    print("")
 
     print("Skipped keys:")
     if len(info["skipped_keys"]) > 0:

@@ -102,6 +102,14 @@ def test_get_session_info0001():
     assert info["n_in_proc_iters"] == 40
     assert info["skipped_keys"] == set()
 
+    expect_non_skipped_keys = set([
+        "dummy:Java:default-java",
+        "nbody:Java:default-java",
+        "dummy:CPython:default-python",
+        "nbody:CPython:default-python",
+    ])
+    assert info["non_skipped_keys"] == expect_non_skipped_keys
+
 
 def test_get_session_info0002():
     path = os.path.join(TEST_DIR, "more_complicated.krun")
@@ -128,3 +136,55 @@ def test_get_session_info0002():
         "fannkuch_redux:CPython:default-python",
     ]
     assert info["skipped_keys"] == set(expect_skip_keys)
+
+    expect_non_skipped_keys = [
+        'richards:C:default-c',
+        'nbody:HHVM:default-php',
+        'binarytrees:C:default-c',
+        'binarytrees:PyPy:default-python',
+        'spectralnorm:Hotspot:default-java',
+        'fannkuch_redux:Graal:default-java',
+        'nbody:JRubyTruffle:default-ruby',
+        'fasta:Graal:default-java',
+        'binarytrees:Graal:default-java',
+        'fasta:C:default-c',
+        'binarytrees:JRubyTruffle:default-ruby',
+        'spectralnorm:HHVM:default-php',
+        'nbody:PyPy:default-python',
+        'fannkuch_redux:C:default-c',
+        'fannkuch_redux:JRubyTruffle:default-ruby',
+        'fannkuch_redux:Hotspot:default-java',
+        'spectralnorm:PyPy:default-python',
+        'fasta:PyPy:default-python',
+        'binarytrees:Hotspot:default-java',
+        'nbody:C:default-c',
+        'richards:JRubyTruffle:default-ruby',
+        'fasta:V8:default-javascript',
+        'nbody:V8:default-javascript',
+        'richards:V8:default-javascript',
+        'nbody:LuaJIT:default-lua',
+        'richards:Hotspot:default-java',
+        'fasta:LuaJIT:default-lua',
+        'binarytrees:LuaJIT:default-lua',
+        'fannkuch_redux:V8:default-javascript',
+        'fannkuch_redux:LuaJIT:default-lua',
+        'richards:Graal:default-java',
+        'binarytrees:V8:default-javascript',
+        'spectralnorm:LuaJIT:default-lua',
+        'spectralnorm:C:default-c',
+        'fannkuch_redux:HHVM:default-php',
+        'fannkuch_redux:PyPy:default-python',
+        'binarytrees:HHVM:default-php',
+        'fasta:HHVM:default-php',
+        'spectralnorm:V8:default-javascript',
+        'spectralnorm:Graal:default-java',
+        'nbody:Graal:default-java',
+        'richards:LuaJIT:default-lua',
+        'nbody:Hotspot:default-java',
+        'richards:PyPy:default-python',
+        'fasta:Hotspot:default-java'
+    ]
+    assert info["non_skipped_keys"] == set(expect_non_skipped_keys)
+
+    # There should be no overlap in the used and skipped keys
+    assert info["skipped_keys"].intersection(info["non_skipped_keys"]) == set()
