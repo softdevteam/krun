@@ -210,9 +210,9 @@ printed to STDOUT.
 Valid debug levels are: `DEBUG`, `INFO`, `WARN`, `DEBUG`,
 `CRITICAL`, `ERROR`.
 
-The `--info` switch reports the total number of process executions and
-in-process iterations that would be run using the specified config file. It
-also prints the benchmark keys which would be skipped.
+The `--info` switch reports various statistics about the setup described in the
+specified config file, such as the total number of process executions and which
+benchmark keys will be skipped etc.
 
 ## Running in reboot and resume modes
 

@@ -181,9 +181,9 @@ class ExecutionScheduler(object):
     def build_schedule(self):
         """Builds a queue of process execution jobs.
 
-        Returns a set of keys which were skipped."""
+        Returns two sets: non_skipped_keys, skipped_keys"""
 
-        skipped = set()
+        skipped_keys, non_skipped_keys = set(), set()
 
         one_exec_scheduled = False
         eta_avail_job = None
@@ -193,13 +193,14 @@ class ExecutionScheduler(object):
                     for variant in vm_info["variants"]:
                         job = ExecutionJob(self, vm_name, vm_info, bmark, variant, param)
                         if not self.config.should_skip(job.key):
+                            non_skipped_keys |= set([job.key])
                             if one_exec_scheduled and not eta_avail_job:
                                 # first job of second executions eta becomes known.
                                 eta_avail_job = job
                                 self.set_eta_avail()
                             self.add_job(job)
                         else:
-                            skipped |= set([job.key])
+                            skipped_keys |= set([job.key])
                             if not one_exec_scheduled:
                                 debug("%s is in skip list. Not scheduling." %
                                       job.key)
@@ -224,7 +225,7 @@ class ExecutionScheduler(object):
                     util.log_and_mail(self.mailer, error,
                                       "Fatal Krun Error",
                                       msg, bypass_limiter=True, exit=True)
-        return skipped
+        return non_skipped_keys, skipped_keys
 
     def _remove_previous_execs_from_schedule(self):
         for key in self.results.data:
