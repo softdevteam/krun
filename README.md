@@ -9,7 +9,7 @@ The example here contains two benchmark programs (*nbody* and *dummy*),
 executed on two VMs (*cPython* and a standard *JVM* such as HotSpot).
 Each benchmark is run for 5 iterations on the same VM, then the VM is
 restarted and the benchmark is re-run for another 5 iterations.
-We say that the experiment runs 2 *executions* and 5 *iterations* of
+We say that the experiment runs 2 *process executions* and 5 *in-process iterations* of
 each benchmark.
 
 This configuration can be found in the file `examples/example.krun`.
@@ -123,7 +123,7 @@ You should see a log scroll past, and results will be stored in the file:
 
 ## Using a Krun results file
 
-Krun generates a bzipped JSON file containing results of all executions.
+Krun generates a bzipped JSON file containing results of all process executions.
 The structure of the JSON results is as follows:
 
 ```python
@@ -131,8 +131,8 @@ The structure of the JSON results is as follows:
     'audit': '',  # A dict containing platform information
     'config': '', # A unicode object containing your Krun configuration
     'data': {     # A dict object containing timing results
-        u'bmark:VM:variant': [  # A list of lists of timing results
-            [ ... ], ...        # One list per execution
+        u'bmark:VM:variant': [  # A list of lists of in-process iteration times
+            [ ... ], ...        # One list per process execution
         ]
     },
     'reboots': N, # An int containing the number of reboots that have
@@ -141,14 +141,14 @@ The structure of the JSON results is as follows:
                   # benchmarking machine has rebooted the correct number
                   # of times. It can be safely ignored by users.
     'starting_temperatures': [ ... ], # Temperatures recorded at the beginning
-                  # of the experiment. Used before each execution to decide if
+                  # of the experiment. Used before each process execution to decide if
                   # the system is running much hotter than before. In this
                   # case we wait to allow the system to cool. The ordering
                   # and meanings of the temperatures in the list are platform
                   # and system specific. This information can be safely
                   # ignored by users.
     'eta_estimates': {u"bmark:VM:variant": [t_0, t_1, ...], ...} # A dict mapping
-                  # benchmark keys to rough execution times. Used internally,
+                  # benchmark keys to rough process execution times. Used internally,
                   # users can ignore this.
 }
 ```
@@ -210,19 +210,23 @@ printed to STDOUT.
 Valid debug levels are: `DEBUG`, `INFO`, `WARN`, `DEBUG`,
 `CRITICAL`, `ERROR`.
 
+The `--info` switch reports the total number of process executions and
+in-process iterations that would be run using the specified config file. It
+also prints the benchmark keys which would be skipped.
+
 ## Running in reboot and resume modes
 
 Krun can resume an interrupted benchmark by passing in the `--resume`
 flag.
-This will read and re-use results from previous executions of your
-benchmarks, and run the remaining executions detailed in your configuration
+This will read and re-use results from previous process executions of your
+benchmarks, and run the remaining process executions detailed in your configuration
 file.
 
 ```bash
 $ PYTHONPATH=../ ../krun.py --resume example.krun
 ```
 
-You may wish to use this facility to reboot after every execution.
+You may wish to use this facility to reboot after every process execution.
 To do this, you can pass in the `--reboot` flag when you start Krun:
 
 ```bash

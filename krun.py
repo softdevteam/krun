@@ -130,6 +130,9 @@ def create_arg_parser():
     parser.add_argument("--develop", action="store_true",
                         dest="develop", required=False,
                         help=("Enable developer mode"))
+    parser.add_argument("--info", action="store_true",
+                        help=("Print session info for specified "
+                              "config file and exit")),
     filename_help = ("Krun configuration or results file. FILENAME should" +
                      " be a configuration file when running benchmarks " +
                      "(e.g. experiment.krun) and a results file " +
@@ -175,6 +178,13 @@ def main(parser):
         util.fatal('Krun configuration file %s does not exist.' % args.filename)
 
     config = Config(args.filename)
+
+    if args.info:
+        # Info mode doesn't run the experiment.
+        # Just prints some metrics and exits.
+        util.print_session_info(config)
+        return
+
     attach_log_file(config, args.resume)
 
     out_file = config.results_filename()

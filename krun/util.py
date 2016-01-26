@@ -91,3 +91,54 @@ def spawn_sanity_check(platform, entry_point, vm_def,
 def assign_platform(config, platform):
     for vm_name, vm_info in config.VMS.items():
         vm_info["vm_def"].set_platform(platform)
+
+
+def get_session_info(config):
+    """Gets information about the session (for --info)
+
+    Separated from print_session_info for ease of testing"""
+
+    from krun.scheduler import ScheduleEmpty, ExecutionScheduler
+    from krun.platform import detect_platform
+
+    platform = detect_platform(None)
+    sched = ExecutionScheduler(config, None, platform)
+    skipped_keys = sched.build_schedule()
+
+    n_proc_execs = 0
+    n_in_proc_iters = 0
+
+    while True:
+        try:
+            job = sched.next_job()
+        except ScheduleEmpty:
+            break
+
+        n_proc_execs += 1
+        n_in_proc_iters += job.vm_info["n_iterations"]
+
+    return {
+        "n_proc_execs": n_proc_execs,
+        "n_in_proc_iters": n_in_proc_iters,
+        "skipped_keys": skipped_keys,
+    }
+
+
+def print_session_info(config):
+    """Prints information about the session (for --info)"""
+
+    info = get_session_info(config)
+
+    print("\nSession Info")
+    print("============\n")
+
+    print("Counts:")
+    print("  Total process executions:    %10d" % info["n_proc_execs"])
+    print("  Total in-process iterations: %10d\n" % info["n_in_proc_iters"])
+
+    print("Skipped keys:")
+    if len(info["skipped_keys"]) > 0:
+        for k in info["skipped_keys"]:
+            print("  %s" % k)
+    else:
+        print("  No keys skipped")
