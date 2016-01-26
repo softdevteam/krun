@@ -179,6 +179,12 @@ class ExecutionScheduler(object):
         self.results.eta_estimates[key].append(exec_time)
 
     def build_schedule(self):
+        """Builds a queue of process execution jobs.
+
+        Returns a set of keys which were skipped."""
+
+        skipped = set()
+
         one_exec_scheduled = False
         eta_avail_job = None
         for exec_n in xrange(self.config.N_EXECUTIONS):
@@ -193,6 +199,7 @@ class ExecutionScheduler(object):
                                 self.set_eta_avail()
                             self.add_job(job)
                         else:
+                            skipped |= set([job.key])
                             if not one_exec_scheduled:
                                 debug("%s is in skip list. Not scheduling." %
                                       job.key)
@@ -217,6 +224,7 @@ class ExecutionScheduler(object):
                     util.log_and_mail(self.mailer, error,
                                       "Fatal Krun Error",
                                       msg, bypass_limiter=True, exit=True)
+        return skipped
 
     def _remove_previous_execs_from_schedule(self):
         for key in self.results.data:

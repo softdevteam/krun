@@ -2,12 +2,15 @@ from krun.util import (format_raw_exec_results,
                        log_and_mail, fatal,
                        check_and_parse_execution_results,
                        run_shell_cmd,
-                       ExecutionFailed)
+                       ExecutionFailed, get_session_info)
 from krun.tests.mocks import MockMailer
+from krun.tests import TEST_DIR
+from krun.config import Config
 
 import json
 import logging
 import pytest
+import os
 
 
 def test_fatal(capsys, caplog):
@@ -88,3 +91,40 @@ stderr:
 --------------------------------------------------
 """
     assert excinfo.value.message == expected
+
+
+def test_get_session_info0001():
+    path = os.path.join(TEST_DIR, "example.krun")
+    config = Config(path)
+    info = get_session_info(config)
+
+    assert info["n_proc_execs"] == 8
+    assert info["n_in_proc_iters"] == 40
+    assert info["skipped_keys"] == set()
+
+
+def test_get_session_info0002():
+    path = os.path.join(TEST_DIR, "more_complicated.krun")
+    config = Config(path)
+    info = get_session_info(config)
+
+    # 6 benchmarks, 9 VMs, skipped 3 exact keys, and all 6 CPython keys
+    # Then two repetitions (process executions) of all of the above.
+    expect_proc_execs = (6 * 9 - 3 - 6) * 2
+    assert info["n_proc_execs"] == expect_proc_execs
+
+    # 2000 in-process iterations
+    assert info["n_in_proc_iters"] == expect_proc_execs * 2000
+
+    expect_skip_keys = [
+        "fasta:JRubyTruffle:default-ruby",
+        "richards:HHVM:default-php",
+        "spectralnorm:JRubyTruffle:default-ruby",
+        "binarytrees:CPython:default-python",
+        "richards:CPython:default-python",
+        "spectralnorm:CPython:default-python",
+        "nbody:CPython:default-python",
+        "fasta:CPython:default-python",
+        "fannkuch_redux:CPython:default-python",
+    ]
+    assert info["skipped_keys"] == set(expect_skip_keys)
