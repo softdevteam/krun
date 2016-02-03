@@ -18,14 +18,38 @@ def make_dummy_get_apm_output_fn(output):
 class TestOpenBSDPlatform(BaseKrunTest):
     """Check stuff specific to OpenBSD in krun.platform"""
 
-    def test_read_temperatures0001(self, platform):
+    def test_take_temperature_readings0001(self, platform):
+        """Test live readings off test machine"""
+
         temps = platform.take_temperature_readings()
         assert type(temps) is dict
-        assert len(temps) > 0  # likely every system has at least one sensor
         assert all([x.startswith("hw.sensors.") for x in temps.iterkeys()])
         # check temperature readings are within reasonable parameters
+        assert all([type(v) == float for v in temps.itervalues()])
         assert all([10 <= v <= 100 for v in temps.itervalues()])
 
+    def test_take_temperature_readings0002(self, platform, monkeypatch):
+        """Test with fake readings"""
+
+        platform.zones = ["zone1", "zone2", "zone3"]
+
+        def fake_get_sysctl_temperature_output(self):
+            line1 = "hw.sensors.cpu0.temp0=64.00 degC"
+            line2 = "hw.sensors.acpitz0.temp0=65.58 degC (zone temperature)"
+            return "%s\n%s" % (line1, line2)
+
+        monkeypatch.setattr(krun.platform.OpenBSDPlatform,
+                            "_get_sysctl_temperature_output",
+                            fake_get_sysctl_temperature_output)
+
+        # Results were already in degrees C
+        expect = {
+            "hw.sensors.cpu0.temp0": 64.00,
+            "hw.sensors.acpitz0.temp0": 65.58,
+        }
+        got = platform.take_temperature_readings()
+
+        assert expect == got
 
     def test_read_broken_temperatures0001(self, monkeypatch, platform, caplog):
         # Unit is missing (expect degC suffix)

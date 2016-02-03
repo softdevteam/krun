@@ -24,9 +24,9 @@ LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkruntime")
 class BasePlatform(object):
     __metaclass__ = ABCMeta
 
-    # We will wait until the zones cools to within TEMP_THRESHOLD_PERCENT
-    # percent warmer than where we started.
-    TEMP_THRESHOLD_PERCENT = 10
+    # Each temperature sensor must cool to its starting temperature plus
+    # TEMP_THRESHOLD_DEGREES. An absolute value in degrees centigrade.
+    TEMP_THRESHOLD_DEGREES = 5
 
     TEMP_MANDATORY_WAIT = 1
     TEMP_POLL_FREQ = 10                 # seconds between polls
@@ -65,11 +65,10 @@ class BasePlatform(object):
         temperature thresholds."""
 
         self._starting_temperatures = readings_dct
-        for name, val in readings_dct.iteritems():
-            self.temperature_thresholds[name] = \
-                int(val + val * (1.0 / self.TEMP_THRESHOLD_PERCENT))
+        self.temperature_thresholds = {k: v + self.TEMP_THRESHOLD_DEGREES for
+                                       k, v in readings_dct.iteritems()}
 
-        debug("Setstart temperatures: %s" % readings_dct)
+        debug("Set start temperatures: %s" % readings_dct)
         debug("Temperatures thresholds: %s" % self.temperature_thresholds)
 
     def has_cooled(self):
@@ -95,9 +94,8 @@ class BasePlatform(object):
             if readings[name] > threshold:
                 # This reading is too hot
                 reason = ("Temperature reading '%s' started at %d but is now %d. " \
-                          "Needs to cool to within %d%% (%d)" %
-                          (name, start_val, now_val,
-                           self.TEMP_THRESHOLD_PERCENT, threshold))
+                          "Needs to cool to %s or lower" %
+                          (name, start_val, now_val, threshold))
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
@@ -159,6 +157,7 @@ class BasePlatform(object):
     # When porting to a new platform, implement the following:
     @abstractmethod
     def take_temperature_readings(self):
+        """Takes temperature readings in degrees centigrade"""
         pass
 
     @abstractmethod
@@ -377,6 +376,8 @@ class OpenBSDPlatform(UnixLikePlatform):
             # Typically the value element looks like:
             # "49.00 degC" or "48.00 degC (zone temperature)"
             # We will only concern ourself with the first two elements.
+            # Notice that the values are already reported in degrees
+            # centigrade, so we don't have to process them.
             if len(v_elems) < 2 or v_elems[1] != "degC":
                 fatal("sensor '%s' has an odd non-degC value: '%s'" % (k, v))
 
@@ -482,7 +483,9 @@ class LinuxPlatform(UnixLikePlatform):
             return int(fh.read())
 
     def take_temperature_readings(self):
-        return dict([(z, self._read_zone(z)) for z in self.zones])
+        # Linux thermal zones are reported in millidegrees celsius
+        # https://www.kernel.org/doc/Documentation/thermal/sysfs-api.txt
+        return {z: self._read_zone(z) / 1000.0 for z in self.zones}
 
     def _save_power(self):
         """Called when benchmarking is done, to save power"""

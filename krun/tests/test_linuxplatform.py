@@ -134,3 +134,32 @@ class TestLinuxPlatform(BaseKrunTest):
             ["myarg"], {"MYENV": "some_value"}), "LD_LIBRARY_PATH")
 
         assert args == expect
+
+    def test_take_temperature_readings0001(self, platform):
+        """Test live readings off test machine"""
+
+        temps = platform.take_temperature_readings()
+        assert type(temps) is dict
+        assert all([x.startswith("thermal_zone") for x in temps.iterkeys()])
+        # check temperature readings are within reasonable parameters
+        assert all([type(v) == float for v in temps.itervalues()])
+        assert all([10 <= v <= 100 for v in temps.itervalues()])
+
+    def test_take_temperature_readings0002(self, platform, monkeypatch):
+        platform.zones = ["zone1", "zone2", "zone3"]
+
+        def fake_read_zone(self, zone):
+            if zone == "zone1":
+                return 66123
+            elif zone == "zone2":
+                return 0
+            else:
+                return 100000
+
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_read_zone", fake_read_zone)
+
+        expect = {"zone1": 66.123, "zone2": 0.0, "zone3": 100.0}
+        got = platform.take_temperature_readings()
+
+        assert expect == got
