@@ -1,5 +1,6 @@
 from krun import LOGFILE_FILENAME_TIME_FORMAT
 from krun.config import Config
+from krun.env import EnvChangeAppend
 
 import os
 import pytest
@@ -213,3 +214,56 @@ def test_temp_read_pause0001():
 def test_temp_read_pause0002():
     config = Config(os.path.join(TEST_DIR, "example.krun"))
     assert config.TEMP_READ_PAUSE == 1
+
+
+def test_user_env0001():
+    config = Config(os.path.join(TEST_DIR, "env.krun"))
+    vm_def = config.VMS["CPython"]["vm_def"]
+
+    env = {}
+    vm_def.apply_env_changes([], env)
+    assert env == {
+        'ANOTHER_ENV': 'arbitrary_user_val',
+        'LD_LIBRARY_PATH': '/wibble/lib',
+    }
+
+
+def test_user_env0002():
+    config = Config(os.path.join(TEST_DIR, "env.krun"))
+    vm_def = config.VMS["CPython"]["vm_def"]
+
+    env = {"LD_LIBRARY_PATH": "zzz"}
+    vm_def.apply_env_changes([], env)
+    assert env == {
+        'ANOTHER_ENV': 'arbitrary_user_val',
+        'LD_LIBRARY_PATH': 'zzz:/wibble/lib',
+    }
+
+
+def test_user_env0003():
+    config = Config(os.path.join(TEST_DIR, "env.krun"))
+    vm_def = config.VMS["CPython"]["vm_def"]
+
+    env = {"LD_LIBRARY_PATH": "zzz"}
+
+    bench_env_changes = [EnvChangeAppend("LD_LIBRARY_PATH", "abc")]
+    vm_def.apply_env_changes(bench_env_changes, env)
+    assert env == {
+        'ANOTHER_ENV': 'arbitrary_user_val',
+        'LD_LIBRARY_PATH': 'zzz:/wibble/lib:abc',
+    }
+
+def test_user_env0004():
+    """Interesting case as PyPy forces a lib path at the VM level"""
+
+    config = Config(os.path.join(TEST_DIR, "env.krun"))
+    vm_def = config.VMS["PyPy"]["vm_def"]
+
+    env = {}
+
+    vm_def.apply_env_changes([], env)
+    # Expect the user's env to come first
+    assert env == {
+        'ANOTHER_ENV': 'arbitrary_user_val',
+        'LD_LIBRARY_PATH': '/wibble/lib:/opt/pypy/pypy/goal',
+    }

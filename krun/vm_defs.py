@@ -62,13 +62,29 @@ def print_stderr_linewise(info):
 class BaseVMDef(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, iterations_runner):
+    def __init__(self, iterations_runner, env=None):
         self.iterations_runner = iterations_runner
 
         # List of EnvChange instances to apply prior to each experiment.
         # These should be benchmark agnostic. Look elsewhere for
         # environment changes specific to a benchmark.
         self.common_env_changes = []
+
+        # The user can pass in a dict to influence the environment.
+        #
+        # These variables are *prepended* to any coinsiding environment that
+        # Krun has set to run benchmarks. E.g. If Krun wants to set
+        # LD_LIBRARY_PATH=/opt/pypy/pypy/goal, and the user passes down
+        # {"LD_LIBRARY_PATH": "/wibble/lib"}, the resulting environment is
+        # LD_LIBRARY_PATH=/wibble/lib:/opt/pypy/pypy/goal
+        #
+        # This is useful, for example, if the user built their own GCC
+        # and needs to force the LD_LIBRARY_PATH.
+        if env is not None:
+            if not isinstance(env, dict):
+                fatal("'env' argument for VM defs should be a dict")
+            for k, v in env.iteritems():
+                self.add_env_change(EnvChangeAppend(k, v))
 
         # tempting as it is to add a self.vm_path, we don't. If we were to add
         # natively compiled languages, then there is no "VM" to speak of.
@@ -98,6 +114,17 @@ class BaseVMDef(object):
     def add_env_change(self, change):
         self.common_env_changes.append(change)
 
+    def apply_env_changes(self, bench_env_changes, env_dct):
+        """Applies both VM and benchmark specific environment to env_dct"""
+
+        assert isinstance(bench_env_changes, list)
+
+        # Apply vm specific environment changes
+        EnvChange.apply_all(self.common_env_changes, env_dct)
+
+        # Apply benchmark specific environment changes
+        EnvChange.apply_all(bench_env_changes, env_dct)
+
     @abstractmethod
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None):
@@ -126,11 +153,8 @@ class BaseVMDef(object):
         # Starts empty, but user change command (i.e. sudo) may introduce some.
         new_user_env = {}
 
-        # Apply vm specific environment changes
-        EnvChange.apply_all(self.common_env_changes, new_user_env)
-
-        # Apply benchmark specific environment changes
-        EnvChange.apply_all(bench_env_changes, new_user_env)
+        # Apply envs
+        self.apply_env_changes(bench_env_changes, new_user_env)
 
         # Apply platform specific argument transformations.
         args = self.platform.bench_cmdline_adjust(args, new_user_env)
@@ -232,10 +256,10 @@ class BaseVMDef(object):
 class NativeCodeVMDef(BaseVMDef):
     """Not really a "VM definition" at all. Runs native code."""
 
-    def __init__(self):
+    def __init__(self, env=None):
         iter_runner = os.path.join(ITERATIONS_RUNNER_DIR,
                                    "iterations_runner_c")
-        BaseVMDef.__init__(self, iter_runner)
+        BaseVMDef.__init__(self, iter_runner, env=env)
 
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None):
@@ -252,11 +276,12 @@ class NativeCodeVMDef(BaseVMDef):
 
 
 class GenericScriptingVMDef(BaseVMDef):
-    def __init__(self, vm_path, iterations_runner, entry_point=None, subdir=None):
+    def __init__(self, vm_path, iterations_runner, entry_point=None,
+                 subdir=None, env=None):
         self.vm_path = vm_path
         self.extra_vm_args = []
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
-        BaseVMDef.__init__(self, fp_iterations_runner)
+        BaseVMDef.__init__(self, fp_iterations_runner, env=env)
 
     def _generic_scripting_run_exec(self, entry_point, benchmark, iterations,
                                     param, heap_lim_k, stack_lim_k, force_dir=None):
@@ -277,10 +302,10 @@ class GenericScriptingVMDef(BaseVMDef):
             fatal("Benchmark file non-existent: %s" % script_path)
 
 class JavaVMDef(BaseVMDef):
-    def __init__(self, vm_path):
+    def __init__(self, vm_path, env=None):
         self.vm_path = vm_path
         self.extra_vm_args = []
-        BaseVMDef.__init__(self, "IterationsRunner")
+        BaseVMDef.__init__(self, "IterationsRunner", env=env)
 
     def run_exec(self, entry_point, benchmark, iterations,
                  param, heap_lim_k, stack_lim_k, force_dir=None):
@@ -353,8 +378,8 @@ def find_internal_jvmci_java_bin(base_dir):
 
 
 class GraalVMDef(JavaVMDef):
-    def __init__(self, vm_path, java_home=None):
-        JavaVMDef.__init__(self, vm_path)
+    def __init__(self, vm_path, java_home=None, env=None):
+        JavaVMDef.__init__(self, vm_path, env=env)
         if java_home is not None:
             self.add_env_change(EnvChangeSet("JAVA_HOME", java_home))
 
@@ -381,8 +406,9 @@ class GraalVMDef(JavaVMDef):
         self._check_jvmci_server_enabled()
 
 class PythonVMDef(GenericScriptingVMDef):
-    def __init__(self, vm_path):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py")
+    def __init__(self, vm_path, env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
+                                       env=env)
 
     def run_exec(self, entry_point, benchmark, iterations,
                  param, heap_lim_k, stack_lim_k, force_dir=None):
@@ -394,21 +420,24 @@ class PythonVMDef(GenericScriptingVMDef):
 
 
 class PyPyVMDef(PythonVMDef):
-    def __init__(self, vm_path):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py")
+    def __init__(self, vm_path, env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
+                                       env=env)
         # XXX: On OpenBSD the PyPy build fails to encode the rpath to libpypy-c.so
         # into the VM executable, so we have to force it ourselves.
         #
         # For fairness, we apply the environment change to all platforms.
         #
         # Ideally fix in PyPy.
+        # The user's environment (if any) comes first however
         lib_dir = os.path.dirname(vm_path)
         self.add_env_change(EnvChangeAppend("LD_LIBRARY_PATH", lib_dir))
 
 
 class LuaVMDef(GenericScriptingVMDef):
-    def __init__(self, vm_path):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.lua")
+    def __init__(self, vm_path, env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.lua",
+                                       env=env)
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None):
@@ -417,8 +446,9 @@ class LuaVMDef(GenericScriptingVMDef):
                                                 stack_lim_k, force_dir=force_dir)
 
 class PHPVMDef(GenericScriptingVMDef):
-    def __init__(self, vm_path):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.php")
+    def __init__(self, vm_path, env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.php",
+                                       env=env)
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None):
@@ -427,8 +457,9 @@ class PHPVMDef(GenericScriptingVMDef):
                                                 stack_lim_k, force_dir=force_dir)
 
 class RubyVMDef(GenericScriptingVMDef):
-    def __init__(self, vm_path):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.rb")
+    def __init__(self, vm_path, env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.rb",
+                                       env=env)
 
 class JRubyVMDef(RubyVMDef):
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
@@ -438,8 +469,8 @@ class JRubyVMDef(RubyVMDef):
                                                 stack_lim_k, force_dir=force_dir)
 
 class JRubyTruffleVMDef(JRubyVMDef):
-    def __init__(self, vm_path, java_path):
-        JRubyVMDef.__init__(self, vm_path)
+    def __init__(self, vm_path, java_path, env=None):
+        JRubyVMDef.__init__(self, vm_path, env=env)
         self.add_env_change(EnvChangeAppend("JAVACMD", java_path))
 
         self.extra_vm_args += ['-X+T', '-J-server']
@@ -463,8 +494,8 @@ class JRubyTruffleVMDef(JRubyVMDef):
         self._check_truffle_enabled()
 
 class JavascriptVMDef(GenericScriptingVMDef):
-    def __init__(self, vm_path):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.js")
+    def __init__(self, vm_path, env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.js", env=env)
 
 
 class V8VMDef(JavascriptVMDef):
