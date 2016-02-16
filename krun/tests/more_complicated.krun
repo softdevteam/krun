@@ -11,8 +11,8 @@ MAX_MAILS = 2
 JDK8_HOME = "dummy"
 JDK8_BIN = os.path.join(JDK8_HOME, "bin", "java")
 
-HEAP_LIMIT = 2097152  # K == 2Gb
-STACK_LIMIT = 8192  # K
+HEAP_LIMIT = 2097152
+STACK_LIMIT = 8192
 
 VARIANTS = {
     "default-c": EntryPoint("bench.so", subdir="c"),
