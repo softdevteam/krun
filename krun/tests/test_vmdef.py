@@ -8,7 +8,7 @@ class TestVMDef(object):
 
     def test_make_wrapper_script0001(self):
         args = ["arg1", "arg2", "arg3"]
-        heap_lim_k = 1024 * 1024 * 1024  # 1GB
+        heap_lim_k = 1024 * 1024 * 1024  # 1GiB
         stack_lim_k = 8192
         dash = find_executable("dash")
         assert dash is not None

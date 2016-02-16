@@ -8,7 +8,7 @@ FLOAT_FORMAT = ".6f"
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 
-SANITY_CHECK_HEAP_KB = 1024 * 1024  # 1GB
+SANITY_CHECK_HEAP_KB = 1024 * 1024  # 1GiB
 SANITY_CHECK_STACK_KB = 8192
 
 PLATFORM_SANITY_CHECK_DIR = os.path.join(DIR, "..", "platform_sanity_checks")
