@@ -5,6 +5,7 @@ import os
 import difflib
 import random
 import sys
+import glob
 from distutils.spawn import find_executable
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
@@ -413,7 +414,7 @@ class OpenBSDPlatform(UnixLikePlatform):
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
 
-    THERMAL_BASE = "/sys/class/thermal/"
+    HWMON_GLOB = "/sys/class/hwmon/hwmon[0-9]/temp[0-9]*_input"
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
     PERF_SAMPLE_RATE = "/proc/sys/kernel/perf_event_max_sample_rate"
@@ -447,7 +448,7 @@ class LinuxPlatform(UnixLikePlatform):
     }
 
     def __init__(self, mailer):
-        self.zones = self._find_thermal_zones()
+        self.temp_sensors = self._find_temperature_sensors()
         self.num_cpus = self._get_num_cpus()
         UnixLikePlatform.__init__(self, mailer)
 
@@ -469,23 +470,30 @@ class LinuxPlatform(UnixLikePlatform):
               "Set `%s` in the kernel arguments.\n"
               "%s" % (prefix, arg, suffix))
 
-    def _find_thermal_zones(self):
-        return [x for x in os.listdir(LinuxPlatform.THERMAL_BASE) if
-                x.startswith("thermal_zone")]
+    def _find_temperature_sensors(self):
+        """Returns a list of sysfs files to use for temperature sensor
+        readings.
+
+        We are not fussy, and use as many sensors as we can find exposed by the
+        sensors framework into sysfs."""
+
+        sensors = sorted(glob.glob(LinuxPlatform.HWMON_GLOB))
+        debug("Detected temperature sensors: %s" % sensors)
+        return sensors
 
     def _get_num_cpus(self):
         cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
         return int(run_shell_cmd(cmd)[0])
 
-    def _read_zone(self, zone):
-        fn = os.path.join(LinuxPlatform.THERMAL_BASE, zone, "temp")
-        with open(fn, "r") as fh:
+    def _read_temperature_sensor(self, sysfs_file):
+        with open(sysfs_file) as fh:
             return int(fh.read())
 
     def take_temperature_readings(self):
         # Linux thermal zones are reported in millidegrees celsius
         # https://www.kernel.org/doc/Documentation/thermal/sysfs-api.txt
-        return {z: self._read_zone(z) / 1000.0 for z in self.zones}
+        return {z: self._read_temperature_sensor(z) / 1000.0
+                for z in self.temp_sensors}
 
     def _save_power(self):
         """Called when benchmarking is done, to save power"""
