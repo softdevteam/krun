@@ -11,14 +11,15 @@
  */
 
 # main
-if ($argc != 4) {
-	echo "usage: iterations_runner.php <benchmark> <# of iterations> <benchmark param>\n";
+if ($argc != 5) {
+	echo "usage: iterations_runner.php <benchmark> <# of iterations> <benchmark param> <debug flag>\n";
 	exit(1);
 }
 
 $BM_benchmark = $argv[1];
 $BM_iters = $argv[2];
 $BM_param = (int) $argv[3]; // parameter sent to benchmark.
+$BM_debug = ((int) $argv[4]) > 0;
 
 if (!file_exists($BM_benchmark)) {
 	throw new RuntimeException("Can't find $BM_benchmark");
@@ -38,7 +39,9 @@ if (!function_exists("run_iter")) {
 
 echo "["; // we are going to print a JSON list.
 for ($BM_i = 0; $BM_i < $BM_iters; $BM_i++) {
-    fprintf(STDERR, "[iterations_runner.php] iteration %d/%d\n", $BM_i + 1, $BM_iters);
+    if ($BM_debug) {
+        fprintf(STDERR, "[iterations_runner.php] iteration %d/%d\n", $BM_i + 1, $BM_iters);
+    }
 
 	$start_time = clock_gettime_monotonic();
 	run_iter($BM_param);

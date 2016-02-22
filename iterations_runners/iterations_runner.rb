@@ -29,22 +29,25 @@ end
 
 # main
 if __FILE__ == $0
-    if ARGV.length != 3
-        puts "usage: iterations_runner.rb <benchmark> <#iterations> <benchmark_param>\n"
+    if ARGV.length != 4
+        puts "usage: iterations_runner.rb <benchmark> <#iterations> <benchmark_param> <debug flag>\n"
         Kernel.exit(1)
     end
 
-    benchmark, iters, param = ARGV
+    benchmark, iters, param, debug = ARGV
     iters = Integer(iters)
     param = Integer(param)
+    debug = Integer(debug) > 0
 
     assert benchmark.end_with?(".rb")
     require("#{benchmark}")
 
     STDOUT.write "["
     for krun_iter_num in 0..iters - 1 do  # inclusive upper bound
-        STDERR.write "[iterations_runner.rb] iteration #{krun_iter_num + 1}/#{iters}\n"
-	STDERR.flush  # JRuby doesn't flush on newline.
+        if debug then
+            STDERR.write "[iterations_runner.rb] iteration #{krun_iter_num + 1}/#{iters}\n"
+            STDERR.flush  # JRuby doesn't flush on newline.
+        end
 
         start_time = clock_gettime_monotonic()
         run_iter(param)

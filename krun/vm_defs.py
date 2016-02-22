@@ -159,6 +159,13 @@ class BaseVMDef(object):
         # Apply platform specific argument transformations.
         args = self.platform.bench_cmdline_adjust(args, new_user_env)
 
+        # Tack on the debug flag: 0 or 1
+        import logging
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            args.append("1")
+        else:
+            args.append("0")
+
         if self.dry_run:
             info("Dry run. Skipping.")
             return ("", "", 0)

@@ -23,20 +23,15 @@ double clock_gettime_monotonic();
 int
 convert_str_to_int(char *s)
 {
-    long r = strtol(s, NULL, 10);
+    char *endptr;
+    long r;
 
-    if (errno != 0) {
+    errno = 0; /* errno not set to 0 on success */
+    r = strtol(s, &endptr, 10);
+
+    if ((errno != 0) || (*endptr != 0)) {
         perror("strtoll");
         exit(EXIT_FAILURE);
-    }
-
-    if (r == 0) {
-        /* Zero used as an error case.
-         * Pretty bad since zero is also a valid result.
-         * Anyway, the user should never pass a zero so
-         * we are OK in this case.
-         */
-        errx(EXIT_FAILURE, "strtoll failed");
     }
 
     if ((r > INT_MAX) || (r < INT_MIN)) {
@@ -52,19 +47,21 @@ main(int argc, char **argv)
 {
     char     *krun_benchmark = 0;
     int       krun_total_iters = 0, krun_param = 0, krun_iter_num = 0;
+    int       krun_debug = 0;
     void     *krun_dl_handle = 0;
     int     (*krun_bench_func)(int); /* func ptr to benchmark entry */
     double    start_time = -1, stop_time = -1;
 
-    if (argc != 4) {
+    if (argc != 5) {
         printf("usage: iterations_runner_c "
-            "<benchmark> <# of iterations> <benchmark param>\n");
+            "<benchmark> <# of iterations> <benchmark param> <debug flag>\n");
         exit(EXIT_FAILURE);
     }
 
     krun_benchmark = argv[1];
     krun_total_iters = convert_str_to_int(argv[2]);
     krun_param = convert_str_to_int(argv[3]);
+    krun_debug = convert_str_to_int(argv[4]);
 
     krun_dl_handle = dlopen(krun_benchmark, RTLD_NOW | RTLD_LOCAL);
     if (krun_dl_handle == NULL) {
@@ -86,8 +83,10 @@ main(int argc, char **argv)
     for (krun_iter_num = 0;
         krun_iter_num < krun_total_iters; krun_iter_num++) {
 
-        fprintf(stderr, "[iterations_runner.c] iteration %d/%d\n",
-            krun_iter_num + 1, krun_total_iters);
+        if (krun_debug > 0) {
+            fprintf(stderr, "[iterations_runner.c] iteration %d/%d\n",
+                krun_iter_num + 1, krun_total_iters);
+        }
 
         /* timed section */
         start_time = clock_gettime_monotonic();
