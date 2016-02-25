@@ -167,7 +167,7 @@ class BaseVMDef(object):
             args.append("0")
 
         if self.dry_run:
-            info("Dry run. Skipping.")
+            info("SIMULATED: Benchmark process execution")
             return ("", "", 0)
 
         # We write out a wrapper script whose job is to enforce ulimits
@@ -491,7 +491,7 @@ class JRubyTruffleVMDef(JRubyVMDef):
     def _check_truffle_enabled(self):
         """Runs fake benchmark crashing if the Truffle is disabled in JRuby"""
 
-        info("Running jruby_check_truffle_enabled sanity check")
+        debug("Running jruby_check_truffle_enabled sanity check")
         ep = EntryPoint("jruby_check_graal_enabled.rb")
         spawn_sanity_check(self.platform, ep, self,
                            "jruby_check_graal_enabled.rb", force_dir=VM_SANITY_CHECKS_DIR)

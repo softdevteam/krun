@@ -71,16 +71,6 @@ class ExecutionJob(object):
         vm_def = self.vm_info["vm_def"]
         vm_def.dry_run = dry_run
 
-        info("Running '%s(%d)' (%s variant) under '%s'" %
-                    (self.benchmark, self.parameter, self.variant, self.vm_name))
-
-        # Print ETA for execution if available
-        tfmt = self.get_exec_estimate_time_formatter()
-        info("{:<35s}: {} ({} from now)".format(
-                                         "Estimated completion (this exec)",
-                                         tfmt.finish_str,
-                                         tfmt.delta_str))
-
         # Set heap limit
         heap_limit_kb = self.sched.config.HEAP_LIMIT
         stack_limit_kb = self.sched.config.STACK_LIMIT
@@ -95,10 +85,16 @@ class ExecutionJob(object):
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
                 iterations_results = []
-            return iterations_results
-
         else:
-            return []
+            iterations_results = []
+
+        # We print the status *after* benchmarking, so that I/O cannot be
+        # commited during benchmarking. In production, we will be rebooting
+        # before the next execution, so we are grand.
+        info("Finished '%s(%d)' (%s variant) under '%s'" %
+                    (self.benchmark, self.parameter, self.variant, self.vm_name))
+
+        return iterations_results
 
 
 class ExecutionScheduler(object):
@@ -147,9 +143,12 @@ class ExecutionScheduler(object):
         debug("Removed %s from schedule" % key)
         self.work_deque.remove(job_to_remove)
 
-    def next_job(self):
+    def next_job(self, peek=False):
         try:
-            return self.work_deque.popleft()
+            job = self.work_deque.popleft()
+            if peek:
+                self.work_deque.appendleft(job)
+            return job
         except IndexError:
             raise ScheduleEmpty() # we are done
 
@@ -252,7 +251,7 @@ class ExecutionScheduler(object):
             debug("Krun started with an empty queue of jobs")
 
         if not self.started_by_init:
-            util.log_and_mail(self.mailer, info,
+            util.log_and_mail(self.mailer, debug,
                               "Benchmarking started",
                               "Benchmarking started.\nLogging to %s" %
                               self.log_path,
@@ -264,7 +263,7 @@ class ExecutionScheduler(object):
             self._reboot()
 
         if self.reboot and self.started_by_init and jobs_left > 0:
-            info("Waiting %s seconds for the system to come up." %
+            debug("Waiting %s seconds for the system to come up." %
                  str(STARTUP_WAIT_SECONDS))
             if self.dry_run:
                 info("SIMULATED: time.sleep (would have waited %s seconds)." %
@@ -280,24 +279,8 @@ class ExecutionScheduler(object):
             self.platform.wait_until_cool()
 
             jobs_left = len(self)
-            info("%d jobs left in scheduler queue" % jobs_left)
             if jobs_left == 0:
                 break
-
-            tfmt = self.get_overall_time_estimate_formatter()
-
-            if self.eta_avail == self.jobs_done:
-                # We just found out roughly how long the session has left, mail out.
-                msg = "ETA for current session now known: %s" % tfmt.finish_str
-                util.log_and_mail(self.mailer, info,
-                             "ETA for Current Session Available",
-                             msg, bypass_limiter=True)
-
-            info("{:<25s}: {} ({} from now)".format(
-                "Estimated completion", tfmt.finish_str, tfmt.delta_str))
-
-            if (self.eta_avail is not None) and (self.jobs_done < self.eta_avail):
-                info("Jobs until ETA known: %s" % self.jobs_until_eta_known())
 
             job = self.next_job()
 
@@ -318,13 +301,46 @@ class ExecutionScheduler(object):
             self.results.data[job.key].append(exec_result)
             self.add_eta_info(job.key, exec_end_time - exec_start_time)
 
+            info("%d executions left in scheduler queue" % (jobs_left - 1))
+
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
-            info("Intermediate results dumped to %s" %
+            debug("Intermediate results dumped to %s" %
                  self.config.results_filename())
             self.results.write_to_file()
 
             self.jobs_done += 1
+
+            tfmt = self.get_overall_time_estimate_formatter()
+
+            if self.eta_avail == self.jobs_done:
+                # We just found out roughly how long the session has left, mail out.
+                msg = "ETA for current session now known: %s" % tfmt.finish_str
+                util.log_and_mail(self.mailer, debug,
+                             "ETA for Current Session Available",
+                             msg, bypass_limiter=True)
+
+            info("{:<25s}: {} ({} from now)".format(
+                "Estimated completion", tfmt.finish_str, tfmt.delta_str))
+
+            try:
+                job = self.next_job(peek=True)
+            except ScheduleEmpty:
+                pass  # no next job
+            else:
+                # print info about the next job
+                info("Next execution is '%s(%d)' (%s variant) under '%s'" %
+                     (job.benchmark, job.parameter, job.variant, job.vm_name))
+
+                tfmt = self.get_exec_estimate_time_formatter(job.key)
+                info("{:<35s}: {} ({} from now)".format(
+                    "Estimated completion (next execution)",
+                    tfmt.finish_str,
+                    tfmt.delta_str))
+
+            if (self.eta_avail is not None) and (self.jobs_done < self.eta_avail):
+                info("Executions until ETA known: %s" % self.jobs_until_eta_known())
+
             if self.platform.check_dmesg_for_changes():
                 self.results.error_flag = True
 

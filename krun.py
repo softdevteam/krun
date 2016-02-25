@@ -40,7 +40,7 @@ def usage(parser):
 
 
 def sanity_checks(config, platform):
-    info("Running sanity checks")
+    debug("Running sanity checks")
 
     vms_that_will_run = []
     # check all necessary benchmark files exist
@@ -222,7 +222,7 @@ def main(parser):
     platform = detect_platform(mailer)
 
     if not args.develop:
-        info("Checking platform preliminaries")
+        debug("Checking platform preliminaries")
         platform.check_preliminaries()
     else:
         # Needed to skip the use of certain tools and techniques.
@@ -256,7 +256,6 @@ def main(parser):
         _, _, rc = util.run_shell_cmd("touch " + args.filename)
         if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)
-
 
         info(("Wait %s secs to allow system to cool prior to "
              "collecting initial temperature readings") %
@@ -316,12 +315,12 @@ def attach_log_file(config, resume):
     fh = logging.FileHandler(log_filename, mode=mode)
     fh.setFormatter(PLAIN_FORMATTER)
     logging.root.addHandler(fh)
-    info("Attached log file: %s" % log_filename)
+    debug("Attached log file: %s" % log_filename)
 
 
 if __name__ == "__main__":
+    debug("Krun starting...")
     debug("arguments: %s"  % " ".join(sys.argv[1:]))
     parser = create_arg_parser()
     setup_logging(parser)
-    info("Krun starting...")
     main(parser)
