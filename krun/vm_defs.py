@@ -159,8 +159,15 @@ class BaseVMDef(object):
         # Apply platform specific argument transformations.
         args = self.platform.bench_cmdline_adjust(args, new_user_env)
 
+        # Tack on the debug flag: 0 or 1
+        import logging
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            args.append("1")
+        else:
+            args.append("0")
+
         if self.dry_run:
-            info("Dry run. Skipping.")
+            info("SIMULATED: Benchmark process execution")
             return ("", "", 0)
 
         # We write out a wrapper script whose job is to enforce ulimits
@@ -176,12 +183,18 @@ class BaseVMDef(object):
         wrapper_args = self.platform.change_user_args(BENCHMARK_USER) + \
             [DASH, WRAPPER_SCRIPT]
 
+        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
+
+        # Do an OS-level sync. Forces pending writes on to the physical disk.
+        # We do this in an attempt to prevent disk commits happening during
+        # benchmarking.
+        self.platform.sync_disks()
+
         # We pass the empty environment dict here.
         # This is the *outer* environment that the current user will invoke the
         # command with. Command line arguments will have been appended *inside*
         # to adjust the new user's environment once the user switch has
         # occurred.
-        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
         p = subprocess.Popen(
             wrapper_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env={})
@@ -484,7 +497,7 @@ class JRubyTruffleVMDef(JRubyVMDef):
     def _check_truffle_enabled(self):
         """Runs fake benchmark crashing if the Truffle is disabled in JRuby"""
 
-        info("Running jruby_check_truffle_enabled sanity check")
+        debug("Running jruby_check_truffle_enabled sanity check")
         ep = EntryPoint("jruby_check_graal_enabled.rb")
         spawn_sanity_check(self.platform, ep, self,
                            "jruby_check_graal_enabled.rb", force_dir=VM_SANITY_CHECKS_DIR)

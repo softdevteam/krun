@@ -79,3 +79,6 @@ class MockPlatform(BasePlatform):
 
     def sanity_checks(self):
         pass
+
+    def sync_disks(self):
+        pass

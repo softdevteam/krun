@@ -19,13 +19,15 @@ class IterationsRunner {
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
 
-        if (args.length != 3) { // not 4 since java doesn't put the program name in args[0]
-            System.out.println("usage: iterations_runner <benchmark> <# of iterations> <benchmark param>\n");
+        if (args.length != 4) {
+            System.out.println("usage: iterations_runner <benchmark> "
+                    "<# of iterations> <benchmark param> <debug flag>\n");
             System.exit(1);
         }
         String benchmark = args[0];
         int iterations = Integer.parseInt(args[1]);
         int param = Integer.parseInt(args[2]);
+        bool debug = Integer.parseInt(args[3]) > 0;
 
         // reflectively call the benchmark's run_iter
         Class<?> cls = Class.forName(benchmark);
@@ -37,7 +39,9 @@ class IterationsRunner {
         System.out.print("[");
         // Please, no refelction inside the timed code!
         for (int i = 0; i < iterations; i++) {
-            System.err.println("[iterations_runner.java] iteration: " + (i + 1) + "/" + iterations);
+            if (debug) {
+                System.err.println("[iterations_runner.java] iteration: " + (i + 1) + "/" + iterations);
+            }
 
             double startTime = IterationsRunner.JNI_clock_gettime_monotonic();
             ke.run_iter(param);

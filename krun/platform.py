@@ -6,6 +6,7 @@ import difflib
 import random
 import sys
 import glob
+import subprocess
 from distutils.spawn import find_executable
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
@@ -144,9 +145,9 @@ class BasePlatform(object):
 
             # if we get here, too hot!
             if not msg_shown:
-                info("System is running hot.")
-                info(reason)
-                info("Waiting to cool")
+                debug("System is running hot.")
+                debug(reason)
+                debug("Waiting to cool")
                 msg_shown = True
 
             trys += 1
@@ -175,6 +176,10 @@ class BasePlatform(object):
 
     @abstractproperty
     def FORCE_LIBRARY_PATH_ENV_NAME(self):
+        pass
+
+    @abstractmethod
+    def sync_disks(self):
         pass
 
     # And you may want to extend this
@@ -294,6 +299,20 @@ class UnixLikePlatform(BasePlatform):
         util.spawn_sanity_check(self, ep, vd, "UNIX user change",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
 
+    def sync_disks(self):
+        """Force pending I/O to physical disks"""
+
+        debug("sync disks...")
+        rc = subprocess.call("/bin/sync")
+        if rc != 0:
+            fatal("sync failed")
+
+        # The OpenBSD manual says: "sync() [the system call] may return before
+        # the buffers are completely flushed.", and the sync command is merely
+        # a thin wrapper around the syscall. We wait a while. We have reports
+        # that the sync command itself can take up to 10 seconds.
+        time.sleep(30)
+
 
 class OpenBSDPlatform(UnixLikePlatform):
     TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
@@ -328,7 +347,7 @@ class OpenBSDPlatform(UnixLikePlatform):
         return run_shell_cmd("apm")[0]
 
     def _check_apm_state(self):
-        info("Checking APM state is geared for high-performance")
+        debug("Checking APM state is geared for high-performance")
         adjust = False
 
         out = self._get_apm_output()
@@ -353,7 +372,7 @@ class OpenBSDPlatform(UnixLikePlatform):
             adjust = True
 
         if adjust:
-            info("adjusting performance mode")
+            debug("adjusting performance mode")
             out, _, _ = run_shell_cmd("apm -H")
             self._check_apm_state()  # should work this time
 
@@ -630,7 +649,7 @@ class LinuxPlatform(UnixLikePlatform):
                 v = fh.read().strip()
 
             if v != "performance":
-                info("changing CPU governor for CPU %s" % cpu_n)
+                debug("changing CPU governor for CPU %s" % cpu_n)
                 cmd = "%s cpufreq-set -c %d -g performance" % \
                     (self.change_user_cmd, cpu_n)
                 stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
@@ -691,7 +710,7 @@ class LinuxPlatform(UnixLikePlatform):
             return  # OK!
         else:
             # ASLR is off, but we can try to enable it
-            info("Turning ASLR off")
+            debug("Turning ASLR off")
             cmd = "%s sh -c 'echo 0 > %s'" % \
                 (self.change_user_cmd, self.ASLR_FILE)
             stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)

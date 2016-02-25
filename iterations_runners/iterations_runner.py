@@ -17,14 +17,13 @@ clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
 
 # main
 if __name__ == "__main__":
-
-    if len(sys.argv) != 4:
+    if len(sys.argv) != 5:
         print("usage: iterations_runner.py "
-        "<benchmark> <# of iterations> <benchmark param>\n")
+        "<benchmark> <# of iterations> <benchmark param> <debug flag>\n")
         sys.exit(1)
 
-    benchmark, iters, param = sys.argv[1:]
-    iters, param = int(iters), int(param)
+    benchmark, iters, param, debug = sys.argv[1:]
+    iters, param, debug = int(iters), int(param), int(debug)
 
     assert benchmark.endswith(".py")
     bench_mod_name = os.path.basename(benchmark[:-3])
@@ -38,8 +37,9 @@ if __name__ == "__main__":
 
     sys.stdout.write("[") # we are going to print a JSON list
     for i in xrange(iters):
-        sys.stderr.write(
-            "[iterations_runner.py] iteration %d/%d\n" % (i + 1, iters))
+        if debug:
+            sys.stderr.write(
+                "[iterations_runner.py] iteration %d/%d\n" % (i + 1, iters))
 
         start_time = clock_gettime_monotonic()
         bench_func(param)
