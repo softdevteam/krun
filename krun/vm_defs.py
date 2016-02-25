@@ -183,12 +183,18 @@ class BaseVMDef(object):
         wrapper_args = self.platform.change_user_args(BENCHMARK_USER) + \
             [DASH, WRAPPER_SCRIPT]
 
+        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
+
+        # Do an OS-level sync. Forces pending writes on to the physical disk.
+        # We do this in an attempt to prevent disk commits happening during
+        # benchmarking.
+        self.platform.sync_disks()
+
         # We pass the empty environment dict here.
         # This is the *outer* environment that the current user will invoke the
         # command with. Command line arguments will have been appended *inside*
         # to adjust the new user's environment once the user switch has
         # occurred.
-        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
         p = subprocess.Popen(
             wrapper_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env={})

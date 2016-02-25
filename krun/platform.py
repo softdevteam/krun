@@ -6,6 +6,7 @@ import difflib
 import random
 import sys
 import glob
+import subprocess
 from distutils.spawn import find_executable
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
@@ -177,6 +178,10 @@ class BasePlatform(object):
     def FORCE_LIBRARY_PATH_ENV_NAME(self):
         pass
 
+    @abstractmethod
+    def sync_disks(self):
+        pass
+
     # And you may want to extend this
     def collect_audit(self):
         self.audit["uname"] = run_shell_cmd("uname -a")[0]
@@ -293,6 +298,20 @@ class UnixLikePlatform(BasePlatform):
         vd = PythonVMDef(sys.executable)  # run under the VM that runs *this*
         util.spawn_sanity_check(self, ep, vd, "UNIX user change",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
+
+    def sync_disks(self):
+        """Force pending I/O to physical disks"""
+
+        debug("sync disks...")
+        rc = subprocess.call("/bin/sync")
+        if rc != 0:
+            fatal("sync failed")
+
+        # The OpenBSD manual says: "sync() [the system call] may return before
+        # the buffers are completely flushed.", and the sync command is merely
+        # a thin wrapper around the syscall. We wait a while. We have reports
+        # that the sync command itself can take up to 10 seconds.
+        time.sleep(30)
 
 
 class OpenBSDPlatform(UnixLikePlatform):
