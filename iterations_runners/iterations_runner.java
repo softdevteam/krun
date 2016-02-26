@@ -20,14 +20,14 @@ class IterationsRunner {
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
 
         if (args.length != 4) {
-            System.out.println("usage: iterations_runner <benchmark> "
+            System.out.println("usage: iterations_runner <benchmark> " +
                     "<# of iterations> <benchmark param> <debug flag>\n");
             System.exit(1);
         }
         String benchmark = args[0];
         int iterations = Integer.parseInt(args[1]);
         int param = Integer.parseInt(args[2]);
-        bool debug = Integer.parseInt(args[3]) > 0;
+        boolean debug = Integer.parseInt(args[3]) > 0;
 
         // reflectively call the benchmark's run_iter
         Class<?> cls = Class.forName(benchmark);
