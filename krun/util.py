@@ -81,7 +81,7 @@ def spawn_sanity_check(platform, entry_point, vm_def,
     stdout, stderr, rc = \
         vm_def.run_exec(entry_point, check_name, iterations,
                         param, SANITY_CHECK_HEAP_KB, SANITY_CHECK_STACK_KB,
-                        force_dir=force_dir)
+                        force_dir=force_dir, sync_disks=False)
 
     try:
         _ = check_and_parse_execution_results(stdout, stderr, rc)
