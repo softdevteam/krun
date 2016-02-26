@@ -4,10 +4,6 @@ import sys
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import run_shell_cmd
 
-def make_dummy_get_sysctl_temperature_output_fn(sysctl_output):
-    def _get_sysctl_temperature_output(self):
-        return sysctl_output
-    return _get_sysctl_temperature_output
 
 def make_dummy_get_apm_output_fn(output):
     def _get_apm_output(self):
@@ -33,14 +29,17 @@ class TestOpenBSDPlatform(BaseKrunTest):
 
         platform.zones = ["zone1", "zone2", "zone3"]
 
-        def fake_get_sysctl_temperature_output(self):
-            line1 = "hw.sensors.cpu0.temp0=64.00 degC"
-            line2 = "hw.sensors.acpitz0.temp0=65.58 degC (zone temperature)"
-            return "%s\n%s" % (line1, line2)
+        def fake__raw_read_temperature_sensor(self, sensor):
+            if sensor == "hw.sensors.cpu0.temp0":
+                return "hw.sensors.cpu0.temp0=64.00 degC"
+            elif sensor== "hw.sensors.acpitz0.temp0":
+                return "hw.sensors.acpitz0.temp0=65.58 degC (zone temperature)"
+            else:
+                assert False
 
         monkeypatch.setattr(krun.platform.OpenBSDPlatform,
-                            "_get_sysctl_temperature_output",
-                            fake_get_sysctl_temperature_output)
+                            "_raw_read_temperature_sensor",
+                            fake__raw_read_temperature_sensor)
 
         # Results were already in degrees C
         expect = {
@@ -52,43 +51,49 @@ class TestOpenBSDPlatform(BaseKrunTest):
         assert expect == got
 
     def test_read_broken_temperatures0001(self, monkeypatch, platform, caplog):
-        # Unit is missing (expect degC suffix)
-        broken_sysctl_output = "hw.sensors.some_temp0=10"
+        platform.temp_sensors = ["hw.sensors.some_temp0"]
 
-        monkey_func = make_dummy_get_sysctl_temperature_output_fn(broken_sysctl_output)
+        def dummy(self, sensor):
+            # Unit is missing (expect degC suffix)
+            return "hw.sensors.some_temp0=10"
+
         monkeypatch.setattr(krun.platform.OpenBSDPlatform,
-                            "_get_sysctl_temperature_output", monkey_func)
+                            "_raw_read_temperature_sensor", dummy)
 
         with pytest.raises(SystemExit):
             platform.take_temperature_readings()
 
-        assert "odd non-degC value" in caplog.text()
+        assert "Odd non-degC value" in caplog.text()
 
     def test_read_broken_temperatures0002(self, monkeypatch, platform, caplog):
-        # value (prior to degC) should be float()able
-        broken_sysctl_output = "hw.sensors.some_temp0=inferno degC"
+        platform.temp_sensors = ["hw.sensors.some_temp0"]
 
-        monkey_func = make_dummy_get_sysctl_temperature_output_fn(broken_sysctl_output)
+        def dummy(self, sensor):
+            # value (prior to degC) should be float()able
+            return "hw.sensors.some_temp0=inferno degC"
+
         monkeypatch.setattr(krun.platform.OpenBSDPlatform,
-                            "_get_sysctl_temperature_output", monkey_func)
+                            "_raw_read_temperature_sensor", dummy)
 
         with pytest.raises(SystemExit):
             platform.take_temperature_readings()
 
-        assert "non-numeric value" in caplog.text()
+        assert "Non-numeric value" in caplog.text()
 
     def test_read_broken_temperatures0003(self, monkeypatch, platform, caplog):
-        # Weird unit (not degC)
-        broken_sysctl_output = "hw.sensors.some_temp0=66 kravits"
+        platform.temp_sensors = ["hw.sensors.some_temp0"]
 
-        monkey_func = make_dummy_get_sysctl_temperature_output_fn(broken_sysctl_output)
+        def dummy(self, sensor):
+            # Weird unit (not degC)
+            return "hw.sensors.some_temp0=66 kravits"
+
         monkeypatch.setattr(krun.platform.OpenBSDPlatform,
-                            "_get_sysctl_temperature_output", monkey_func)
+                            "_raw_read_temperature_sensor", dummy)
 
         with pytest.raises(SystemExit):
             platform.take_temperature_readings()
 
-        assert "odd non-degC value" in caplog.text()
+        assert "Odd non-degC value" in caplog.text()
 
     def test_apm_state0001(self, platform, caplog):
         run_shell_cmd("apm -C")  # cool mode; forces krun to change this.

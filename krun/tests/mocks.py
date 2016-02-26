@@ -82,3 +82,6 @@ class MockPlatform(BasePlatform):
 
     def sync_disks(self):
         pass
+
+    def find_temperature_sensors(self):
+        return []
