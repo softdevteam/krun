@@ -2,6 +2,9 @@ import pytest
 from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef
 from distutils.spawn import find_executable
 from krun.env import EnvChange
+from krun.tests.mocks import MockPlatform
+from krun import EntryPoint
+from krun import util
 
 class TestVMDef(object):
     """Test stuff in VM definitions"""
@@ -50,3 +53,42 @@ class TestVMDef(object):
         EnvChange.apply_all(vm.common_env_changes, env)
         assert env["LD_LIBRARY_PATH"] == '/path/to/happiness:/bin'
 
+    def test_sync_disks0001(self, monkeypatch):
+        """Check disk sync method is called"""
+
+        platform = MockPlatform(None)
+        ep = EntryPoint("test")
+        vm_def = PythonVMDef('/dummy/bin//python')
+        vm_def.set_platform(platform)
+
+        sync_called = [False]
+        def fake_sync_disks():
+            sync_called[0] = True
+        monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
+
+        def fake_run_exec_popen(args):
+            return "[1]", "", 0  # stdout, stderr, exit_code
+        monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
+
+        vm_def.run_exec(ep, "test", 1, 1, 1, 1)
+        assert sync_called == [True]
+
+    def test_sync_disks0002(self, monkeypatch):
+        """We throw away the results from sanity checks, so there's no need to
+        sync disks (and wait)."""
+
+        platform = MockPlatform(None)
+        ep = EntryPoint("test")
+        vm_def = PythonVMDef('/dummy/bin//python')
+
+        sync_called = [False]
+        def fake_sync_disks():
+            sync_called[0] = True
+        monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
+
+        def fake_run_exec_popen(args):
+            return "[1]", "", 0  # stdout, stderr, exit_code
+        monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
+
+        util.spawn_sanity_check(platform, ep, vm_def, "test")
+        assert sync_called == [False]
