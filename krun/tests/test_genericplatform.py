@@ -10,7 +10,7 @@ class TestGenericPlatform(BaseKrunTest):
         mock_platform.starting_temperatures = temps
 
         for k, v in temps.iteritems():
-            assert mock_platform.temperature_thresholds[k] == temps[k] + 5
+            assert mock_platform.temperature_thresholds[k] == temps[k] + 1
 
     def test_inconsistent_sensors0001(self, platform, caplog):
         # The platform has already detected the available sensors. Now we
