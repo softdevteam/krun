@@ -28,7 +28,7 @@ class BasePlatform(object):
 
     # Each temperature sensor must cool to its starting temperature plus
     # TEMP_THRESHOLD_DEGREES. An absolute value in degrees centigrade.
-    TEMP_THRESHOLD_DEGREES = 5
+    TEMP_THRESHOLD_DEGREES = 1
 
     TEMP_MANDATORY_WAIT = 1
     TEMP_POLL_FREQ = 10                 # seconds between polls
