@@ -4,6 +4,8 @@
 // This is not quite ideal. We should use CLOCK_MONOTONIC_RAW instead.
 // For this reason we use JNI to make a call to clock_gettime() ourselves.
 
+import java.util.Arrays;
+
 // All entry points must implement this
 interface BaseKrunEntry {
     public abstract void run_iter(int param);
@@ -36,7 +38,9 @@ class IterationsRunner {
         Object instance = constructors[0].newInstance();
         BaseKrunEntry ke = (BaseKrunEntry) instance; // evil
 
-        System.out.print("[");
+        double[] iter_times = new double[iterations];
+        Arrays.fill(iter_times, -1.0);
+
         // Please, no refelction inside the timed code!
         for (int i = 0; i < iterations; i++) {
             if (debug) {
@@ -47,14 +51,17 @@ class IterationsRunner {
             ke.run_iter(param);
             double stopTime = IterationsRunner.JNI_clock_gettime_monotonic();
 
-            double intvl = (stopTime - startTime);
-            System.out.print(intvl);
+            iter_times[i] = stopTime - startTime;
+        }
+
+        System.out.print("[");
+        for (int i = 0; i < iterations; i++) {
+            System.out.print(iter_times[i]);
 
             if (i < iterations - 1) {
                 System.out.print(", ");
             }
         }
-        System.out.print("]");
-
+        System.out.print("]\n");
     }
 }

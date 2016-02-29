@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <dlfcn.h>
 #include <err.h>
+#include <string.h>
 
 #define BENCH_FUNC_NAME "run_iter"
 
@@ -51,6 +52,7 @@ main(int argc, char **argv)
     void     *krun_dl_handle = 0;
     int     (*krun_bench_func)(int); /* func ptr to benchmark entry */
     double    start_time = -1, stop_time = -1;
+    double   *krun_iter_times = NULL;
 
     if (argc != 5) {
         printf("usage: iterations_runner_c "
@@ -76,12 +78,19 @@ main(int argc, char **argv)
         goto clean;
     }
 
-    /* Building a JSON list */
-    fprintf(stdout, "[");
-    fflush(stdout);
+    krun_iter_times = calloc(krun_total_iters, sizeof(double));
+    if (krun_iter_times == NULL) {
+        errx(EXIT_FAILURE, "%s", strerror(errno));
+        goto clean;
+    }
 
-    for (krun_iter_num = 0;
-        krun_iter_num < krun_total_iters; krun_iter_num++) {
+    for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
+        krun_iter_num++) {
+        krun_iter_times[krun_iter_num] = -1.0;
+    }
+
+    for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
+        krun_iter_num++) {
 
         if (krun_debug > 0) {
             fprintf(stderr, "[iterations_runner.c] iteration %d/%d\n",
@@ -93,17 +102,23 @@ main(int argc, char **argv)
         (void) (*krun_bench_func)(krun_param);
         stop_time = clock_gettime_monotonic();
 
+        krun_iter_times[krun_iter_num] = stop_time - start_time;
+    }
+
+    fprintf(stdout, "[");
+    for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
+        krun_iter_num++) {
         fprintf(stdout, "%f", (stop_time - start_time));
+
         if (krun_iter_num < krun_total_iters - 1) {
             fprintf(stdout, ", ");
         }
-
-        fflush(stdout);
     }
-
     fprintf(stdout, "]\n");
 
 clean:
+    free(krun_iter_times);
+
     if (krun_dl_handle != NULL) {
         dlclose(krun_dl_handle);
     }
