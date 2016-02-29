@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     # OK, all is well, let's run.
 
-    sys.stdout.write("[") # we are going to print a JSON list
+    iter_times = [-1.0] * iters
     for i in xrange(iters):
         if debug:
             sys.stderr.write(
@@ -45,10 +45,11 @@ if __name__ == "__main__":
         bench_func(param)
         stop_time = clock_gettime_monotonic()
 
-        sys.stdout.write("%f" % (stop_time - start_time))
+        iter_times[i] = stop_time - start_time
+
+    sys.stdout.write("[")
+    for i in xrange(iters):
+        print("%f" % iter_times[i])
         if i < iters - 1:
             sys.stdout.write(", ")
-
-        sys.stdout.flush()
-
     sys.stdout.write("]\n")

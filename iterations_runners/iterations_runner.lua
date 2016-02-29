@@ -1,9 +1,3 @@
--- XXX os.clock() probably isn't good enough
--- http://www.lua.org/manual/5.3/manual.html#pdf-os.clock
--- http://codea.io/talk/discussion/360/milliseconds-in-codea-answered
-
-
--- Call out to C to get the monotonic time
 local ffi = require("ffi")
 ffi.cdef[[double clock_gettime_monotonic();]]
 local kruntime = ffi.load("kruntime")
@@ -20,9 +14,12 @@ end
 
 dofile(BM_benchmark)
 
-io.stdout:write("[")
-io.stdout:flush()
-for BM_i = 1, BM_iters, 1 do -- inclusive upper bound in lua
+local BM_iter_times = {}
+for BM_i = 1, BM_iters, 1 do
+    BM_iter_times[BM_i] = -1.0
+end
+
+for BM_i = 1, BM_iters, 1 do
     if BM_debug then
         io.stderr:write(string.format("[iterations_runner.lua] iteration %d/%d\n", BM_i, BM_iters))
     end
@@ -31,15 +28,14 @@ for BM_i = 1, BM_iters, 1 do -- inclusive upper bound in lua
     run_iter(BM_param) -- run one iteration of benchmark
     local BM_end_time = kruntime.clock_gettime_monotonic()
 
-    local BM_intvl = BM_end_time - BM_start_time
+    BM_iter_times[BM_i] = BM_end_time - BM_start_time
+end
 
-    io.stdout:write(BM_intvl)
+io.stdout:write("[")
+for BM_i = 1, BM_iters, 1 do
+    io.stdout:write(BM_iter_times[BM_i])
     if BM_i < BM_iters then
         io.stdout:write(", ")
     end
-
-    io.stdout:flush()
 end
-
-io.stdout:write("]")
-io.stdout:flush()
+io.stdout:write("]\n")

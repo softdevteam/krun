@@ -42,10 +42,11 @@ if __FILE__ == $0
     assert benchmark.end_with?(".rb")
     require("#{benchmark}")
 
-    STDOUT.write "["
-    for krun_iter_num in 0..iters - 1 do  # inclusive upper bound
+    iter_times = [-1.0] * iters
+
+    for iter_num in 0..iters - 1 do
         if debug then
-            STDERR.write "[iterations_runner.rb] iteration #{krun_iter_num + 1}/#{iters}\n"
+            STDERR.write "[iterations_runner.rb] iteration #{iter_num + 1}/#{iters}\n"
             STDERR.flush  # JRuby doesn't flush on newline.
         end
 
@@ -53,11 +54,15 @@ if __FILE__ == $0
         run_iter(param)
         stop_time = clock_gettime_monotonic()
 
-        intvl = stop_time - start_time
-        STDOUT.write String(intvl)
-        if krun_iter_num < iters - 1 then
+        iter_times[iter_num] = stop_time - start_time
+    end
+
+    STDOUT.write "["
+    for iter_num in 0..iters - 1 do
+        STDOUT.write String(iter_times[iter_num])
+        if iter_num < iters - 1 then
             STDOUT.write ", "
         end
     end
-    STDOUT.write "]"
+    STDOUT.write "]\n"
 end

@@ -11,7 +11,9 @@ var BM_debug = parseInt(this.arguments[3]) > 0;
 
 load(BM_entry_point);
 
-print("[");
+var BM_iter_times = new Array(BM_n_iters);
+BM_iter_times.fill(-1.0);
+
 for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
     if (BM_debug) {
         print_err("[iterations_runner.js] iteration " + (BM_i + 1) + "/" + BM_n_iters);
@@ -21,8 +23,13 @@ for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
     run_iter(BM_param);
     var BM_stop_time = clock_gettime_monotonic();
 
-    var BM_intvl = BM_stop_time - BM_start_time;
-    print(BM_intvl);
+    BM_iter_times[BM_i] = BM_stop_time - BM_start_time;
+}
+
+print("[");
+for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
+    print(BM_iter_times[BM_i]);
+
     if (BM_i < BM_n_iters - 1) {
         print(", ")
     }
