@@ -45,6 +45,7 @@ class BasePlatform(object):
         # derive thresholds that characterise "too hot".
         self._starting_temperatures = {}  # accessed via property
         self.temperature_thresholds = {}
+        self.find_temperature_sensors()
 
         self.last_dmesg = None
         self.last_dmesg_time = None
@@ -65,6 +66,13 @@ class BasePlatform(object):
     def starting_temperatures(self, readings_dct):
         """Sets the starting temperatures and automatically updates the
         temperature thresholds."""
+
+        # Check consistency of sensors
+        keys1 = list(sorted(readings_dct.keys()))
+        keys2 = list(sorted(self.temp_sensors))
+        if keys1 != keys2:
+            fatal("Inconsistent sensors. %s vs %s" % \
+                  (keys1, keys2))  # sensors moved between reboot?
 
         self._starting_temperatures = readings_dct
         self.temperature_thresholds = {k: v + self.TEMP_THRESHOLD_DEGREES for
@@ -245,6 +253,11 @@ class BasePlatform(object):
     def sanity_checks(self):
         pass
 
+    @abstractmethod
+    def find_temperature_sensors(self):
+        """Fill self.temp_sensors"""
+        pass
+
 
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
@@ -315,7 +328,7 @@ class UnixLikePlatform(BasePlatform):
 
 
 class OpenBSDPlatform(UnixLikePlatform):
-    TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
+    FIND_TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
     GET_SETPERF_CMD = "sysctl hw.setperf"
 
     # flags to set OpenBSD MALLOC_OPTIONS to. We disable anything that could
@@ -325,8 +338,19 @@ class OpenBSDPlatform(UnixLikePlatform):
     MALLOC_OPTS = "sfghjpru"
 
     def __init__(self, mailer):
-        self.temperature_sensors = []
         UnixLikePlatform.__init__(self, mailer)
+
+    def find_temperature_sensors(self):
+        lines = self._get_sysctl_sensor_lines()
+        sensors = []
+        for line in lines.split("\n"):
+            elems = line.split("=")
+
+            if len(elems) != 2:
+                fatal("Malformed sysctl line: '%s'" % line)
+
+            sensors.append(elems[0].strip())
+        self.temp_sensors = sensors
 
     def bench_env_changes(self):
         # Force malloc flags
@@ -376,22 +400,33 @@ class OpenBSDPlatform(UnixLikePlatform):
             out, _, _ = run_shell_cmd("apm -H")
             self._check_apm_state()  # should work this time
 
-    def _get_sysctl_temperature_output(self):
+    def _get_sysctl_sensor_lines(self):
         # separate for test mocking
-        return run_shell_cmd(self.TEMP_SENSORS_CMD)[0]
+        return run_shell_cmd(self.FIND_TEMP_SENSORS_CMD)[0]
+
+    def _raw_read_temperature_sensor(self, sensor):
+        # mocked in tests
+
+        # sysctl doesn't return 0 on failure.
+        # Luckily we can catch the error later when when the output
+        # looks weird.
+        return run_shell_cmd("sysctl %s" % sensor)[0]
 
     def take_temperature_readings(self):
-        lines = self._get_sysctl_temperature_output()
         readings = {}
-        for line in lines.split("\n"):
+        for sensor in self.temp_sensors:
+            line = self._raw_read_temperature_sensor(sensor)
+
             elems = line.split("=")
 
             if len(elems) != 2:
-                fatal("Malformed sensor sysctl line: '%s'" % line)
+                fatal("Failed to read sensor: '%s'. "
+                      "Malformed sysctl output: %s" % (sensor, line))
 
             k, v = elems
             v_elems = [x.strip() for x in v.split(" ")]
             k = k.strip()
+            assert k == sensor
 
             # Typically the value element looks like:
             # "49.00 degC" or "48.00 degC (zone temperature)"
@@ -399,12 +434,14 @@ class OpenBSDPlatform(UnixLikePlatform):
             # Notice that the values are already reported in degrees
             # centigrade, so we don't have to process them.
             if len(v_elems) < 2 or v_elems[1] != "degC":
-                fatal("sensor '%s' has an odd non-degC value: '%s'" % (k, v))
+                fatal("Failed to read sensor: '%s'. "
+                      "Odd non-degC value: '%s'" % (k, v))
 
             try:
                 temp_val = float(v_elems[0])
             except ValueError:
-                fatal("sensor '%s' has a non-numeric value: '%s'" % (k, v_elems[0]))
+                fatal("Failed to read sensor %s. "
+                      "Non-numeric value: '%s'" % (k, v_elems[0]))
 
             readings[k] = temp_val
 
@@ -467,9 +504,8 @@ class LinuxPlatform(UnixLikePlatform):
     }
 
     def __init__(self, mailer):
-        self.temp_sensors = self._find_temperature_sensors()
-        self.num_cpus = self._get_num_cpus()
         UnixLikePlatform.__init__(self, mailer)
+        self.num_cpus = self._get_num_cpus()
 
 
     def _fatal_kernel_arg(self, arg, prefix, suffix):
@@ -489,7 +525,7 @@ class LinuxPlatform(UnixLikePlatform):
               "Set `%s` in the kernel arguments.\n"
               "%s" % (prefix, arg, suffix))
 
-    def _find_temperature_sensors(self):
+    def find_temperature_sensors(self):
         """Returns a list of sysfs files to use for temperature sensor
         readings.
 
@@ -498,15 +534,18 @@ class LinuxPlatform(UnixLikePlatform):
 
         sensors = sorted(glob.glob(LinuxPlatform.HWMON_GLOB))
         debug("Detected temperature sensors: %s" % sensors)
-        return sensors
+        self.temp_sensors = sensors
 
     def _get_num_cpus(self):
         cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
         return int(run_shell_cmd(cmd)[0])
 
     def _read_temperature_sensor(self, sysfs_file):
-        with open(sysfs_file) as fh:
-            return int(fh.read())
+        try:
+            with open(sysfs_file) as fh:
+                return int(fh.read())
+        except IOError:
+            fatal("Failed to read sensor: %s" % sysfs_file)
 
     def take_temperature_readings(self):
         # Linux thermal zones are reported in millidegrees celsius
