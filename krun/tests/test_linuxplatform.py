@@ -1,6 +1,7 @@
 import pytest
 import krun.platform
 from krun.tests import BaseKrunTest, subst_env_arg
+from krun.util import FatalKrunError
 import sys
 from StringIO import StringIO
 
@@ -52,7 +53,7 @@ class TestLinuxPlatform(BaseKrunTest):
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_tickless0003(self, monkeypatch, platform):
@@ -71,7 +72,7 @@ class TestLinuxPlatform(BaseKrunTest):
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_tickless0004(self, monkeypatch, platform):
@@ -89,7 +90,7 @@ class TestLinuxPlatform(BaseKrunTest):
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_tickless0005(self, monkeypatch, platform, caplog):
@@ -114,7 +115,7 @@ class TestLinuxPlatform(BaseKrunTest):
                             "_get_kernel_cmdline",
                             dummy_get_kernel_cmdline)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
         assert "Adaptive-ticks CPUs overridden on kernel command line" \

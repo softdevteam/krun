@@ -78,7 +78,7 @@ class TestScheduler(BaseKrunTest):
                                    started_by_init=False)
         try:
             sched.build_schedule()
-        except SystemExit:
+        except krun.util.FatalKrunError:
             pass
         else:
             assert False, "Krun did not exit when ETAs failed to tally with results!"
@@ -154,4 +154,80 @@ class TestScheduler(BaseKrunTest):
                                    reboot=True, dry_run=False,
                                    started_by_init=False)
         sched.build_schedule()
-        assert len(sched) == 90  # tking into account skips
+        assert len(sched) == 90  # taking into account skips
+
+
+    def test_pre_exec_cmds0001(self, monkeypatch, mock_platform):
+        cap_cmds = []
+        def dummy_run_shell_cmd(cmd):
+            cap_cmds.append(cmd)
+            return "", "", 0
+
+        monkeypatch.setattr(krun.util, "run_shell_cmd", dummy_run_shell_cmd)
+
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+        config.PRE_EXECUTION_CMDS = ["cmd1", "cmd2"]
+        krun.util.assign_platform(config, mock_platform)
+
+        sched = ExecutionScheduler(config,
+                                   mock_platform.mailer,
+                                   mock_platform, resume=False,
+                                   dry_run=True,
+                                   started_by_init=True)
+        sched.build_schedule()
+        assert len(sched) == 8
+        sched.run()
+
+        expect = ["cmd1", "cmd2"] * 8
+        assert cap_cmds == expect
+
+    def test_post_exec_cmds0001(self, monkeypatch, mock_platform):
+        cap_cmds = []
+        def dummy_run_shell_cmd(cmd):
+            cap_cmds.append(cmd)
+            return "", "", 0
+
+        monkeypatch.setattr(krun.util, "run_shell_cmd", dummy_run_shell_cmd)
+
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+        config.POST_EXECUTION_CMDS = ["cmd1", "cmd2"]
+        krun.util.assign_platform(config, mock_platform)
+
+        sched = ExecutionScheduler(config,
+                                   mock_platform.mailer,
+                                   mock_platform, resume=False,
+                                   dry_run=True,
+                                   started_by_init=True)
+        sched.build_schedule()
+        assert len(sched) == 8
+        sched.run()
+
+        expect = ["cmd1", "cmd2"] * 8
+        assert cap_cmds == expect
+
+    def test_pre_and_post_cmds0001(self, monkeypatch, mock_platform):
+        cap_cmds = []
+        def dummy_run_shell_cmd(cmd):
+            cap_cmds.append(cmd)
+            return "", "", 0
+
+        monkeypatch.setattr(krun.util, "run_shell_cmd", dummy_run_shell_cmd)
+
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+
+        config.PRE_EXECUTION_CMDS = ["pre1", "pre2"]
+        config.POST_EXECUTION_CMDS = ["post1", "post2"]
+
+        krun.util.assign_platform(config, mock_platform)
+
+        sched = ExecutionScheduler(config,
+                                   mock_platform.mailer,
+                                   mock_platform, resume=False,
+                                   dry_run=True,
+                                   started_by_init=True)
+        sched.build_schedule()
+        assert len(sched) == 8
+        sched.run()
+
+        expect = ["pre1", "pre2", "post1", "post2"] * 8
+        assert cap_cmds == expect

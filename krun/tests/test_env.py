@@ -1,4 +1,5 @@
 from krun.env import EnvChangeSet, EnvChangeAppend
+from krun.util import FatalKrunError
 
 import logging, os
 import pytest
@@ -8,7 +9,7 @@ def test_env_change_set(monkeypatch, caplog):
     env = EnvChangeSet("bach", 1685)
     assert env.var == "bach"
     assert env.val == 1685
-    with pytest.raises(SystemExit):
+    with pytest.raises(FatalKrunError):
         env.apply({"bach": 1695})
     assert "Environment bach is already defined" in caplog.text()
 

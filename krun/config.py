@@ -28,6 +28,9 @@ class Config(object):
         self.STACK_LIMIT = None
         self.TEMP_READ_PAUSE = 60
 
+        self.PRE_EXECUTION_CMDS = []
+        self.POST_EXECUTION_CMDS = []
+
         if config_file is not None:
             self.read_from_file(config_file)
 
@@ -112,4 +115,6 @@ class Config(object):
                 (self.VARIANTS == other.VARIANTS) and
                 (self.BENCHMARKS == other.BENCHMARKS) and
                 (self.SKIP == other.SKIP) and
-                (self.N_EXECUTIONS == other.N_EXECUTIONS))
+                (self.N_EXECUTIONS == other.N_EXECUTIONS) and
+                (self.PRE_EXECUTION_CMDS == other.PRE_EXECUTION_CMDS) and
+                (self.POST_EXECUTION_CMDS == other.POST_EXECUTION_CMDS))
