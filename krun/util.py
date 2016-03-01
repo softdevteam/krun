@@ -61,7 +61,10 @@ def run_shell_cmd(cmd, failure_fatal=True, extra_env=None):
     stdout, stderr = p.communicate()
     rc = p.wait()
     if failure_fatal and rc != 0:
-        fatal("Shell command failed: '%s'" % cmd)
+        msg = "Command failed: '%s'\n" % cmd
+        msg += "stdout:\n%s\n" % stdout
+        msg += "stderr:\n%s\n" % stderr
+        fatal(msg)
     return stdout.strip(), stderr.strip(), rc
 
 
@@ -69,12 +72,8 @@ def run_shell_cmd_list(cmds, failure_fatal=True, extra_env=None):
     """Run a list of shell commands, stopping on first failure."""
 
     for cmd in cmds:
-        out, err, rv = run_shell_cmd(cmd, extra_env=extra_env)
-        if rv != 0:
-            msg = "Command failed: '%s'\n" % cmd
-            msg += "stdout:\n%s\n" % out
-            msg += "stderr:\n%s\n" % err
-            fatal(msg)
+        _, _, rv = run_shell_cmd(cmd, extra_env=extra_env)
+        assert rv == 0
 
 def check_and_parse_execution_results(stdout, stderr, rc):
     json_exn = None
