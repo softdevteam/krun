@@ -470,7 +470,7 @@ class OpenBSDPlatform(UnixLikePlatform):
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
 
-    HWMON_GLOB = "/sys/class/hwmon/hwmon[0-9]/temp[0-9]*_input"
+    HWMON_CHIPS_GLOB = "/sys/class/hwmon/hwmon[0-9]"
     CPU_GOV_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor"
     TURBO_DISABLED = "/sys/devices/system/cpu/intel_pstate/no_turbo"
     PERF_SAMPLE_RATE = "/proc/sys/kernel/perf_event_max_sample_rate"
@@ -504,6 +504,7 @@ class LinuxPlatform(UnixLikePlatform):
     }
 
     def __init__(self, mailer):
+        self.temp_sensor_map = None
         UnixLikePlatform.__init__(self, mailer)
         self.num_cpus = self._get_num_cpus()
 
@@ -526,26 +527,47 @@ class LinuxPlatform(UnixLikePlatform):
               "%s" % (prefix, arg, suffix))
 
     def find_temperature_sensors(self):
-        """Returns a list of sysfs files to use for temperature sensor
-        readings.
+        """Detect sensors using the hwmon sysfs framework
 
-        We are not fussy, and use as many sensors as we can find exposed by the
-        sensors framework into sysfs."""
+        The sensors move between reboots, so we have to roll our own sensor
+        identifier. We are not fussy, and use as many sensors as we can find."""
 
-        sensors = sorted(glob.glob(LinuxPlatform.HWMON_GLOB))
-        debug("Detected temperature sensors: %s" % sensors)
-        self.temp_sensors = sensors
+        # maps our identifier to actual sysfs filename
+        sensor_map = {}
+
+        hwmons = glob.glob(LinuxPlatform.HWMON_CHIPS_GLOB)
+        for chip in hwmons:
+            name_path = os.path.join(chip, "name")
+            with open(name_path) as fh:
+                chip_name = fh.read().strip()
+
+            inputs_glob = os.path.join(chip, "temp[0-9]*_input")
+            chip_sensors = glob.glob(inputs_glob)
+
+            for sensor in chip_sensors:
+                key = "%s:%s" % (chip_name, os.path.basename(sensor))
+                assert key not in sensor_map  # two chips with the same name?
+                sensor_map[key] = sensor
+
+        debug("Detected temperature sensors: %s" % sensor_map)
+        self.temp_sensors = sensor_map.keys()
+        self.temp_sensor_map = sensor_map
 
     def _get_num_cpus(self):
         cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
         return int(run_shell_cmd(cmd)[0])
 
-    def _read_temperature_sensor(self, sysfs_file):
+    def _read_temperature_sensor(self, sid):
+        try:
+            sysfs_file = self.temp_sensor_map[sid]
+        except KeyError:
+            fatal("Failed to read sensor: %s (missing key)" % sid)
+
         try:
             with open(sysfs_file) as fh:
                 return int(fh.read())
         except IOError:
-            fatal("Failed to read sensor: %s" % sysfs_file)
+            fatal("Failed to read sensor: %s at %s" % (sid, sysfs_file))
 
     def take_temperature_readings(self):
         # Linux thermal zones are reported in millidegrees celsius

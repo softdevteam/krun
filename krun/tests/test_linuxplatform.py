@@ -141,23 +141,27 @@ class TestLinuxPlatform(BaseKrunTest):
 
         temps = platform.take_temperature_readings()
         assert type(temps) is dict
-        assert all([x.startswith("/sys/class/hwmon/hwmon") \
-                    for x in temps.iterkeys()])
+
+        for sid in temps.iterkeys():
+            elems = sid.split(":")
+            assert len(elems) == 2
+            assert elems[1].endswith("_input")
+
         # check temperature readings are within reasonable parameters
         assert all([type(v) == float for v in temps.itervalues()])
         assert all([10 <= v <= 100 for v in temps.itervalues()])
 
     def test_take_temperature_readings0002(self, platform, monkeypatch):
         platform.temp_sensors = [
-            "/sys/class/hwmon/hwmon1/temp1_input",
-            "/sys/class/hwmon/hwmon2/temp1_input",
-            "/sys/class/hwmon/hwmon2/temp2_input",
+            "x:temp1_input",
+            "y:temp1_input",
+            "y:temp2_input",
         ]
 
         def fake_read_zone(self, zone):
-            if zone == "/sys/class/hwmon/hwmon1/temp1_input":
+            if zone == "x:temp1_input":
                 return 66123
-            elif zone == "/sys/class/hwmon/hwmon2/temp1_input":
+            elif zone == "y:temp1_input":
                 return 0
             else:
                 return 100000
@@ -166,9 +170,9 @@ class TestLinuxPlatform(BaseKrunTest):
                             "_read_temperature_sensor", fake_read_zone)
 
         expect = {
-            "/sys/class/hwmon/hwmon1/temp1_input": 66.123,
-            "/sys/class/hwmon/hwmon2/temp1_input": 0.0,
-            "/sys/class/hwmon/hwmon2/temp2_input": 100.0
+            "x:temp1_input": 66.123,
+            "y:temp1_input": 0.0,
+            "y:temp2_input": 100.0
         }
         got = platform.take_temperature_readings()
 
