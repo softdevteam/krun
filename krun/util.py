@@ -45,9 +45,19 @@ def format_raw_exec_results(exec_data):
     return [float(format(x, FLOAT_FORMAT)) for x in exec_data]
 
 
-def run_shell_cmd(cmd, failure_fatal=True):
+def run_shell_cmd(cmd, failure_fatal=True, extra_env=None):
     debug("execute shell cmd: %s" % cmd)
-    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+
+    env = os.environ.copy()
+    if extra_env:
+        # Use EnvChangeSet so that we crash out if extra_env conflicts
+        # with the current environment.
+        from krun.env import EnvChangeSet
+        for var, val in extra_env.iteritems():
+            ec = EnvChangeSet(var, val)
+            ec.apply(env)
+
+    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE, env=env)
     stdout, stderr = p.communicate()
     rc = p.wait()
     if failure_fatal and rc != 0:
@@ -55,11 +65,11 @@ def run_shell_cmd(cmd, failure_fatal=True):
     return stdout.strip(), stderr.strip(), rc
 
 
-def run_shell_cmd_list(cmds, failure_fatal=True):
+def run_shell_cmd_list(cmds, failure_fatal=True, extra_env=None):
     """Run a list of shell commands, stopping on first failure."""
 
     for cmd in cmds:
-        out, err, rv = run_shell_cmd(cmd)
+        out, err, rv = run_shell_cmd(cmd, extra_env=extra_env)
         if rv != 0:
             msg = "Command failed: '%s'\n" % cmd
             msg += "stdout:\n%s\n" % out

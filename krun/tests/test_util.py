@@ -227,3 +227,32 @@ def test_run_shell_cmd_list0002(caplog):
 
     expect = "Shell command failed: '/flibblebop"
     assert expect in caplog.text()
+
+def test_run_shell_cmd_list0002():
+    path = os.path.join(TEST_DIR, "shell-out")
+    cmds = [
+        "echo ${TESTVAR}  > %s" % path,
+        "echo ${TESTVAR2} >> %s" % path,
+    ]
+
+    run_shell_cmd_list(cmds, extra_env={
+        "TESTVAR": "test123", "TESTVAR2": "test456"})
+
+    with open(path) as fh:
+        got = fh.read()
+
+    os.unlink(path)
+    assert got == "test123\ntest456\n"
+
+def test_run_shell_cmd_list0003(caplog):
+    path = os.path.join(TEST_DIR, "shell-out")
+    cmds = [
+        "echo ${TESTVAR}  > %s" % path,
+        "echo ${TESTVAR2} >> %s" % path,
+    ]
+
+    with pytest.raises(FatalKrunError):
+        run_shell_cmd_list(cmds, extra_env={"HOME": "test123"})
+
+    expect = "Environment HOME is already defined"
+    assert expect in caplog.text()

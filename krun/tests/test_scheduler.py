@@ -159,7 +159,7 @@ class TestScheduler(BaseKrunTest):
 
     def test_pre_exec_cmds0001(self, monkeypatch, mock_platform):
         cap_cmds = []
-        def dummy_run_shell_cmd(cmd):
+        def dummy_run_shell_cmd(cmd, failure_fatal=False, extra_env=None):
             cap_cmds.append(cmd)
             return "", "", 0
 
@@ -183,7 +183,7 @@ class TestScheduler(BaseKrunTest):
 
     def test_post_exec_cmds0001(self, monkeypatch, mock_platform):
         cap_cmds = []
-        def dummy_run_shell_cmd(cmd):
+        def dummy_run_shell_cmd(cmd, failure_fatal=False, extra_env=None):
             cap_cmds.append(cmd)
             return "", "", 0
 
@@ -205,9 +205,35 @@ class TestScheduler(BaseKrunTest):
         expect = ["cmd1", "cmd2"] * 8
         assert cap_cmds == expect
 
+    def test_post_exec_cmds0002(self, monkeypatch, mock_platform):
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+        path = os.path.join(TEST_DIR, "shell-out")
+        cmd = "echo ${KRUN_RESULTS_FILE}:${KRUN_LOG_FILE} > %s" % path
+        config.POST_EXECUTION_CMDS = [cmd]
+        krun.util.assign_platform(config, mock_platform)
+
+        sched = ExecutionScheduler(config,
+                                   mock_platform.mailer,
+                                   mock_platform, resume=False,
+                                   dry_run=True,
+                                   started_by_init=True)
+        sched.build_schedule()
+        assert len(sched) == 8
+        sched.run()
+
+        with open(path) as fh:
+            got = fh.read().strip()
+
+        os.unlink(path)
+
+        elems = got.split(":")
+
+        assert elems[0].endswith(".json.bz2")
+        assert elems[1].endswith(".log")
+
     def test_pre_and_post_cmds0001(self, monkeypatch, mock_platform):
         cap_cmds = []
-        def dummy_run_shell_cmd(cmd):
+        def dummy_run_shell_cmd(cmd, failure_fatal=False, extra_env=None):
             cap_cmds.append(cmd)
             return "", "", 0
 

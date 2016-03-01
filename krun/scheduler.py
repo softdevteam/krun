@@ -75,8 +75,16 @@ class ExecutionJob(object):
         heap_limit_kb = self.sched.config.HEAP_LIMIT
         stack_limit_kb = self.sched.config.STACK_LIMIT
 
+        pre_post_cmds_extra_env = {
+            "KRUN_RESULTS_FILE": self.sched.config.results_filename(),
+            "KRUN_LOG_FILE": self.sched.config.log_filename(resume=True),
+        }
+
         # run the user's pre-process-execution commands
-        util.run_shell_cmd_list(self.sched.config.PRE_EXECUTION_CMDS)
+        util.run_shell_cmd_list(
+            self.sched.config.PRE_EXECUTION_CMDS,
+            extra_env=pre_post_cmds_extra_env,
+        )
 
         stdout, stderr, rc = vm_def.run_exec(
             entry_point, self.benchmark, self.vm_info["n_iterations"],
@@ -98,7 +106,10 @@ class ExecutionJob(object):
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
 
         # run the user's post-process-execution commands
-        util.run_shell_cmd_list(self.sched.config.POST_EXECUTION_CMDS)
+        util.run_shell_cmd_list(
+            self.sched.config.POST_EXECUTION_CMDS,
+            extra_env=pre_post_cmds_extra_env,
+        )
 
         return iterations_results
 
