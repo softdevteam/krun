@@ -27,7 +27,10 @@ class TestOpenBSDPlatform(BaseKrunTest):
     def test_take_temperature_readings0002(self, platform, monkeypatch):
         """Test with fake readings"""
 
-        platform.zones = ["zone1", "zone2", "zone3"]
+        platform.temp_sensors = [
+            "hw.sensors.cpu0.temp0",
+            "hw.sensors.acpitz0.temp0",
+        ]
 
         def fake__raw_read_temperature_sensor(self, sensor):
             if sensor == "hw.sensors.cpu0.temp0":
