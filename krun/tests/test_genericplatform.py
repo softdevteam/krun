@@ -1,4 +1,5 @@
 from krun.tests import BaseKrunTest
+from krun.util import FatalKrunError
 import pytest
 
 class TestGenericPlatform(BaseKrunTest):
@@ -22,7 +23,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         platform.temp_sensors[0] += "_moved"
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             platform.take_temperature_readings()
 
         expect = "Failed to read sensor"
@@ -32,7 +33,7 @@ class TestGenericPlatform(BaseKrunTest):
     def test_inconsistent_sensors0002(self, platform, caplog):
         platform.temp_sensors = ["different", "sensors"]
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             platform.starting_temperatures = {"a": 1000, "b": 2000}
 
         expect = "Inconsistent sensors. ['a', 'b'] vs ['different', 'sensors']"
@@ -41,7 +42,7 @@ class TestGenericPlatform(BaseKrunTest):
     def test_inconsistent_sensors0003(self, platform, caplog):
         platform.temp_sensors = ["a"]
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             platform.starting_temperatures = {"a": 1000, "b": 2000}
 
         expect = "Inconsistent sensors. ['a', 'b'] vs ['a']"

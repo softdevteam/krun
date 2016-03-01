@@ -18,16 +18,22 @@ class ExecutionFailed(Exception):
     pass
 
 
+class FatalKrunError(Exception):
+    pass
+
 def fatal(msg):
     error(msg)
-    sys.exit(1)
+
+    # We raise, then later this is trapped in an attempt to run the user's
+    # post-session commands.
+    raise FatalKrunError()
 
 
 def log_and_mail(mailer, log_fn, subject, msg, exit=False, bypass_limiter=False):
     log_fn(msg)
     mailer.send(subject, msg, bypass_limiter)
     if exit:
-        sys.exit(1)
+        raise FatalKrunError()  # causes post-session commands to run
 
 
 def format_raw_exec_results(exec_data):
@@ -40,6 +46,7 @@ def format_raw_exec_results(exec_data):
 
 
 def run_shell_cmd(cmd, failure_fatal=True):
+    debug("execute shell cmd: %s" % cmd)
     p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate()
     rc = p.wait()
@@ -47,6 +54,17 @@ def run_shell_cmd(cmd, failure_fatal=True):
         fatal("Shell command failed: '%s'" % cmd)
     return stdout.strip(), stderr.strip(), rc
 
+
+def run_shell_cmd_list(cmds, failure_fatal=True):
+    """Run a list of shell commands, stopping on first failure."""
+
+    for cmd in cmds:
+        out, err, rv = run_shell_cmd(cmd)
+        if rv != 0:
+            msg = "Command failed: '%s'\n" % cmd
+            msg += "stdout:\n%s\n" % out
+            msg += "stderr:\n%s\n" % err
+            fatal(msg)
 
 def check_and_parse_execution_results(stdout, stderr, rc):
     json_exn = None

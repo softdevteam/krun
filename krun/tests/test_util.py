@@ -2,7 +2,8 @@ from krun.util import (format_raw_exec_results,
                        log_and_mail, fatal,
                        check_and_parse_execution_results,
                        run_shell_cmd,
-                       ExecutionFailed, get_session_info)
+                       ExecutionFailed, get_session_info,
+                       run_shell_cmd_list, FatalKrunError)
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
@@ -16,7 +17,7 @@ import os
 def test_fatal(capsys, caplog):
     caplog.setLevel(logging.ERROR)
     msg = "example text"
-    with pytest.raises(SystemExit):
+    with pytest.raises(FatalKrunError):
         fatal(msg)
     out, err = capsys.readouterr()
     assert out == ""
@@ -27,7 +28,7 @@ def test_log_and_mail():
     log_fn = lambda s: None
     log_and_mail(MockMailer(), log_fn, "subject", "msg", exit=False,
                  bypass_limiter=False)
-    with pytest.raises(SystemExit):
+    with pytest.raises(FatalKrunError):
         log_and_mail(MockMailer(), log_fn, "", "", exit=True,
                      bypass_limiter=False)
     assert True
@@ -188,3 +189,41 @@ def test_get_session_info0002():
 
     # There should be no overlap in the used and skipped keys
     assert info["skipped_keys"].intersection(info["non_skipped_keys"]) == set()
+
+
+def test_run_shell_cmd_list0001():
+    path = os.path.join(TEST_DIR, "shell-out")
+    cmds = [
+        "echo 1 > %s" % path,
+        "echo 2 >> %s" % path,
+        "echo 3 >> %s" % path,
+    ]
+
+    run_shell_cmd_list(cmds)
+
+    with open(path) as fh:
+        got = fh.read()
+
+    os.unlink(path)
+    assert got == "1\n2\n3\n"
+
+
+def test_run_shell_cmd_list0002(caplog):
+    path = os.path.join(TEST_DIR, "shell-out")
+    cmds = [
+        "echo 1 > %s" % path,
+        "/flibblebop 2 >> %s" % path,  # failing command
+        "echo 3 >> %s" % path,
+    ]
+
+    with pytest.raises(FatalKrunError):
+        run_shell_cmd_list(cmds)
+
+    with open(path) as fh:
+        got = fh.read()
+
+    os.unlink(path)
+    assert got == "1\n"
+
+    expect = "Shell command failed: '/flibblebop"
+    assert expect in caplog.text()

@@ -75,6 +75,9 @@ class ExecutionJob(object):
         heap_limit_kb = self.sched.config.HEAP_LIMIT
         stack_limit_kb = self.sched.config.STACK_LIMIT
 
+        # run the user's pre-process-execution commands
+        util.run_shell_cmd_list(self.sched.config.PRE_EXECUTION_CMDS)
+
         stdout, stderr, rc = vm_def.run_exec(
             entry_point, self.benchmark, self.vm_info["n_iterations"],
             self.parameter, heap_limit_kb, stack_limit_kb)
@@ -93,6 +96,9 @@ class ExecutionJob(object):
         # before the next execution, so we are grand.
         info("Finished '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
+
+        # run the user's post-process-execution commands
+        util.run_shell_cmd_list(self.sched.config.POST_EXECUTION_CMDS)
 
         return iterations_results
 

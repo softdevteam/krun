@@ -2,7 +2,7 @@ import pytest
 import krun.platform
 import sys
 from krun.tests import BaseKrunTest, subst_env_arg
-from krun.util import run_shell_cmd
+from krun.util import run_shell_cmd, FatalKrunError
 
 
 def make_dummy_get_apm_output_fn(output):
@@ -60,7 +60,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.OpenBSDPlatform,
                             "_raw_read_temperature_sensor", dummy)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             platform.take_temperature_readings()
 
         assert "Odd non-degC value" in caplog.text()
@@ -75,7 +75,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.OpenBSDPlatform,
                             "_raw_read_temperature_sensor", dummy)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             platform.take_temperature_readings()
 
         assert "Non-numeric value" in caplog.text()
@@ -90,7 +90,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.OpenBSDPlatform,
                             "_raw_read_temperature_sensor", dummy)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             platform.take_temperature_readings()
 
         assert "Odd non-degC value" in caplog.text()
@@ -118,7 +118,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.OpenBSDPlatform,
                             "_get_apm_output", monkey_func)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(FatalKrunError):
             platform._check_apm_state()
         assert "Expected 3 lines of output from apm(8)" in caplog.text()
 

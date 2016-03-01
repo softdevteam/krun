@@ -285,7 +285,11 @@ def main(parser):
     sched.build_schedule()
 
     # does the benchmarking
-    sched.run()
+    try:
+        sched.run()
+    except FatalKrunError as e:
+        util.run_shell_cmd_list(config.POST_SESSION_CMDS)
+        raise e
 
 
 def setup_logging(parser):
@@ -323,4 +327,8 @@ if __name__ == "__main__":
     debug("arguments: %s"  % " ".join(sys.argv[1:]))
     parser = create_arg_parser()
     setup_logging(parser)
-    main(parser)
+
+    try:
+        main(parser)
+    except FatalKrunError:
+        pass
