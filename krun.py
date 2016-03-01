@@ -287,7 +287,7 @@ def main(parser):
     # does the benchmarking
     try:
         sched.run()
-    except FatalKrunError as e:
+    except util.FatalKrunError as e:
         util.run_shell_cmd_list(config.POST_SESSION_CMDS)
         raise e
 
@@ -330,5 +330,5 @@ if __name__ == "__main__":
 
     try:
         main(parser)
-    except FatalKrunError:
+    except util.FatalKrunError:
         pass
