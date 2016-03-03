@@ -4,6 +4,7 @@ from krun.results import Results
 from krun.scheduler import mean, ExecutionJob, ExecutionScheduler, JobMissingError
 from krun.tests import BaseKrunTest
 import krun.util
+from krun.tests import no_sleep
 
 import os, pytest, subprocess
 from krun.tests import TEST_DIR

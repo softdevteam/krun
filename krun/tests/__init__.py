@@ -8,6 +8,11 @@ import os
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
+@pytest.fixture(autouse=True)
+def no_sleep(monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda x: None)
+
+
 def subst_env_arg(lst, var):
     """Returns a copy of the list with elements starting with 'var=' changed to
     literally 'var='. Used in tests where an environment variable argument to

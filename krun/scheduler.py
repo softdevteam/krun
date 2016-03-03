@@ -75,17 +75,6 @@ class ExecutionJob(object):
         heap_limit_kb = self.sched.config.HEAP_LIMIT
         stack_limit_kb = self.sched.config.STACK_LIMIT
 
-        pre_post_cmds_extra_env = {
-            "KRUN_RESULTS_FILE": self.sched.config.results_filename(),
-            "KRUN_LOG_FILE": self.sched.config.log_filename(resume=True),
-        }
-
-        # run the user's pre-process-execution commands
-        util.run_shell_cmd_list(
-            self.sched.config.PRE_EXECUTION_CMDS,
-            extra_env=pre_post_cmds_extra_env,
-        )
-
         stdout, stderr, rc = vm_def.run_exec(
             entry_point, self.benchmark, self.vm_info["n_iterations"],
             self.parameter, heap_limit_kb, stack_limit_kb)
@@ -104,12 +93,6 @@ class ExecutionJob(object):
         # before the next execution, so we are grand.
         info("Finished '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
-
-        # run the user's post-process-execution commands
-        util.run_shell_cmd_list(
-            self.sched.config.POST_EXECUTION_CMDS,
-            extra_env=pre_post_cmds_extra_env,
-        )
 
         return iterations_results
 
@@ -139,6 +122,12 @@ class ExecutionScheduler(object):
             self.results = Results(self.config, platform)
 
         self.log_path = self.config.log_filename(self.resume)
+
+        # Used for pre/post cmd hooks
+        self.pre_post_cmds_extra_env = {
+            "KRUN_RESULTS_FILE": self.config.results_filename(),
+            "KRUN_LOG_FILE": self.config.log_filename(resume=True),
+        }
 
     def set_eta_avail(self):
         """call after adding job before eta should become available"""
@@ -301,6 +290,12 @@ class ExecutionScheduler(object):
 
             job = self.next_job()
 
+            # Run the user's pre-process-execution commands
+            util.run_shell_cmd_list(
+                self.config.PRE_EXECUTION_CMDS,
+                extra_env=self.pre_post_cmds_extra_env,
+            )
+
             # We collect rough execution times separate from real results. The
             # reason for this is that, even if a benchmark crashes it takes
             # time and we need to account for this when making estimates. A
@@ -322,9 +317,15 @@ class ExecutionScheduler(object):
 
             # We dump the json after each experiment so we can monitor the
             # json file mid-run. It is overwritten each time.
-            debug("Intermediate results dumped to %s" %
-                 self.config.results_filename())
             self.results.write_to_file()
+
+            # Run the user's post-process-execution commands. Important that
+            # this happens *after* dumping results. The user is likely copying
+            # intermediate results to another host.
+            util.run_shell_cmd_list(
+                self.config.POST_EXECUTION_CMDS,
+                extra_env=self.pre_post_cmds_extra_env,
+            )
 
             self.jobs_done += 1
 
