@@ -1,4 +1,4 @@
-# Various platform related abstrations
+# Various platform related abstractions
 
 import time
 import os
@@ -26,13 +26,8 @@ LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkruntime")
 class BasePlatform(object):
     __metaclass__ = ABCMeta
 
-    # Each temperature sensor must cool to its starting temperature plus
-    # TEMP_THRESHOLD_DEGREES. An absolute value in degrees centigrade.
-    TEMP_THRESHOLD_DEGREES = 1
-
-    TEMP_MANDATORY_WAIT = 1
-    TEMP_POLL_FREQ = 10                 # seconds between polls
-    TEMP_POLLS_BEFORE_MELTDOWN = 60     # times 10 = ten mins
+    TEMP_THRESHOLD_DEGREES = 3
+    TEMP_WAIT_SECS_BEFORE_GIVEUP = 60 * 60
 
     def __init__(self, mailer):
         self.developer_mode = False
@@ -75,37 +70,34 @@ class BasePlatform(object):
                   (keys1, keys2))  # sensors moved between reboot?
 
         self._starting_temperatures = readings_dct
-        self.temperature_thresholds = {k: v + self.TEMP_THRESHOLD_DEGREES for
-                                       k, v in readings_dct.iteritems()}
-
         debug("Set start temperatures: %s" % readings_dct)
-        debug("Temperatures thresholds: %s" % self.temperature_thresholds)
 
-    def has_cooled(self):
-        """Returns tuple: (bool_cool, str_reason_if_false)
+    def temp_sensors_within_interval(self):
+        """Indicates if all temperature sensors are close (within an interval)
+        to their start readings.
 
-        'bool_cool' is True if the system has cooled (or was never hot).
+        Returns tuple: (bool_ok, str_reason_if_false)
 
-        'str_reason_if_false' is None if the system cooled down.
-        (bool_cool=True) , otherwise it is a string indicating the reason
-        the system failed to cool.
+        'bool_ok' is True if all temperature sensors are within range.
+
+        'str_reason_if_false' is None if 'bool_ok' is True, otherwise it is a
+        string indicating the reason the system is not within the desired
+        temperature range.
         """
-
-        assert self._starting_temperatures != {}
 
         readings = self.take_temperature_readings()
         debug("start temperatures: %s" % self._starting_temperatures)
-        debug("temp thresholds: %s" % self.temperature_thresholds)
         debug("temp reading: %s" % readings)
 
-        for name, threshold in self.temperature_thresholds.iteritems():
-            now_val = readings[name]
+        for name, now_val in readings.iteritems():
             start_val = self.starting_temperatures[name]
-            if readings[name] > threshold:
-                # This reading is too hot
-                reason = ("Temperature reading '%s' started at %d but is now %d. " \
-                          "Needs to cool to %s or lower" %
-                          (name, start_val, now_val, threshold))
+            low = start_val - self.TEMP_THRESHOLD_DEGREES
+            high = start_val + self.TEMP_THRESHOLD_DEGREES
+
+            if not (low <= now_val <= high):
+                # This reading is too hot/cold
+                reason = ("Temperature reading '%s' not within interval: "
+                          "(%d <= %d <= %d)" % (name, low, now_val, high))
                 return (False, reason)  # one or more sensor too hot
         return (True, None)
 
@@ -136,33 +128,30 @@ class BasePlatform(object):
             return True  # i.e. a (potential) error occurred
         return False
 
-    def wait_until_cool(self):
+    def wait_for_temperature_sensors(self):
+        """A polling loop waiting for temperature sensors to return (close) to
+        their starting values."""
+
         if self.developer_mode:
-            warn("Not waiting for cooling due to developer mode")
+            warn("Not waiting for temperature sensors due to developer mode")
             return
 
-        time.sleep(BasePlatform.TEMP_MANDATORY_WAIT)
-        msg_shown = False
+        time.sleep(1)  # for good measure, always wait a second
         trys = 0
-        while True:
-            debug("Temp poll %d/%d" %
-                  (trys + 1, BasePlatform.TEMP_POLLS_BEFORE_MELTDOWN))
-            cool, reason = self.has_cooled()
-            if cool:
+        while trys < self.TEMP_WAIT_SECS_BEFORE_GIVEUP:
+            ok, reason = self.temp_sensors_within_interval()
+            if ok:
                 break
 
-            # if we get here, too hot!
-            if not msg_shown:
-                debug("System is running hot.")
-                debug(reason)
-                debug("Waiting to cool")
-                msg_shown = True
+            # Avoid flooding log when in debug mode
+            if trys % 60 == 0:
+                debug("Temperature poll %d/%d: %s" %
+                      (trys + 1, self.TEMP_WAIT_SECS_BEFORE_GIVEUP, reason))
 
             trys += 1
-            if trys >= BasePlatform.TEMP_POLLS_BEFORE_MELTDOWN:
-                fatal("System didn't cool down")
-
-            time.sleep(BasePlatform.TEMP_POLL_FREQ)
+            time.sleep(1)
+        else:
+            fatal("Temperature timeout: %s" % reason)
 
     # When porting to a new platform, implement the following:
     @abstractmethod

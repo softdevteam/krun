@@ -26,17 +26,11 @@ class MockPlatform(BasePlatform):
     def check_dmesg_for_changes(self):
         pass
 
-    def wait_until_cpu_cool(self):
-        pass
-
     def CHANGE_USER_CMD(self):
         pass
 
     def take_temperature_readings(self):
-        pass
-
-    def has_cooled(self):
-        return True, None  # pretend we cooled down OK
+        return {}
 
     def check_preliminaries(self):
         pass
