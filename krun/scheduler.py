@@ -282,7 +282,7 @@ class ExecutionScheduler(object):
         self.platform.collect_starting_dmesg()
 
         while True:
-            self.platform.wait_until_cool()
+            self.platform.wait_for_temperature_sensors()
 
             jobs_left = len(self)
             if jobs_left == 0:
