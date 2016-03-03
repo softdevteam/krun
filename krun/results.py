@@ -1,5 +1,6 @@
 from krun.audit import Audit
 from krun.config import Config
+from logging import debug
 
 import bz2  # decent enough compression with Python 2.7 compatibility.
 import json
@@ -73,8 +74,10 @@ class Results(object):
             self.audit = results["audit"]
 
     def write_to_file(self):
-        """Serialise object on disk.
-        """
+        """Serialise object on disk."""
+
+        debug("Writing results out to: %s" % self.filename)
+
         to_write = {
             "config": self.config.text,
             "data": self.data,
