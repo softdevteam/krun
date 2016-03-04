@@ -1,5 +1,4 @@
 import json
-import sys
 import os
 from subprocess import Popen, PIPE
 from logging import error, debug
@@ -25,8 +24,9 @@ def fatal(msg):
     error(msg)
 
     # We raise, then later this is trapped in an attempt to run the user's
-    # post-session commands.
-    raise FatalKrunError()
+    # post-session commands. The message is stashed inside the exception so
+    # that we can send an email indicating the problem later.
+    raise FatalKrunError(msg)
 
 
 def log_and_mail(mailer, log_fn, subject, msg, exit=False, bypass_limiter=False):
