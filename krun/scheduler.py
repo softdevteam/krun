@@ -7,8 +7,8 @@ from logging import warn, info, error, debug
 
 import os, resource, subprocess, sys, time
 
-# Wait this many seconds for the network to come up.
-STARTUP_WAIT_SECONDS = 3 * 60
+# Wait this many seconds for the init system to finish bringing up services.
+STARTUP_WAIT_SECONDS = 2 * 60
 
 
 def mean(seq):
