@@ -20,7 +20,8 @@ SENDMAIL = "/usr/sbin/sendmail"
 class Mailer(object):
     def __init__(self, recipients, max_mails):
         self.recipients = recipients
-        self.fqdn = socket.getfqdn()
+        self.hostname = socket.gethostname()
+        self.short_hostname = self.hostname.split(".")[0]
 
         # After sending max_mails emails, we stop sending more so as
         # not to spam. Some emails however, you will always want to send.
@@ -40,7 +41,7 @@ class Mailer(object):
             return
 
         if self.n_mails_sent < self.max_mails or bypass_limiter:
-            body = "Message from krun running on %s:\n\n" % self.fqdn
+            body = "Message from krun running on %s:\n\n" % self.hostname
             body += inner_body + "\n"
 
             if self.n_mails_sent == self.max_mails - 1 and not bypass_limiter:
@@ -49,16 +50,20 @@ class Mailer(object):
                 logging.warn("Mail quota reached.")
 
             msg = MIMEText(body)  # text/plain
-            msg['Subject'] = '[krun] ' + append_subject
-            msg['From'] = "%s@%s" % (FROM_USER, self.fqdn)
+            msg['Subject'] = '[krun:%s] %s' % \
+                (self.short_hostname, append_subject)
+            msg['From'] = "%s@%s" % (FROM_USER, self.hostname)
             msg['To'] = ", ".join(self.recipients)
+
+            logging.debug("Sending email to '%s' subject line '%s'" %
+                  (msg['To'], msg['Subject']))
 
             pipe = Popen([SENDMAIL, "-t", "-oi"], stdin=PIPE)
             pipe.communicate(msg.as_string())
 
             rc = pipe.returncode
             if rc != 0:
-                logging.error("Sendmail process returned %d" % rc)
+                logging.warning("Sendmail process returned %d" % rc)
 
             if not bypass_limiter:
                 self.n_mails_sent += 1

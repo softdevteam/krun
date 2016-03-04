@@ -7,7 +7,7 @@ usage: runner.py <config_file.krun>
 """
 
 import argparse, json, logging, os, sys
-from logging import debug, info, warn
+from logging import debug, info, warn, error
 import locale
 import time
 
@@ -288,7 +288,9 @@ def main(parser):
     try:
         sched.run()
     except util.FatalKrunError as e:
-        util.run_shell_cmd_list(config.POST_SESSION_CMDS)
+        subject = "Fatal Krun Exception"
+        mailer.send(subject, e.args[0], bypass_limiter=True)
+        util.run_shell_cmd_list(config.POST_EXECUTION_CMDS)
         raise e
 
 
@@ -330,5 +332,5 @@ if __name__ == "__main__":
 
     try:
         main(parser)
-    except util.FatalKrunError:
-        pass
+    except util.FatalKrunError as e:
+        sys.exit(1)
