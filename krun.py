@@ -187,6 +187,22 @@ def main(parser):
 
     attach_log_file(config, args.resume)
 
+    mail_recipients = config.MAIL_TO
+    if type(mail_recipients) is not list:
+        util.fatal("MAIL_TO config should be a list")
+
+    mailer = Mailer(mail_recipients, max_mails=config.MAX_MAILS)
+
+    try:
+        inner_main(mailer, config, args)
+    except util.FatalKrunError as e:
+        subject = "Fatal Krun Exception"
+        mailer.send(subject, e.args[0], bypass_limiter=True)
+        util.run_shell_cmd_list(config.POST_EXECUTION_CMDS)
+        raise e
+
+
+def inner_main(mailer, config, args):
     out_file = config.results_filename()
     out_file_exists = os.path.exists(out_file)
 
@@ -210,12 +226,6 @@ def main(parser):
 
     if args.develop:
         warn("Developer mode enabled. Results will not be reliable.")
-
-    mail_recipients = config.MAIL_TO
-    if type(mail_recipients) is not list:
-        util.fatal("MAIL_TO config should be a list")
-
-    mailer = Mailer(mail_recipients, max_mails=config.MAX_MAILS)
 
     # Initialise platform instance and assign to VM defs.
     # This needs to be done early, so VM sanity checks can run.
@@ -283,15 +293,7 @@ def main(parser):
                                dry_run=args.dry_run,
                                started_by_init=args.started_by_init)
     sched.build_schedule()
-
-    # does the benchmarking
-    try:
-        sched.run()
-    except util.FatalKrunError as e:
-        subject = "Fatal Krun Exception"
-        mailer.send(subject, e.args[0], bypass_limiter=True)
-        util.run_shell_cmd_list(config.POST_EXECUTION_CMDS)
-        raise e
+    sched.run()
 
 
 def setup_logging(parser):
