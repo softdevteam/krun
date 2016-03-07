@@ -180,3 +180,16 @@ def print_session_info(config):
             print("  %s" % k)
     else:
         print("  No keys skipped")
+
+
+def make_heat():
+    """A loop which spins, attempting to make heat.
+
+    Used when the CPU is too cool to run a benchmark."""
+
+    # Waste cycles with this loop. At the time of writing PyPy is unable to
+    # optimise this away. Heat is a consequence.
+    j = 0
+    for i in xrange(10000000):
+        j += 1
+    assert j == 10000000
