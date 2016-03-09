@@ -29,6 +29,10 @@ class BasePlatform(object):
     TEMP_THRESHOLD_DEGREES = 3
     TEMP_WAIT_SECS_BEFORE_GIVEUP = 60 * 60
 
+    TEMP_OK = 0
+    TEMP_TOO_HOT = 1
+    TEMP_TOO_COLD = 2
+
     def __init__(self, mailer):
         self.developer_mode = False
         self.mailer = mailer
@@ -78,11 +82,13 @@ class BasePlatform(object):
 
         Returns tuple: (bool_ok, str_reason_if_false)
 
-        'bool_ok' is True if all temperature sensors are within range.
+        'flag' is BasePlatform.TEMP_OK if all temperature sensors are within
+        range, or BasePlatform.TEMP_TOO_HOT or BasePlatform.TEMP_TOO_COLD
+        otherwise.
 
-        'str_reason_if_false' is None if 'bool_ok' is True, otherwise it is a
-        string indicating the reason the system is not within the desired
-        temperature range.
+        'str_reason' is None if 'flag' is BasePlatform.TEMP_OK, otherwise it is
+        a string message indicating the reason the system is not within the
+        desired temperature range.
         """
 
         readings = self.take_temperature_readings()
@@ -98,8 +104,15 @@ class BasePlatform(object):
                 # This reading is too hot/cold
                 reason = ("Temperature reading '%s' not within interval: "
                           "(%d <= %d <= %d)" % (name, low, now_val, high))
-                return (False, reason)  # one or more sensor too hot
-        return (True, None)
+
+                if now_val < low:
+                    flag = BasePlatform.TEMP_TOO_COLD
+                else:
+                    assert now_val > high
+                    flag = BasePlatform.TEMP_TOO_HOT
+
+                return (flag, reason)  # one or more sensor too hot or cold
+        return (self.TEMP_OK, None)
 
     def _collect_dmesg_lines(self):
         return run_shell_cmd("dmesg")[0].split("\n")
@@ -128,29 +141,38 @@ class BasePlatform(object):
             return True  # i.e. a (potential) error occurred
         return False
 
-    def wait_for_temperature_sensors(self):
+    def wait_for_temperature_sensors(self, testing=False):
         """A polling loop waiting for temperature sensors to return (close) to
-        their starting values."""
+        their starting values.
+
+        When 'testing' is True, only one iteration of the wait loop will
+        run (used only in unit tests)."""
 
         if self.developer_mode:
             warn("Not waiting for temperature sensors due to developer mode")
             return
 
-        time.sleep(1)  # for good measure, always wait a second
-        trys = 0
-        while trys < self.TEMP_WAIT_SECS_BEFORE_GIVEUP:
-            ok, reason = self.temp_sensors_within_interval()
-            if ok:
+        if not testing:
+            bail_out_time = time.clock() + self.TEMP_WAIT_SECS_BEFORE_GIVEUP
+        else:
+            bail_out_time = 0  # force only one iteration
+
+        while True:
+            flag, reason = self.temp_sensors_within_interval()
+
+            if flag == self.TEMP_OK:
+                break
+            elif flag == self.TEMP_TOO_HOT:
+                time.sleep(1)
+            elif flag == self.TEMP_TOO_COLD:
+                # This takes a variable amount of time, but on a modern
+                # machine it takes only a fraction of a second.
+                util.make_heat()
+
+            if time.clock() >= bail_out_time:
                 break
 
-            # Avoid flooding log when in debug mode
-            if trys % 60 == 0:
-                debug("Temperature poll %d/%d: %s" %
-                      (trys + 1, self.TEMP_WAIT_SECS_BEFORE_GIVEUP, reason))
-
-            trys += 1
-            time.sleep(1)
-        else:
+        if flag != self.TEMP_OK:
             fatal("Temperature timeout: %s" % reason)
 
     # When porting to a new platform, implement the following:

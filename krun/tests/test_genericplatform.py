@@ -1,6 +1,8 @@
 from krun.tests import BaseKrunTest, no_sleep
 from krun.util import FatalKrunError
+from krun.platform import BasePlatform
 import pytest
+from krun import util
 
 class TestGenericPlatform(BaseKrunTest):
     """Platform tests that can be run on any platform"""
@@ -16,7 +18,7 @@ class TestGenericPlatform(BaseKrunTest):
         monkeypatch.setattr(mock_platform,"take_temperature_readings",
                             mock_take_temperature_readings)
 
-        mock_platform.wait_for_temperature_sensors()
+        mock_platform.wait_for_temperature_sensors(testing=True)
         # should exit without crashing, no assert.
 
     def test_temperature_thresholds0002(self, mock_platform, monkeypatch, caplog):
@@ -30,11 +32,67 @@ class TestGenericPlatform(BaseKrunTest):
                             mock_take_temperature_readings)
 
         with pytest.raises(FatalKrunError):
-            mock_platform.wait_for_temperature_sensors()
+            mock_platform.wait_for_temperature_sensors(testing=True)
 
         expect = ("Temperature timeout: Temperature reading 'x' not "
                   "within interval: (27 <= 999 <= 33)")
         assert expect in caplog.text()
+
+    def test_temperature_thresholds0003(self, mock_platform, monkeypatch, caplog):
+        temps = {"x": 30.0}
+        mock_platform.temp_sensors = ["x"]
+        mock_platform.starting_temperatures = temps
+
+        def mock_take_temperature_readings():
+            return {"x": -999}  # system in the arctic
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
+                            mock_take_temperature_readings)
+
+        with pytest.raises(FatalKrunError):
+            mock_platform.wait_for_temperature_sensors(testing=True)
+
+        expect = ("Temperature timeout: Temperature reading 'x' not "
+                  "within interval: (27 <= -999 <= 33)")
+        assert expect in caplog.text()
+
+    def test_temperature_thresholds0004(self, mock_platform, monkeypatch, caplog):
+        temps = {"x": 30.0}
+        mock_platform.temp_sensors = ["x"]
+        mock_platform.starting_temperatures = temps
+
+        def mock_take_temperature_readings():
+            return {"x": 999}  # system on fire
+        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+                            mock_take_temperature_readings)
+
+        flag, _ = mock_platform.temp_sensors_within_interval()
+        assert flag == BasePlatform.TEMP_TOO_HOT
+
+    def test_temperature_thresholds0005(self, mock_platform, monkeypatch, caplog):
+        temps = {"x": 30.0}
+        mock_platform.temp_sensors = ["x"]
+        mock_platform.starting_temperatures = temps
+
+        def mock_take_temperature_readings():
+            return {"x": -999}  # system in the arctic again
+        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+                            mock_take_temperature_readings)
+
+        flag, _ = mock_platform.temp_sensors_within_interval()
+        assert flag == BasePlatform.TEMP_TOO_COLD
+
+    def test_temperature_thresholds0006(self, mock_platform, monkeypatch, caplog):
+        temps = {"x": 30.0}
+        mock_platform.temp_sensors = ["x"]
+        mock_platform.starting_temperatures = temps
+
+        def mock_take_temperature_readings():
+            return {"x": 31}  # almost spot on
+        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+                            mock_take_temperature_readings)
+
+        flag, _ = mock_platform.temp_sensors_within_interval()
+        assert flag == BasePlatform.TEMP_OK
 
     def test_inconsistent_sensors0001(self, platform, caplog):
         # The platform has already detected the available sensors. Now we
