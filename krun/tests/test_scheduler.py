@@ -258,3 +258,29 @@ class TestScheduler(BaseKrunTest):
 
         expect = ["pre1", "pre2", "post1", "post2"] * 8
         assert cap_cmds == expect
+
+    def test_pre_and_post_cmds0002(self, monkeypatch, mock_platform):
+        """Check that the pre/post commands use a shell and don't just exec(3)"""
+
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+        tmp_file = os.path.join(TEST_DIR, "prepost.txt")
+
+        # commands use shell syntax
+        config.PRE_EXECUTION_CMDS = ["echo 'pre' > %s" % tmp_file]
+        config.POST_EXECUTION_CMDS = ["echo 'post' >> %s" % tmp_file]
+
+        krun.util.assign_platform(config, mock_platform)
+
+        sched = ExecutionScheduler(config,
+                                   mock_platform.mailer,
+                                   mock_platform, resume=False,
+                                   dry_run=True,
+                                   started_by_init=True)
+        sched.build_schedule()
+        sched.run()
+
+        with open(tmp_file) as fh:
+            got = fh.read()
+
+        os.unlink(tmp_file)
+        assert got == "pre\npost\n"
