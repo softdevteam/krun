@@ -108,7 +108,7 @@ main(int argc, char **argv)
     fprintf(stdout, "[");
     for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
         krun_iter_num++) {
-        fprintf(stdout, "%f", (stop_time - start_time));
+        fprintf(stdout, "%f", krun_iter_times[krun_iter_num]);
 
         if (krun_iter_num < krun_total_iters - 1) {
             fprintf(stdout, ", ");
