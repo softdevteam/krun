@@ -1,6 +1,7 @@
 from krun.audit import Audit
 from krun.config import Config
-from logging import debug
+from logging import debug, info
+from krun.util import fatal
 
 import bz2  # decent enough compression with Python 2.7 compatibility.
 import json
@@ -107,3 +108,47 @@ class Results(object):
                 self.starting_temperatures == other.starting_temperatures and
                 self.eta_estimates == other.eta_estimates and
                 self.error_flag == other.error_flag)
+
+    def strip_results(self, key_spec):
+        debug("Strip results: %s" % key_spec)
+
+        spec_elems = key_spec.split(":")
+        if len(spec_elems) != 3:
+            fatal("malformed key spec: %s" % key_spec)
+
+        new_data = self.data.copy()
+        removed_keys = 0
+        removed_execs = 0
+
+        # We have to keep track of how many executions have run successfully so
+        # that we can set self.reboots accordingly. It's not correct to simply
+        # deduct one for each execution we remove, as the reboots value is one
+        # higher due to the initial reboot. Bear in mind the user may strip
+        # several result keys in succession, so counting the completed
+        # executions is the only safe way.
+        completed_execs = 0
+
+        for key in self.data.iterkeys():
+            key_elems = key.split(":")
+            # deal with wildcards
+            for i in xrange(3):
+                if spec_elems[i] == "*":
+                    key_elems[i] = "*"
+
+            # decide whether to remove
+            if key_elems == spec_elems:
+                removed_keys += 1
+                removed_execs += len(new_data[key])
+                new_data[key] = []
+                self.eta_estimates[key] = []
+                info("Removed results for: %s" % key)
+            else:
+                completed_execs += len(new_data[key])
+
+        self.data = new_data
+
+        # If the results were collected with reboot mode, update reboots count
+        if self.reboots != 0:
+            self.reboots = completed_execs
+
+        return removed_keys
