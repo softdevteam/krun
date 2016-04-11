@@ -18,7 +18,7 @@ IterationsRunner.class BaseKrunEntry.class: iterations_runner.java
 	fi
 
 iterations_runner_c: iterations_runner.c
-	${CC} ${C_ITER_RUNNER_CFLAGS} ${CFLAGS} -L${PWD}/../libkruntime \
+	${CC} ${C_ITER_RUNNER_CFLAGS} ${CFLAGS} -L${PWD}/../libkrun \
 		${CPPFLAGS} iterations_runner.c \
 		-o iterations_runner_c -lkruntime ${C_ITER_RUNNER_LDFLAGS} \
 		${LDFLAGS}

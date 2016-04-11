@@ -20,7 +20,7 @@ from krun.env import EnvChangeSet, EnvChange, EnvChangeAppend
 
 NICE_PRIORITY = -20
 DIR = os.path.abspath(os.path.dirname(__file__))
-LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkruntime")
+LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkrun")
 
 
 class BasePlatform(object):
@@ -212,7 +212,6 @@ class BasePlatform(object):
         Currently deals with:
           * CPU pinning (if available)
           * Adding libkruntime to linker path
-          * Process priority
 
         It does not deal with changing user, as this is done one
         level up in the wrapper script."""
@@ -222,8 +221,7 @@ class BasePlatform(object):
         changes = self.bench_env_changes()
         EnvChange.apply_all(changes, combine_env)
 
-        return self.process_priority_args() + \
-            self.adjust_env_cmd(combine_env) + args
+        return self.adjust_env_cmd(combine_env) + args
 
     @abstractmethod
     def _change_user_args(self, user="root"):
@@ -275,6 +273,7 @@ class UnixLikePlatform(BasePlatform):
 
     FORCE_LIBRARY_PATH_ENV_NAME = "LD_LIBRARY_PATH"
     REBOOT = "reboot"
+    NICE_CMD = "/usr/bin/nice"
 
     def __init__(self, mailer):
         self.change_user_cmd = find_executable("sudo")
@@ -298,7 +297,7 @@ class UnixLikePlatform(BasePlatform):
         fcntl.fcntl(fd, fcntl.F_SETFL, fl)
 
     def process_priority_args(self):
-        return ["nice", str(NICE_PRIORITY)]
+        return [self.NICE_CMD, "-n", str(NICE_PRIORITY)]
 
     def adjust_env_cmd(self, env_dct):
         """Construct a command prefix with env_dict set using env(1)"""
@@ -313,6 +312,7 @@ class UnixLikePlatform(BasePlatform):
 
     def sanity_checks(self):
         self._sanity_check_user_change()
+        self._sanity_check_nice_priority()
 
     def _sanity_check_user_change(self):
         from krun.vm_defs import PythonVMDef
@@ -321,6 +321,16 @@ class UnixLikePlatform(BasePlatform):
         ep = EntryPoint("check_user_change.py")
         vd = PythonVMDef(sys.executable)  # run under the VM that runs *this*
         util.spawn_sanity_check(self, ep, vd, "UNIX user change",
+                                force_dir=PLATFORM_SANITY_CHECK_DIR)
+
+    def _sanity_check_nice_priority(self):
+        from krun.vm_defs import NativeCodeVMDef
+        from krun import EntryPoint
+
+        ep = EntryPoint("check_nice_priority.so")
+        vd = NativeCodeVMDef()
+        util.spawn_sanity_check(self, ep, vd,
+                                "Process priority sanity check",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
 
     def sync_disks(self):

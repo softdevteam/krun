@@ -1,6 +1,6 @@
 OS != uname
 
-all: check_openbsd_malloc_options
+all: check_openbsd_malloc_options check_nice_priority.so
 
 .PHONY: clean
 
@@ -10,5 +10,9 @@ check_openbsd_malloc_options: check_openbsd_malloc_options.c
 		check_openbsd_malloc_options check_openbsd_malloc_options.c \
 		; fi
 
+check_nice_priority.so: check_nice_priority.c
+	${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -shared -Wall -Wextra -o \
+		check_nice_priority.so check_nice_priority.c
+
 clean:
-	rm -f check_openbsd_malloc_options
+	rm -f check_openbsd_malloc_options check_nice_priority.so
