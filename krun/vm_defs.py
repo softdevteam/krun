@@ -181,7 +181,11 @@ class BaseVMDef(object):
 
         debug("Wrapper script:\n%s" % ("\n".join(lines)))
 
-        wrapper_args = self.platform.change_user_args(BENCHMARK_USER) + \
+        # The arguments used to invoke the wrapper script now
+        wrapper_args = \
+            self.platform.change_user_args("root") + \
+            self.platform.process_priority_args() + \
+            self.platform.change_user_args(BENCHMARK_USER) + \
             [DASH, WRAPPER_SCRIPT]
 
         debug("Execute wrapper: %s" % (" ".join(wrapper_args)))

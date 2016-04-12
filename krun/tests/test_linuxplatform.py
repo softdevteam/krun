@@ -122,14 +122,13 @@ class TestLinuxPlatform(BaseKrunTest):
             in caplog.text()
 
     def test_bench_cmdline_adjust0001(self, platform):
-        expect = ['nice', '-20', 'env', 'LD_LIBRARY_PATH=']
+        expect = ['env', 'LD_LIBRARY_PATH=']
 
         args = subst_env_arg(platform.bench_cmdline_adjust([], {}), "LD_LIBRARY_PATH")
         assert args == expect
 
     def test_bench_cmdline_adjust0002(self, platform):
-        expect = ['nice', '-20', 'env', 'MYENV=some_value',
-                  'LD_LIBRARY_PATH=', 'myarg']
+        expect = ['env', 'MYENV=some_value', 'LD_LIBRARY_PATH=', 'myarg']
 
         args = subst_env_arg(platform.bench_cmdline_adjust(
             ["myarg"], {"MYENV": "some_value"}), "LD_LIBRARY_PATH")
