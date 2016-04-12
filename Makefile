@@ -6,7 +6,7 @@ PASS_DOWN_ARGS =	ENABLE_JAVA=${ENABLE_JAVA} JAVAC=${JAVAC} \
 			CC=${CC} CFLAGS=${CFLAGS} CPPFLAGS=${CPPFLAGS} \
 			LDFLAGS=${LDFLAGS}
 
-.PHONY: libkrun vm-sanity-checks clean
+.PHONY: libkrun vm-sanity-checks clean all
 
 all: iterations-runners libkrun vm-sanity-checks platform-sanity-checks
 
