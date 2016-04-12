@@ -329,8 +329,7 @@ class UnixLikePlatform(BasePlatform):
 
         ep = EntryPoint("check_nice_priority.so")
         vd = NativeCodeVMDef()
-        util.spawn_sanity_check(self, ep, vd,
-                                "Process priority sanity check",
+        util.spawn_sanity_check(self, ep, vd, "Process priority",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
 
     def sync_disks(self):
