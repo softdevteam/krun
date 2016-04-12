@@ -479,7 +479,7 @@ class OpenBSDPlatform(UnixLikePlatform):
         """Checks MALLOC_OPTIONS are set"""
 
         from krun import EntryPoint
-        ep = EntryPoint("check_openbsd_malloc_options")
+        ep = EntryPoint("check_openbsd_malloc_options.so")
 
         from krun.vm_defs import NativeCodeVMDef, SANITY_CHECK_HEAP_KB
         vd = NativeCodeVMDef()
