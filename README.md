@@ -24,11 +24,12 @@ using, e.g. on Linux you should be able to run `sudo`.
 
 You need to have the following installed:
 
-  * Python2.7 (other versions of Python are not supported)
-  * a Java SDK (version 7)
-  * GNU make, a C compiler and libc (e.g. `sudo apt-get install build-essential`)
-  * cpufrequtils (e.g. `sudo apt-get install cpufrequtils`)
-  * cffi (e.g. `sudo apt-get install python-cffi`)
+  * Python2.7 (pre-installed in Debian)
+  * A Java SDK 7 (`openjdk-7-jdk` package in Debian)
+  * GNU make, a C compiler and libc (`build-essential` package in Debian)
+  * cpufrequtils (Linux only. `cpufrequtils` package in Debian)
+  * cffi (`python-cffi` package in Debian)
+  * taskset (Linux only. `util-linux` package in Debian)
 
 ### Kernel arguments
 
@@ -37,14 +38,24 @@ If your Linux bootloader is Grub, you can follow these steps:
 
   * Edit /etc/default/grub (e.g. `sudo gedit /etc/default/grub`)
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
+  * Add `isolcpus=x,y,z` to `GRUB_CMDLINE_LINUX_DEFAULT`, where 'x,y,z' is a
+    comma separated list of all logical CPUs apart from the boot processor
+    (i.e. CPU 0). This ensures that the adaptive tick cores are used soley for
+    benchmarks (see 'Tickless Mode Linux Kernel').
   * Run `sudo update-grub`
 
 ### Tickless Mode Linux Kernel
 
+The Linux kernel can run in ``tickless'' configurations, where under certain
+conditions regular tick interrupts can be avoided for a subset of logical CPUs.
+More info here:
+https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt
+
 On a Linux system, Krun will insist that the kernel is running in
-"full tickless" mode. Tickless mode is a compile time kernel parameter, so if it is
-not enabled, you will need to build a custom kernel.  You can verify the
-tickless mode of the current kernel with:
+"full tickless" mode with the NO_HZ_FULL_ALL compile time flag. This will place
+all logical CPUs apart from the boot processor (i.e. CPU 0) into adaptive ticks
+mode. If this is not enabled, you will need to build a custom kernel. You can
+verify the tickless mode of the current kernel with:
 
 ```
 cat /boot/config-`uname -r` | grep HZ
