@@ -179,3 +179,51 @@ class TestLinuxPlatform(BaseKrunTest):
         got = platform.take_temperature_readings()
 
         assert expect == got
+
+    def test_isolcpus0001(self, platform, monkeypatch, caplog):
+        platform.num_cpus = 8
+
+        def dummy_get_kernel_cmdline():
+            return "quiet"  # isolcpus missing
+        monkeypatch.setattr(platform, "_get_kernel_cmdline",
+                            dummy_get_kernel_cmdline)
+
+        with pytest.raises(FatalKrunError):
+            platform._check_isolcpus()
+
+        find = "CPUs incorrectly isolated. Got: [], expect: ['1', '2', '3', '4', '5', '6', '7']"
+        assert find in caplog.text()
+
+    def test_isolcpus0002(self, platform, monkeypatch, caplog):
+        platform.num_cpus = 4
+
+        def dummy_get_kernel_cmdline():
+            return "quiet isolcpus=1"  # not enough
+        monkeypatch.setattr(platform, "_get_kernel_cmdline",
+                            dummy_get_kernel_cmdline)
+
+        with pytest.raises(FatalKrunError):
+            platform._check_isolcpus()
+
+        find = "CPUs incorrectly isolated. Got: ['1'], expect: ['1', '2', '3']"
+        assert find in caplog.text()
+
+    def test_isolcpus0003(self, platform, monkeypatch):
+        platform.num_cpus = 8
+
+        def dummy_get_kernel_cmdline():
+            return "quiet isolcpus=1,2,3,4,5,6,7"  # good
+        monkeypatch.setattr(platform, "_get_kernel_cmdline",
+                            dummy_get_kernel_cmdline)
+
+        platform._check_isolcpus()  # should not raise
+
+    def test_isolcpus0004(self, platform, monkeypatch):
+        platform.num_cpus = 8
+
+        def dummy_get_kernel_cmdline():
+            return "quiet isolcpus=7,2,3,4,5,6,1"  # good but odd order
+        monkeypatch.setattr(platform, "_get_kernel_cmdline",
+                            dummy_get_kernel_cmdline)
+
+        platform._check_isolcpus()  # should not raise

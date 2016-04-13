@@ -852,6 +852,7 @@ class LinuxPlatform(UnixLikePlatform):
     def sanity_checks(self):
         UnixLikePlatform.sanity_checks(self)
         self._check_taskset_installed()
+        self._check_isolcpus()
         self._sanity_check_cpu_affinity()
 
     def _sanity_check_cpu_affinity(self):
@@ -862,6 +863,41 @@ class LinuxPlatform(UnixLikePlatform):
         vd = NativeCodeVMDef()
         util.spawn_sanity_check(self, ep, vd, "CPU affinity",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
+
+    def _advise_isolcpus_arg(self, got_cpus, expect_cpus):
+        """Error out and guide user in isolating CPUs"""
+
+        arg = "isolcpus=%s" % ",".join(expect_cpus)
+        self._fatal_kernel_arg(
+            arg, "CPUs incorrectly isolated. Got: %s, expect: %s" %
+            (got_cpus, expect_cpus)
+        )
+
+    def _check_isolcpus(self):
+        """Checks the correct CPUs have been isolated.
+        (All but the boot processor)"""
+
+        expect_cpus = [str(x) for x in xrange(1, self.num_cpus)]
+        all_args = self._get_kernel_cmdline()
+
+        args = all_args.split(" ")
+        for arg in args:
+            if "=" not in arg:
+                continue
+
+            k, v = arg.split("=", 1)
+
+            if k != "isolcpus":
+                continue
+
+            break  # found the isolcpus arg
+        else:
+            self._advise_isolcpus_arg([], expect_cpus)  # exits
+
+        got_cpus = list(sorted(v.split(",")))
+
+        if expect_cpus != got_cpus:
+            self._advise_isolcpus_arg(got_cpus, expect_cpus)  # exits
 
 
 class DebianLinuxPlatform(LinuxPlatform):
@@ -884,7 +920,7 @@ class DebianLinuxPlatform(LinuxPlatform):
               "Set `%s` in the kernel arguments.\n"
               "To do this on Debian:\n"
               "  * Edit /etc/default/grub\n"
-              "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
+              "  * Amend GRUB_CMDLINE_LINUX_DEFAULT\n"
               "  * Run `sudo update-grub`\n"
               "%s" % (prefix, arg, suffix))
 
