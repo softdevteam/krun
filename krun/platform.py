@@ -221,7 +221,8 @@ class BasePlatform(object):
         changes = self.bench_env_changes()
         EnvChange.apply_all(changes, combine_env)
 
-        return self.adjust_env_cmd(combine_env) + args
+        return self.adjust_env_cmd(combine_env) + \
+            self.pin_process_args() + args
 
     @abstractmethod
     def _change_user_args(self, user="root"):
@@ -265,6 +266,10 @@ class BasePlatform(object):
     @abstractmethod
     def find_temperature_sensors(self):
         """Fill self.temp_sensors"""
+        pass
+
+    @abstractmethod
+    def pin_process_args(self):
         pass
 
 
@@ -486,6 +491,9 @@ class OpenBSDPlatform(UnixLikePlatform):
         util.spawn_sanity_check(self, ep, vd, "OpenBSD malloc options",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
 
+    def pin_process_args(self):
+        return []  # not supported on OpenBSD
+
 
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -574,8 +582,18 @@ class LinuxPlatform(UnixLikePlatform):
         self.temp_sensor_map = sensor_map
 
     def _get_num_cpus(self):
-        cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
-        return int(run_shell_cmd(cmd)[0])
+        err = False
+
+        # most reliable method generic to all Linux
+        out, _, rv = run_shell_cmd("grep -c ^processor  /proc/cpuinfo")
+        if rv == 0:
+            out = out.strip()
+            try:
+                return int(out)
+            except ValueError:
+                pass
+
+        fatal("could not detect number of logical CPUs")
 
     def _read_temperature_sensor(self, sid):
         try:
@@ -814,6 +832,36 @@ class LinuxPlatform(UnixLikePlatform):
         cmd = self.change_user_args()
         cmd.append(self.REBOOT)
         return cmd
+
+    def pin_process_args(self):
+        """Pin to a set of adaptive tick CPUs.
+        We are working the assumption that the kernel is NO_HZ_FULL_ALL meaning
+        that all but the first CPU are in adaptive tick mode."""
+
+        if self.num_cpus == 1:
+            fatal("not enough CPUs to pin")
+
+        cpus = ",".join([str(x) for x in xrange(1, self.num_cpus)])
+        return ["taskset", "-c", cpus]
+
+    def _check_taskset_installed(self):
+        from distutils.spawn import find_executable
+        if not find_executable("taskset"):
+            fatal("taskset not installed (needed for pinning).")
+
+    def sanity_checks(self):
+        UnixLikePlatform.sanity_checks(self)
+        self._check_taskset_installed()
+        self._sanity_check_cpu_affinity()
+
+    def _sanity_check_cpu_affinity(self):
+        from krun.vm_defs import NativeCodeVMDef
+        from krun import EntryPoint
+
+        ep = EntryPoint("check_linux_cpu_affinity.so")
+        vd = NativeCodeVMDef()
+        util.spawn_sanity_check(self, ep, vd, "CPU affinity",
+                                force_dir=PLATFORM_SANITY_CHECK_DIR)
 
 
 class DebianLinuxPlatform(LinuxPlatform):

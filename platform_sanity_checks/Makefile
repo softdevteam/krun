@@ -1,6 +1,6 @@
 OS != uname
 
-all: check_openbsd_malloc_options.so check_nice_priority.so
+all: check_openbsd_malloc_options.so check_nice_priority.so check_linux_cpu_affinity.so
 
 .PHONY: clean
 
@@ -14,5 +14,12 @@ check_nice_priority.so: check_nice_priority.c
 	${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -shared -Wall -Wextra -o \
 		check_nice_priority.so check_nice_priority.c
 
+check_linux_cpu_affinity.so: check_linux_cpu_affinity.c
+	if [ "${OS}" = "Linux" ]; then \
+		${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -fPIC -shared -Wall -Wextra -o \
+		check_linux_cpu_affinity.so check_linux_cpu_affinity.c \
+		; fi
+
 clean:
-	rm -f check_openbsd_malloc_options.so check_nice_priority.so
+	rm -f check_openbsd_malloc_options.so check_nice_priority.so \
+		check_linux_cpu_affinity.so
