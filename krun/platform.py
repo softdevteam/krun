@@ -211,7 +211,7 @@ class BasePlatform(object):
 
         Currently deals with:
           * CPU pinning (if available)
-          * Adding libkruntime to linker path
+          * Adding libkruntime.so to linker path
 
         It does not deal with changing user, as this is done one
         level up in the wrapper script."""
