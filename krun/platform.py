@@ -531,7 +531,7 @@ class LinuxPlatform(UnixLikePlatform):
         "CONFIG_NO_HZ_IDLE": False,
 
         # Omit scheduler ticks when an adaptive tick CPU has only one
-        # runnable process. This enbles the tickless functionality, but the
+        # runnable process. This enables the tickless functionality, but the
         # system admin must manually specify on adaptive-tick CPUs via
         # the kernel command line. By default, no CPUs are adaptive tick,
         # so we insist also upon CONFIG_NO_HZ_FULL_ALL.
