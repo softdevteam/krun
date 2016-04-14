@@ -23,6 +23,12 @@ class MockPlatform(BasePlatform):
         self.num_cpus = 0
         self.developer_mode = False
 
+    def pin_process_args(self):
+        return []
+
+    def change_scheduler_args(self):
+        return []
+
     def check_dmesg_for_changes(self):
         pass
 

@@ -211,7 +211,7 @@ class BasePlatform(object):
 
         Currently deals with:
           * CPU pinning (if available)
-          * Adding libkruntime to linker path
+          * Adding libkruntime.so to linker path
 
         It does not deal with changing user, as this is done one
         level up in the wrapper script."""
@@ -221,7 +221,8 @@ class BasePlatform(object):
         changes = self.bench_env_changes()
         EnvChange.apply_all(changes, combine_env)
 
-        return self.adjust_env_cmd(combine_env) + args
+        return self.adjust_env_cmd(combine_env) + \
+            self.pin_process_args() + args
 
     @abstractmethod
     def _change_user_args(self, user="root"):
@@ -265,6 +266,14 @@ class BasePlatform(object):
     @abstractmethod
     def find_temperature_sensors(self):
         """Fill self.temp_sensors"""
+        pass
+
+    @abstractmethod
+    def pin_process_args(self):
+        pass
+
+    @abstractmethod
+    def change_scheduler_args(self):
         pass
 
 
@@ -486,6 +495,12 @@ class OpenBSDPlatform(UnixLikePlatform):
         util.spawn_sanity_check(self, ep, vd, "OpenBSD malloc options",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
 
+    def pin_process_args(self):
+        return []  # not supported on OpenBSD
+
+    def change_scheduler_args(self):
+        return []  # no control over scheduler
+
 
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -497,6 +512,11 @@ class LinuxPlatform(UnixLikePlatform):
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
     ASLR_FILE = "/proc/sys/kernel/randomize_va_space"
+
+    # The best realtime scheduler for our purposes. Also correctly schedules
+    # threads when a process is forced onto isolated cores:
+    # http://stackoverflow.com/questions/36604360/why-does-using-taskset-to-run-a-multi-threaded-linux-program-on-a-set-of-isolate
+    SCHED_ALGO = "fifo"
 
     # Expected tickless kernel config
     #
@@ -511,7 +531,7 @@ class LinuxPlatform(UnixLikePlatform):
         "CONFIG_NO_HZ_IDLE": False,
 
         # Omit scheduler ticks when an adaptive tick CPU has only one
-        # runnable process. This enbles the tickless functionality, but the
+        # runnable process. This enables the tickless functionality, but the
         # system admin must manually specify on adaptive-tick CPUs via
         # the kernel command line. By default, no CPUs are adaptive tick,
         # so we insist also upon CONFIG_NO_HZ_FULL_ALL.
@@ -574,8 +594,18 @@ class LinuxPlatform(UnixLikePlatform):
         self.temp_sensor_map = sensor_map
 
     def _get_num_cpus(self):
-        cmd = "cat /proc/cpuinfo | grep -e '^processor.*:' | wc -l"
-        return int(run_shell_cmd(cmd)[0])
+        err = False
+
+        # most reliable method generic to all Linux
+        out, _, rv = run_shell_cmd("grep -c ^processor  /proc/cpuinfo")
+        if rv == 0:
+            out = out.strip()
+            try:
+                return int(out)
+            except ValueError:
+                pass
+
+        fatal("could not detect number of logical CPUs")
 
     def _read_temperature_sensor(self, sid):
         try:
@@ -815,6 +845,93 @@ class LinuxPlatform(UnixLikePlatform):
         cmd.append(self.REBOOT)
         return cmd
 
+    def pin_process_args(self):
+        """Pin to a set of adaptive tick CPUs.
+        We are working the assumption that the kernel is NO_HZ_FULL_ALL meaning
+        that all but the first CPU are in adaptive tick mode."""
+
+        if self.num_cpus == 1:
+            fatal("not enough CPUs to pin")
+
+        cpus = ",".join([str(x) for x in xrange(1, self.num_cpus)])
+        return ["taskset", "-c", cpus]
+
+    def _check_util_linux_installed(self):
+        from distutils.spawn import find_executable
+        if not find_executable("taskset"):
+            fatal("util-linix is not installed "
+                  "(needed for pinning and scheduler tweaking).")
+
+    def sanity_checks(self):
+        UnixLikePlatform.sanity_checks(self)
+        self._check_util_linux_installed()
+        self._check_isolcpus()
+        self._sanity_check_cpu_affinity()
+        self._sanity_check_scheduler()
+
+    def _sanity_check_cpu_affinity(self):
+        from krun.vm_defs import NativeCodeVMDef
+        from krun import EntryPoint
+
+        ep = EntryPoint("check_linux_cpu_affinity.so")
+        vd = NativeCodeVMDef()
+        util.spawn_sanity_check(self, ep, vd, "CPU affinity",
+                                force_dir=PLATFORM_SANITY_CHECK_DIR)
+
+    def _sanity_check_scheduler(self):
+        from krun.vm_defs import NativeCodeVMDef
+        from krun import EntryPoint
+
+        ep = EntryPoint("check_linux_scheduler.so")
+        vd = NativeCodeVMDef()
+        util.spawn_sanity_check(self, ep, vd, "Scheduler",
+                                force_dir=PLATFORM_SANITY_CHECK_DIR)
+
+    def _advise_isolcpus_arg(self, got_cpus, expect_cpus):
+        """Error out and guide user in isolating CPUs"""
+
+        arg = "isolcpus=%s" % ",".join(expect_cpus)
+        self._fatal_kernel_arg(
+            arg, "CPUs incorrectly isolated. Got: %s, expect: %s" %
+            (got_cpus, expect_cpus)
+        )
+
+    def _check_isolcpus(self):
+        """Checks the correct CPUs have been isolated.
+        (All but the boot processor)"""
+
+        expect_cpus = [str(x) for x in xrange(1, self.num_cpus)]
+        all_args = self._get_kernel_cmdline()
+
+        args = all_args.split(" ")
+        for arg in args:
+            if "=" not in arg:
+                continue
+
+            k, v = arg.split("=", 1)
+
+            if k != "isolcpus":
+                continue
+
+            break  # found the isolcpus arg
+        else:
+            self._advise_isolcpus_arg([], expect_cpus)  # exits
+
+        got_cpus = list(sorted(v.split(",")))
+
+        if expect_cpus != got_cpus:
+            self._advise_isolcpus_arg(got_cpus, expect_cpus)  # exits
+
+    def _sched_get_priority_max(self):
+        # If we later support other operating systems which too support static
+        # thread priorities, then move this method into a super-class and call
+        # out to C to sched_get_priority_max(2).
+        return 99  # Linux specific maximum
+
+    def change_scheduler_args(self):
+        algo_arg = "--%s" % LinuxPlatform.SCHED_ALGO
+        return ["chrt", algo_arg, str(self._sched_get_priority_max())]
+
 
 class DebianLinuxPlatform(LinuxPlatform):
     def collect_audit(self):
@@ -836,7 +953,7 @@ class DebianLinuxPlatform(LinuxPlatform):
               "Set `%s` in the kernel arguments.\n"
               "To do this on Debian:\n"
               "  * Edit /etc/default/grub\n"
-              "  * Add the argument to GRUB_CMDLINE_LINUX_DEFAULT\n"
+              "  * Amend GRUB_CMDLINE_LINUX_DEFAULT\n"
               "  * Run `sudo update-grub`\n"
               "%s" % (prefix, arg, suffix))
 

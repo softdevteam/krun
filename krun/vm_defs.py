@@ -184,6 +184,7 @@ class BaseVMDef(object):
         # The arguments used to invoke the wrapper script now
         wrapper_args = \
             self.platform.change_user_args("root") + \
+            self.platform.change_scheduler_args() + \
             self.platform.process_priority_args() + \
             self.platform.change_user_args(BENCHMARK_USER) + \
             [DASH, WRAPPER_SCRIPT]
