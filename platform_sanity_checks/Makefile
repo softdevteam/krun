@@ -1,9 +1,9 @@
 OS != uname
 
+.PHONY: clean all
+
 all: check_openbsd_malloc_options.so check_nice_priority.so \
 	check_linux_cpu_affinity.so check_linux_scheduler.so
-
-.PHONY: clean
 
 check_openbsd_malloc_options.so: check_openbsd_malloc_options.c
 	if [ "${OS}" = "OpenBSD" ]; then \
