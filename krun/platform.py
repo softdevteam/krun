@@ -517,6 +517,7 @@ class LinuxPlatform(UnixLikePlatform):
     # threads when a process is forced onto isolated cores:
     # http://stackoverflow.com/questions/36604360/why-does-using-taskset-to-run-a-multi-threaded-linux-program-on-a-set-of-isolate
     SCHED_ALGO = "fifo"
+    SCHED_RT_RUNTIME_US = "/proc/sys/kernel/sched_rt_runtime_us"
 
     # Expected tickless kernel config
     #
@@ -647,6 +648,46 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_perf_samplerate()
         self._check_tickless_kernel()
         self._check_aslr_disabled()
+        self._check_realtime_throttle_disabled()
+
+    def _check_realtime_throttle_disabled(self):
+        """Linux kernel gets pretty upset if you run a CPU intensive thread
+        under the real-time thread schedule policy. By default Linux will
+        artificially pre-empt such threads to give other things a chance to run
+        on this core. A switch will flip at runtime leaving a message in dmesg
+        when this comes into effect.
+
+        See the "Limiting the CPU usage of real-time and deadline processes"
+        section in sched(7).
+
+        We don't want "throttling" on the benchmarking cores.
+
+        From sched(7):
+
+        "Specifying [sched_rt_runtime_us] -1 makes the runtime the same as the
+        period; that is, no CPU time is set aside for non-real-time processes."
+        """
+
+        debug("Check real-time thread throttling is off")
+
+        for itr in xrange(2):
+            with open(LinuxPlatform.SCHED_RT_RUNTIME_US) as fh:
+                val = fh.read().strip()
+
+            if val != "-1":
+                if itr == 0:
+                    debug("%s is not -1, adjusting." % LinuxPlatform.SCHED_RT_RUNTIME_US)
+
+                    # Needs to happen as root
+                    args = self.change_user_args() +  \
+                        ["sh", "-c",
+                         "'echo -1 > %s'" % LinuxPlatform.SCHED_RT_RUNTIME_US]
+
+                    cmd = " ".join(args)
+                    run_shell_cmd(cmd)
+                else:
+                    fatal("Could not set %s to -1" %
+                          LinuxPlatform.SCHED_RT_RUNTIME_US)
 
     @staticmethod
     def _tickless_config_info_str(modes):
