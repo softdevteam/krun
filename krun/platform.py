@@ -643,6 +643,8 @@ class LinuxPlatform(UnixLikePlatform):
     def check_preliminaries(self):
         """Checks the system is in a suitable state for benchmarking"""
 
+        self._check_util_linux_installed()
+        self._check_isolcpus()
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
@@ -898,6 +900,8 @@ class LinuxPlatform(UnixLikePlatform):
         return ["taskset", "-c", cpus]
 
     def _check_util_linux_installed(self):
+        debug("Check util-linux is installed")
+
         from distutils.spawn import find_executable
         if not find_executable("taskset"):
             fatal("util-linix is not installed "
@@ -905,8 +909,6 @@ class LinuxPlatform(UnixLikePlatform):
 
     def sanity_checks(self):
         UnixLikePlatform.sanity_checks(self)
-        self._check_util_linux_installed()
-        self._check_isolcpus()
         self._sanity_check_cpu_affinity()
         self._sanity_check_scheduler()
 
@@ -940,6 +942,8 @@ class LinuxPlatform(UnixLikePlatform):
     def _check_isolcpus(self):
         """Checks the correct CPUs have been isolated.
         (All but the boot processor)"""
+
+        debug("Check cores are isolated correctly")
 
         expect_cpus = [str(x) for x in xrange(1, self.num_cpus)]
         all_args = self._get_kernel_cmdline()
