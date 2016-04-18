@@ -66,5 +66,11 @@ N_EXECUTIONS = 2  # Number of fresh processes.
 TEMP_READ_PAUSE = 1
 
 # Commands to run before and after each process execution
+#
+# Environment available for these commands:
+#   KRUN_RESULTS_FILE: path to results file.
+#   KRUN_LOG_FILE: path to log file.
+#   KRUN_ETA_DATUM: time the ETA was computed
+#   KRUN_ETA_VALUE: estimated time of completion
 #PRE_EXECUTION_CMDS = ["sudo service cron stop"]
 #POST_EXECUTION_CMDS = ["sudo service cron start"]
