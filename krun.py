@@ -186,6 +186,7 @@ def main(parser):
         return
 
     attach_log_file(config, args.resume)
+    debug("Krun invoked with arguments: %s" % sys.argv)
 
     mail_recipients = config.MAIL_TO
     if type(mail_recipients) is not list:
