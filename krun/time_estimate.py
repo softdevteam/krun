@@ -33,3 +33,8 @@ class TimeEstimateFormatter(object):
             return str(self.delta).split(".")[0]
         else:
             return UNKNOWN_TIME_DELTA
+
+def now_str():
+    """Just return the time now (formatted)"""
+
+    return str(datetime.datetime.now().strftime(ABS_TIME_FORMAT))

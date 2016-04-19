@@ -1,6 +1,7 @@
-from krun.time_estimate import TimeEstimateFormatter
+from krun.time_estimate import TimeEstimateFormatter, now_str
 from krun.results import Results
 from krun import util
+from krun.platform import SYNC_SLEEP_SECS
 
 from collections import deque
 from logging import warn, info, error, debug
@@ -123,12 +124,6 @@ class ExecutionScheduler(object):
 
         self.log_path = self.config.log_filename(self.resume)
 
-        # Used for pre/post cmd hooks
-        self.pre_post_cmds_extra_env = {
-            "KRUN_RESULTS_FILE": self.config.results_filename(),
-            "KRUN_LOG_FILE": self.config.log_filename(resume=True),
-        }
-
     def set_eta_avail(self):
         """call after adding job before eta should become available"""
         self.eta_avail = len(self)
@@ -250,6 +245,23 @@ class ExecutionScheduler(object):
                            "file: %s, but not in config file: %s." % tup)
                     util.fatal(msg)
 
+    def _make_pre_post_cmd_env(self):
+        """Prepare an environment dict for pre/post execution hooks"""
+
+        jobs_until_eta_known = self.jobs_until_eta_known()
+        if jobs_until_eta_known > 0:
+            eta_val = "Unknown. Known in %d process executions." % \
+                self.jobs_until_eta_known()
+        else:
+            eta_val = self.get_overall_time_estimate_formatter().finish_str
+
+        return {
+            "KRUN_RESULTS_FILE": self.config.results_filename(),
+            "KRUN_LOG_FILE": self.config.log_filename(resume=True),
+            "KRUN_ETA_DATUM": now_str(),
+            "KRUN_ETA_VALUE": eta_val,
+        }
+
     def run(self):
         """Benchmark execution starts here"""
         jobs_left = len(self)
@@ -288,13 +300,13 @@ class ExecutionScheduler(object):
             if jobs_left == 0:
                 break
 
-            job = self.next_job()
-
             # Run the user's pre-process-execution commands
             util.run_shell_cmd_list(
                 self.config.PRE_EXECUTION_CMDS,
-                extra_env=self.pre_post_cmds_extra_env,
+                extra_env=self._make_pre_post_cmd_env()
             )
+
+            job = self.next_job()
 
             # We collect rough execution times separate from real results. The
             # reason for this is that, even if a benchmark crashes it takes
@@ -311,7 +323,14 @@ class ExecutionScheduler(object):
                 self.results.error_flag = True
 
             self.results.data[job.key].append(exec_result)
-            self.add_eta_info(job.key, exec_end_time - exec_start_time)
+
+
+            eta_info = exec_end_time - exec_start_time
+            if self.reboot:
+                # Add time taken to wait for system to come up if we are in
+                # reboot mode.
+                eta_info += STARTUP_WAIT_SECONDS
+            self.add_eta_info(job.key, eta_info)
 
             info("%d executions left in scheduler queue" % (jobs_left - 1))
 
@@ -319,15 +338,16 @@ class ExecutionScheduler(object):
             # json file mid-run. It is overwritten each time.
             self.results.write_to_file()
 
-            # Run the user's post-process-execution commands. Important that
-            # this happens *after* dumping results. The user is likely copying
-            # intermediate results to another host.
+            self.jobs_done += 1
+
+            # Run the user's post-process-execution commands with updated
+            # ETA estimates. Important that this happens *after* dumping
+            # results, as the user is likely copying intermediate results to
+            # another host.
             util.run_shell_cmd_list(
                 self.config.POST_EXECUTION_CMDS,
-                extra_env=self.pre_post_cmds_extra_env,
+                extra_env=self._make_pre_post_cmd_env()
             )
-
-            self.jobs_done += 1
 
             tfmt = self.get_overall_time_estimate_formatter()
 

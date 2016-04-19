@@ -21,6 +21,7 @@ from krun.env import EnvChangeSet, EnvChange, EnvChangeAppend
 NICE_PRIORITY = -20
 DIR = os.path.abspath(os.path.dirname(__file__))
 LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkrun")
+SYNC_SLEEP_SECS = 30  # time to wait for sync() to finish
 
 
 class BasePlatform(object):
@@ -355,7 +356,7 @@ class UnixLikePlatform(BasePlatform):
         # the buffers are completely flushed.", and the sync command is merely
         # a thin wrapper around the syscall. We wait a while. We have reports
         # that the sync command itself can take up to 10 seconds.
-        time.sleep(30)
+        time.sleep(SYNC_SLEEP_SECS)
 
 
 class OpenBSDPlatform(UnixLikePlatform):
