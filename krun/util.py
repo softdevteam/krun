@@ -1,7 +1,7 @@
 import json
 import os
 from subprocess import Popen, PIPE
-from logging import error, debug
+from logging import error, debug, info
 
 FLOAT_FORMAT = ".6f"
 
@@ -209,3 +209,16 @@ def get_git_version():
         run_shell_cmd("sh -c 'cd %s && git rev-parse --verify HEAD'" % DIR)
 
     return out.strip()  # returns the hash
+
+
+def strip_results(config, key_spec):
+    from krun.platform import detect_platform
+    from krun.results import Results
+
+    platform = detect_platform(None)
+    results = Results(config, platform,
+                      results_file=config.results_filename())
+    n_removed = results.strip_results(key_spec)
+    if n_removed > 0:
+        results.write_to_file()
+    info("Removed %d result keys" % n_removed)

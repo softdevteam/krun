@@ -132,7 +132,11 @@ def create_arg_parser():
                         help=("Enable developer mode"))
     parser.add_argument("--info", action="store_true",
                         help=("Print session info for specified "
-                              "config file and exit")),
+                              "config file and exit"))
+    parser.add_argument("--strip-results", action="store",
+                        metavar="KEY-SPEC",
+                        help="Strip result key from results file")
+
     filename_help = ("Krun configuration or results file. FILENAME should" +
                      " be a configuration file when running benchmarks " +
                      "(e.g. experiment.krun) and a results file " +
@@ -183,6 +187,10 @@ def main(parser):
         # Info mode doesn't run the experiment.
         # Just prints some metrics and exits.
         util.print_session_info(config)
+        return
+
+    if args.strip_results:
+        util.strip_results(config, args.strip_results)
         return
 
     attach_log_file(config, args.resume)
