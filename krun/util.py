@@ -193,3 +193,19 @@ def make_heat():
     for i in xrange(10000000):
         j += 1
     assert j == 10000000
+
+
+def get_git_version():
+    """Ask the krun checkout for its version. This assumes that Krun is run
+    from a git clone. If we decide to package this into (e.g.) PyPI at a later
+    date, then we would have to re-think this.
+    """
+
+    from distutils.spawn import find_executable
+    if not find_executable("git"):
+        fatal("git not found in ${PATH}. Please install git.")
+
+    out, err, code = \
+        run_shell_cmd("sh -c 'cd %s && git rev-parse --verify HEAD'" % DIR)
+
+    return out.strip()  # returns the hash

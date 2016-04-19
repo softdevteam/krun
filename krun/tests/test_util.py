@@ -1,7 +1,7 @@
 from krun.util import (format_raw_exec_results,
                        log_and_mail, fatal,
                        check_and_parse_execution_results,
-                       run_shell_cmd,
+                       run_shell_cmd, get_git_version,
                        ExecutionFailed, get_session_info,
                        run_shell_cmd_list, FatalKrunError)
 from krun.tests.mocks import MockMailer
@@ -256,3 +256,9 @@ def test_run_shell_cmd_list0003(caplog):
 
     expect = "Environment HOME is already defined"
     assert expect in caplog.text()
+
+
+def test_get_git_version0001():
+    vers = get_git_version()
+    num = int(vers, 16)
+    # should not crash

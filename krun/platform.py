@@ -205,6 +205,8 @@ class BasePlatform(object):
     def collect_audit(self):
         self.audit["uname"] = run_shell_cmd("uname -a")[0]
         self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
+        self.audit["krun_version"] = util.get_git_version()
+        self.audit["cli_args"] = sys.argv
 
     def bench_cmdline_adjust(self, args, env_dct):
         """Prepends various arguments to benchmark invocation.
