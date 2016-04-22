@@ -54,9 +54,10 @@ main(int argc, char **argv)
     double    start_time = -1, stop_time = -1;
     double   *krun_iter_times = NULL;
 
-    if (argc != 5) {
+    if (argc != 6) {
         printf("usage: iterations_runner_c "
-            "<benchmark> <# of iterations> <benchmark param> <debug flag>\n");
+            "<benchmark> <# of iterations> <benchmark param> <debug flag> "
+            "<instrument flag>\n");
         exit(EXIT_FAILURE);
     }
 

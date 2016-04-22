@@ -7,8 +7,9 @@ local BM_iters = tonumber(arg[2])
 local BM_param = tonumber(arg[3])
 local BM_debug = tonumber(arg[4]) > 0
 
-if #arg ~= 4 then
-    print("usage: iterations_runner.lua <benchmark> <# of iterations> <benchmark param> <debug flag>")
+if #arg ~= 5 then
+    print("usage: iterations_runner.lua <benchmark> <# of iterations> " ..
+          "<benchmark param> <debug flag> <instrument flag>")
     os.exit(1)
 end
 
