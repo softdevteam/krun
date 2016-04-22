@@ -20,6 +20,11 @@ class Results(object):
         self.data = dict()
         self.reboots = 0
 
+        # Instrumentation counters
+        # "bmark:vm:variant" ->
+        #     (instrumentation name -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...])
+        self.instrumentation_data = {}
+
         # Record how long execs are taking so we can give the user a rough ETA.
         # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
         self.eta_estimates = dict()
@@ -61,6 +66,7 @@ class Results(object):
                 for variant in vm_info["variants"]:
                     key = ":".join((bmark, vm_name, variant))
                     self.data[key] = []
+                    self.instrumentation_data[key] = {}
                     self.eta_estimates[key] = []
 
     def read_from_file(self, results_file):
@@ -82,6 +88,7 @@ class Results(object):
         to_write = {
             "config": self.config.text,
             "data": self.data,
+            "instrumentation_data": self.instrumentation_data,
             "audit": self.audit.audit,
             "reboots": self.reboots,
             "starting_temperatures": self.starting_temperatures,
@@ -91,6 +98,15 @@ class Results(object):
         with bz2.BZ2File(self.filename, "w") as f:
             f.write(json.dumps(to_write,
                                indent=1, sort_keys=True, encoding='utf-8'))
+
+    def add_instrumentation_data(self, bench_key, inst_dct):
+        """Record instrumentation data into results object."""
+
+        for inst_key, v in inst_dct.iteritems():
+            # keys in dict are arbitrary, so we may need to scaffold a new list
+            if inst_key not in self.instrumentation_data[bench_key]:
+                self.instrumentation_data[bench_key][inst_key] = []
+            self.instrumentation_data[bench_key][inst_key].append(v)
 
     def jobs_completed(self, key):
         """Return number of executions for which we have data for a given

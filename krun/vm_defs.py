@@ -3,6 +3,7 @@ import os
 import select
 import fnmatch
 import json
+import re
 from abc import ABCMeta, abstractmethod
 
 from logging import info, debug, warn
@@ -59,10 +60,59 @@ def print_stderr_linewise(info):
             startindex = nl + 1
 
 
+class Instrumentation(object):
+    def __init__(self, name, stderr_regex):
+        self.name = name
+        self.regex = re.compile(stderr_regex)
+        self.count = 0
+        self.counts = []
+
+    def store(self):
+        self.counts.append(self.count)
+        self.count = 0
+
+    def match(self, line):
+        if re.match(self.regex, line):
+            self.count += 1
+
+    def reset(self):
+        self.count = 0
+        self.counts = []
+
+    @staticmethod
+    def process_lines(stderr_lines, instrumentations):
+        iter_num = 0
+
+        for inst in instrumentations:
+            inst.reset()
+
+        # Iterate lines looking for instrumentation
+        for line in stderr_lines:
+            if line.startswith("@@@ END_IN_PROC_ITER:"):
+                # end of an iteration, store counters
+                for inst in instrumentations:
+                    inst.store()
+
+                elems = line.split(":")
+                assert(len(elems) == 2 and int(elems[1]) == iter_num)
+                iter_num += 1
+                continue
+
+            for inst in instrumentations:
+                inst.match(line.strip())
+
+        rv = {}
+
+        for inst in instrumentations:
+            rv[inst.name] = inst.counts
+
+        return rv
+
+
 class BaseVMDef(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, iterations_runner, env=None):
+    def __init__(self, iterations_runner, env=None, instrument=False):
         self.iterations_runner = iterations_runner
 
         # List of EnvChange instances to apply prior to each experiment.
@@ -96,6 +146,10 @@ class BaseVMDef(object):
         # Do not execute the benchmark program
         # (useful for testing configurations.).
         self.dry_run = False
+
+        self.instrument = instrument
+
+        self.instrumentations = []
 
     def _get_benchmark_path(self, benchmark, entry_point, force_dir=None):
         if force_dir is not None:
@@ -169,6 +223,14 @@ class BaseVMDef(object):
             args.append("1")
         else:
             args.append("0")
+
+        # Instrumentation flag counters
+        # XXX all iterations runners need to support this flag?
+        if isinstance(self, PythonVMDef):
+            if self.instrument:
+                args.append("1")
+            else:
+                args.append("0")
 
         if self.dry_run:
             warn("SIMULATED: Benchmark process execution (--dryrun)")
@@ -293,6 +355,10 @@ class BaseVMDef(object):
     def __eq__(self, other):
         return isinstance(other, self.__class__)
 
+    def get_instrumentation_data(self, stderr):
+        lines = stderr.splitlines()
+        return Instrumentation.process_lines(lines, self.instrumentations)
+
 
 class NativeCodeVMDef(BaseVMDef):
     """Not really a "VM definition" at all. Runs native code."""
@@ -319,11 +385,12 @@ class NativeCodeVMDef(BaseVMDef):
 
 class GenericScriptingVMDef(BaseVMDef):
     def __init__(self, vm_path, iterations_runner, entry_point=None,
-                 subdir=None, env=None):
+                 subdir=None, env=None, instrument=False):
         self.vm_path = vm_path
         self.extra_vm_args = []
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
-        BaseVMDef.__init__(self, fp_iterations_runner, env=env)
+        BaseVMDef.__init__(self, fp_iterations_runner, env=env,
+                           instrument=instrument)
 
     def _generic_scripting_run_exec(self, entry_point, benchmark, iterations,
                                     param, heap_lim_k, stack_lim_k,
@@ -452,9 +519,9 @@ class GraalVMDef(JavaVMDef):
         self._check_jvmci_server_enabled()
 
 class PythonVMDef(GenericScriptingVMDef):
-    def __init__(self, vm_path, env=None):
+    def __init__(self, vm_path, env=None, instrument=False):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
-                                       env=env)
+                                       env=env, instrument=instrument)
 
     def run_exec(self, entry_point, benchmark, iterations,
                  param, heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
@@ -467,9 +534,17 @@ class PythonVMDef(GenericScriptingVMDef):
 
 
 class PyPyVMDef(PythonVMDef):
-    def __init__(self, vm_path, env=None):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
-                                       env=env)
+    def __init__(self, vm_path, env=None, instrument=False):
+        """When instrument=True, record GC and compilation events"""
+
+        if instrument:
+            if env is None:
+                env = {}
+            # Causes PyPy to emit VM events on stderr
+            EnvChangeSet("PYPYLOG", "-").apply(env)
+
+        PythonVMDef.__init__(self, vm_path, env=env, instrument=instrument)
+
         # XXX: On OpenBSD the PyPy build fails to encode the rpath to libpypy-c.so
         # into the VM executable, so we have to force it ourselves.
         #
@@ -480,6 +555,10 @@ class PyPyVMDef(PythonVMDef):
         lib_dir = os.path.dirname(vm_path)
         self.add_env_change(EnvChangeAppend("LD_LIBRARY_PATH", lib_dir))
 
+        self.instrumentations = [
+            Instrumentation("tracing", "\[[0-9a-f]+\] \{jit-tracing"),
+            Instrumentation("major_gc", "\[[0-9a-f]+\] \{gc-collect-step")
+        ]
 
 class LuaVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path, env=None):
