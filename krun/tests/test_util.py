@@ -272,7 +272,7 @@ def to_strip():
     path = os.path.join(TEST_DIR, "quick.krun")
     config = Config(path)
 
-    platform = detect_platform(None)
+    platform = detect_platform(None, config)
     results = Results(config, platform,
                       results_file=config.results_filename())
     return results

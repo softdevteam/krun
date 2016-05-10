@@ -74,3 +74,6 @@ TEMP_READ_PAUSE = 1
 #   KRUN_ETA_VALUE: estimated time of completion
 #PRE_EXECUTION_CMDS = ["sudo service cron stop"]
 #POST_EXECUTION_CMDS = ["sudo service cron start"]
+
+# CPU pinning (off by default)
+#ENABLE_PINNING = False

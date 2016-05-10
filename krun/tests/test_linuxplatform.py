@@ -122,6 +122,7 @@ class TestLinuxPlatform(BaseKrunTest):
             in caplog.text()
 
     def test_bench_cmdline_adjust0001(self, platform):
+        platform.config.ENABLE_PINNING = True
         platform.num_cpus = 8
         expect = ['env', 'LD_LIBRARY_PATH=', 'taskset', '-c', '1,2,3,4,5,6,7']
 
@@ -130,12 +131,21 @@ class TestLinuxPlatform(BaseKrunTest):
 
     def test_bench_cmdline_adjust0002(self, platform):
         platform.num_cpus = 2
+        platform.config.ENABLE_PINNING = True
         expect = ['env', 'MYENV=some_value', 'LD_LIBRARY_PATH=',
                   'taskset', '-c', '1', 'myarg']
 
         args = subst_env_arg(platform.bench_cmdline_adjust(
             ["myarg"], {"MYENV": "some_value"}), "LD_LIBRARY_PATH")
 
+        assert args == expect
+
+    def test_bench_cmdline_adjust0003(self, platform):
+        platform.config.ENABLE_PINNING = False
+        platform.num_cpus = 8
+        expect = ['env', 'LD_LIBRARY_PATH=']
+
+        args = subst_env_arg(platform.bench_cmdline_adjust([], {}), "LD_LIBRARY_PATH")
         assert args == expect
 
     def test_take_temperature_readings0001(self, platform):
@@ -181,6 +191,7 @@ class TestLinuxPlatform(BaseKrunTest):
         assert expect == got
 
     def test_isolcpus0001(self, platform, monkeypatch, caplog):
+        platform.config.ENABLE_PINNING = True
         platform.num_cpus = 8
 
         def dummy_get_kernel_cmdline():
@@ -195,6 +206,7 @@ class TestLinuxPlatform(BaseKrunTest):
         assert find in caplog.text()
 
     def test_isolcpus0002(self, platform, monkeypatch, caplog):
+        platform.config.ENABLE_PINNING = True
         platform.num_cpus = 4
 
         def dummy_get_kernel_cmdline():
@@ -209,6 +221,7 @@ class TestLinuxPlatform(BaseKrunTest):
         assert find in caplog.text()
 
     def test_isolcpus0003(self, platform, monkeypatch):
+        platform.config.ENABLE_PINNING = True
         platform.num_cpus = 8
 
         def dummy_get_kernel_cmdline():
@@ -219,6 +232,7 @@ class TestLinuxPlatform(BaseKrunTest):
         platform._check_isolcpus()  # should not raise
 
     def test_isolcpus0004(self, platform, monkeypatch):
+        platform.config.ENABLE_PINNING = True
         platform.num_cpus = 8
 
         def dummy_get_kernel_cmdline():
@@ -227,3 +241,29 @@ class TestLinuxPlatform(BaseKrunTest):
                             dummy_get_kernel_cmdline)
 
         platform._check_isolcpus()  # should not raise
+
+    def test_isolcpus0005(self, platform, monkeypatch):
+        platform.config.ENABLE_PINNING = False
+        platform.num_cpus = 8
+
+        def dummy_get_kernel_cmdline():
+            return "quiet"  # good, as we are not using pinning
+        monkeypatch.setattr(platform, "_get_kernel_cmdline",
+                            dummy_get_kernel_cmdline)
+
+        platform._check_isolcpus()  # should not raise
+
+    def test_isolcpus0005(self, platform, monkeypatch, caplog):
+        platform.config.ENABLE_PINNING = False
+        platform.num_cpus = 8
+
+        def dummy_get_kernel_cmdline():
+            return "quiet isolcpus=2,3"  # bad, should not isolate with pinning off
+        monkeypatch.setattr(platform, "_get_kernel_cmdline",
+                            dummy_get_kernel_cmdline)
+
+        with pytest.raises(FatalKrunError):
+            platform._check_isolcpus()
+
+        find = "CPUs incorrectly isolated. Got: ['2', '3'], expect: []"
+        assert find in caplog.text()

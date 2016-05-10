@@ -238,7 +238,7 @@ def inner_main(mailer, config, args):
 
     # Initialise platform instance and assign to VM defs.
     # This needs to be done early, so VM sanity checks can run.
-    platform = detect_platform(mailer)
+    platform = detect_platform(mailer, config)
 
     if not args.develop:
         debug("Checking platform preliminaries")

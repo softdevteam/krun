@@ -38,11 +38,15 @@ If your Linux bootloader is Grub, you can follow these steps:
 
   * Edit /etc/default/grub (e.g. `sudo gedit /etc/default/grub`)
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
-  * Add `isolcpus=x,y,z` to `GRUB_CMDLINE_LINUX_DEFAULT`, where 'x,y,z' is a
-    comma separated list of all logical CPUs apart from the boot processor
+  * If you want to use CPU pinning, add `isolcpus=x,y,z` to
+    `GRUB_CMDLINE_LINUX_DEFAULT`, where 'x,y,z' is a comma separated list of
+    all logical CPUs apart from the boot processor.
     (i.e. CPU 0). This ensures that the adaptive tick cores are used soley for
     benchmarks (see 'Tickless Mode Linux Kernel').
   * Run `sudo update-grub`
+
+Note that CPU pinning is off by default due to a bug in the Linux kernel:
+https://bugzilla.kernel.org/show_bug.cgi?id=116701
 
 ### Tickless Mode Linux Kernel
 

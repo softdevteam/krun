@@ -89,7 +89,9 @@ class BaseVMDef(object):
         # tempting as it is to add a self.vm_path, we don't. If we were to add
         # natively compiled languages, then there is no "VM" to speak of.
 
-        self.platform = None  # Set later
+        # These are set later
+        self.platform = None
+        self.config = None
 
         # Do not execute the benchmark program
         # (useful for testing configurations.).
@@ -110,6 +112,7 @@ class BaseVMDef(object):
 
     def set_platform(self, platform):
         self.platform = platform
+        self.config = platform.config
 
     def add_env_change(self, change):
         self.common_env_changes.append(change)
@@ -182,10 +185,12 @@ class BaseVMDef(object):
         debug("Wrapper script:\n%s" % ("\n".join(lines)))
 
         # The arguments used to invoke the wrapper script now
-        wrapper_args = \
-            self.platform.change_user_args("root") + \
-            self.platform.change_scheduler_args() + \
-            self.platform.process_priority_args() + \
+        wrapper_args = self.platform.change_user_args("root")
+
+        if self.config.ENABLE_PINNING:
+            wrapper_args += self.platform.change_scheduler_args()
+
+        wrapper_args += self.platform.process_priority_args() + \
             self.platform.change_user_args(BENCHMARK_USER) + \
             [DASH, WRAPPER_SCRIPT]
 
