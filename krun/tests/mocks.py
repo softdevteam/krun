@@ -16,8 +16,8 @@ class MockPlatform(BasePlatform):
 
     CHANGE_USER_CMD = ""
 
-    def __init__(self, mailer):
-        BasePlatform.__init__(self, mailer)
+    def __init__(self, mailer, config):
+        BasePlatform.__init__(self, mailer, config)
         self.mailer = mailer
         self.audit = dict()
         self.num_cpus = 0

@@ -34,10 +34,11 @@ class BasePlatform(object):
     TEMP_TOO_HOT = 1
     TEMP_TOO_COLD = 2
 
-    def __init__(self, mailer):
+    def __init__(self, mailer, config):
         self.developer_mode = False
         self.mailer = mailer
         self.audit = OrderedDict()
+        self.config = config
 
         # Temperatures should always be a dict mapping a descriptive name of
         # the sensor to a platform dependent linear temperature measurement.
@@ -224,8 +225,12 @@ class BasePlatform(object):
         changes = self.bench_env_changes()
         EnvChange.apply_all(changes, combine_env)
 
-        return self.adjust_env_cmd(combine_env) + \
-            self.pin_process_args() + args
+        new_args = self.adjust_env_cmd(combine_env)
+        if self.config.ENABLE_PINNING:
+            new_args += self.pin_process_args()
+        new_args += args
+
+        return new_args
 
     @abstractmethod
     def _change_user_args(self, user="root"):
@@ -287,12 +292,12 @@ class UnixLikePlatform(BasePlatform):
     REBOOT = "reboot"
     NICE_CMD = "/usr/bin/nice"
 
-    def __init__(self, mailer):
+    def __init__(self, mailer, config):
         self.change_user_cmd = find_executable("sudo")
         if self.change_user_cmd is None:
             fatal("Could not find sudo!")
 
-        BasePlatform.__init__(self, mailer)
+        BasePlatform.__init__(self, mailer, config)
 
     def bench_env_changes(self):
         # Force libkruntime into linker path.
@@ -369,8 +374,8 @@ class OpenBSDPlatform(UnixLikePlatform):
     # See malloc.conf(5) and src/lib/libc/stdlib/malloc.c for more info.
     MALLOC_OPTS = "sfghjpru"
 
-    def __init__(self, mailer):
-        UnixLikePlatform.__init__(self, mailer)
+    def __init__(self, mailer, config):
+        UnixLikePlatform.__init__(self, mailer, config)
 
     def find_temperature_sensors(self):
         lines = self._get_sysctl_sensor_lines()
@@ -547,9 +552,9 @@ class LinuxPlatform(UnixLikePlatform):
         "CONFIG_NO_HZ_FULL_ALL": True,
     }
 
-    def __init__(self, mailer):
+    def __init__(self, mailer, config):
         self.temp_sensor_map = None
-        UnixLikePlatform.__init__(self, mailer)
+        UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
 
 
@@ -912,8 +917,9 @@ class LinuxPlatform(UnixLikePlatform):
 
     def sanity_checks(self):
         UnixLikePlatform.sanity_checks(self)
-        self._sanity_check_cpu_affinity()
-        self._sanity_check_scheduler()
+        if self.config.ENABLE_PINNING:
+            self._sanity_check_cpu_affinity()
+            self._sanity_check_scheduler()
 
     def _sanity_check_cpu_affinity(self):
         from krun.vm_defs import NativeCodeVMDef
@@ -943,12 +949,20 @@ class LinuxPlatform(UnixLikePlatform):
         )
 
     def _check_isolcpus(self):
-        """Checks the correct CPUs have been isolated.
-        (All but the boot processor)"""
+        """Checks the correct CPUs have been isolated if pinning is enabled.
+        (All but the boot processor)
 
-        debug("Check cores are isolated correctly")
+        Conversely check cores are *not* isolated if pinning is disabled.
+        """
 
-        expect_cpus = [str(x) for x in xrange(1, self.num_cpus)]
+        debug("Check cores are isolated correctly (pinning=%s)" % \
+              self.config.ENABLE_PINNING)
+
+        if self.config.ENABLE_PINNING:
+            expect_cpus = [str(x) for x in xrange(1, self.num_cpus)]
+        else:
+            expect_cpus = []
+
         all_args = self._get_kernel_cmdline()
 
         args = all_args.split(" ")
@@ -956,16 +970,16 @@ class LinuxPlatform(UnixLikePlatform):
             if "=" not in arg:
                 continue
 
-            k, v = arg.split("=", 1)
+            key, val = arg.split("=", 1)
+            assert val != ""
 
-            if k != "isolcpus":
+            if key != "isolcpus":
                 continue
 
-            break  # found the isolcpus arg
+            got_cpus = list(sorted(val.split(",")))
+            break
         else:
-            self._advise_isolcpus_arg([], expect_cpus)  # exits
-
-        got_cpus = list(sorted(v.split(",")))
+            got_cpus = []
 
         if expect_cpus != got_cpus:
             self._advise_isolcpus_arg(got_cpus, expect_cpus)  # exits
@@ -1006,14 +1020,14 @@ class DebianLinuxPlatform(LinuxPlatform):
               "%s" % (prefix, arg, suffix))
 
 
-def detect_platform(mailer):
+def detect_platform(mailer, config):
     plat_name = sys.platform
     if plat_name.startswith("linux"):
         if os.path.exists("/etc/debian_version"):
-            return DebianLinuxPlatform(mailer)
+            return DebianLinuxPlatform(mailer, config)
         else:
             fatal("Unknown Linux platform")
     elif plat_name.startswith("openbsd"):
-        return OpenBSDPlatform(mailer)
+        return OpenBSDPlatform(mailer, config)
     else:
         fatal("I don't have support for your platform")

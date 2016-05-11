@@ -128,7 +128,7 @@ def get_session_info(config):
     from krun.scheduler import ScheduleEmpty, ExecutionScheduler
     from krun.platform import detect_platform
 
-    platform = detect_platform(None)
+    platform = detect_platform(None, config)
     sched = ExecutionScheduler(config, None, platform)
     non_skipped_keys, skipped_keys = sched.build_schedule()
 

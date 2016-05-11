@@ -1,5 +1,6 @@
 import pytest
 from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef
+from krun.config import Config
 from distutils.spawn import find_executable
 from krun.env import EnvChange
 from krun.tests.mocks import MockPlatform
@@ -56,9 +57,10 @@ class TestVMDef(object):
     def test_sync_disks0001(self, monkeypatch):
         """Check disk sync method is called"""
 
-        platform = MockPlatform(None)
+        config = Config()
+        platform = MockPlatform(None, config)
         ep = EntryPoint("test")
-        vm_def = PythonVMDef('/dummy/bin//python')
+        vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
 
         sync_called = [False]
@@ -77,9 +79,10 @@ class TestVMDef(object):
         """We throw away the results from sanity checks, so there's no need to
         sync disks (and wait)."""
 
-        platform = MockPlatform(None)
+        config = Config()
+        platform = MockPlatform(None, config)
         ep = EntryPoint("test")
-        vm_def = PythonVMDef('/dummy/bin//python')
+        vm_def = PythonVMDef('/dummy/bin/python')
 
         sync_called = [False]
         def fake_sync_disks():
