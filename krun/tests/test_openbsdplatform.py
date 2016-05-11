@@ -3,6 +3,8 @@ import krun.platform
 import sys
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import run_shell_cmd, FatalKrunError
+from krun import EntryPoint
+from krun.vm_defs import PythonVMDef
 
 
 def make_dummy_get_apm_output_fn(output):
@@ -147,3 +149,26 @@ class TestOpenBSDPlatform(BaseKrunTest):
         args = subst_env_arg(platform.bench_cmdline_adjust(
             ["myarg"], {"MYENV": "some_value"}), "LD_LIBRARY_PATH")
         assert args == expect
+
+    def test_wrapper_args0001(self, platform):
+        ep = EntryPoint("test")
+        vm_def = PythonVMDef('/dummy/bin/python')
+        vm_def.set_platform(platform)
+        got = vm_def._wrapper_args()
+        expect = ['/usr/local/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
+                  '/usr/local/bin/sudo', '-u', 'krun', '/usr/local/bin/dash',
+                  '/tmp/krun_wrapper.dash']
+        assert got == expect
+
+    def test_wrapper_args0002(self, platform):
+        # Pinning isn't supported on OpenBSD, so it should make no difference
+        platform.config.ENABLE_PINNING = False
+
+        ep = EntryPoint("test")
+        vm_def = PythonVMDef('/dummy/bin/python')
+        vm_def.set_platform(platform)
+        got = vm_def._wrapper_args()
+        expect = ['/usr/local/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
+                  '/usr/local/bin/sudo', '-u', 'krun', '/usr/local/bin/dash',
+                  '/tmp/krun_wrapper.dash']
+        assert got == expect
