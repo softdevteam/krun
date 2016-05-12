@@ -1,4 +1,3 @@
-HERE !=		pwd
 JAVAC ?=	javac
 
 BENCHMARKS = dummy nbody
@@ -6,14 +5,16 @@ BENCHMARKS = dummy nbody
 .PHONY: all clean
 
 all:
-	for i in ${BENCHMARKS}; do \
-		echo "Building java benchmark $${i}..."; \
-		cd ${HERE}/$${i}/java && \
-		CLASSPATH=../../../../../krun/iterations_runners/ ${JAVAC} *.java; \
-		done
+	$(foreach i, ${BENCHMARKS}, \
+		echo "Building java benchmark ${i}..."; \
+		cd ${i}/java && \
+		CLASSPATH=../../../../iterations_runners/ ${JAVAC} *.java; \
+		cd ../../; \
+	)
 
 clean:
-	for i in ${BENCHMARKS}; do \
-		cd ${HERE}/$${i}/java && \
+	$(foreach i, ${BENCHMARKS}, \
+		cd ${i}/java && \
 		rm *.class; \
-		done
+		cd ../../ \
+	)

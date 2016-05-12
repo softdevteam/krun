@@ -1,11 +1,9 @@
-PWD != pwd
 C_ITER_RUNNER_CFLAGS = -fPIC -Wall -Wextra -pedantic
-C_ITER_RUNNER_LDFLAGS =
 
-
-OS != uname -s
-ifeq ($(OS),Linux)
-	C_ITER_RUNNER_LDFLAGS += -ldl
+ifeq ($(shell uname -s),Linux)
+	C_ITER_RUNNER_LDFLAGS = -ldl -lrt
+else
+	C_ITER_RUNNER_LDFLAGS =
 endif
 
 .PHONY: clean
@@ -18,7 +16,8 @@ IterationsRunner.class BaseKrunEntry.class: iterations_runner.java
 	fi
 
 iterations_runner_c: iterations_runner.c
-	${CC} ${C_ITER_RUNNER_CFLAGS} ${CFLAGS} -L${PWD}/../libkrun \
+	echo ${C_ITER_RUNNER_LDFLAGS}
+	${CC} ${C_ITER_RUNNER_CFLAGS} ${CFLAGS} -L`pwd`/../libkrun \
 		${CPPFLAGS} iterations_runner.c \
 		-o iterations_runner_c -lkruntime ${C_ITER_RUNNER_LDFLAGS} \
 		${LDFLAGS}

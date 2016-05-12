@@ -1,5 +1,11 @@
 LIBKRUNTIME_CFLAGS =	-Wall -shared -fPIC
 
+ifeq ($(shell uname -s),Linux)
+	LIBKRUNTIME_LDFLAGS =	-lrt -ldl
+else
+	LIBKRUNTIME_LDFLAGS =
+endif
+
 ifeq (${ENABLE_JAVA},1)
 LIBKRUNTIME_CFLAGS += -DWITH_JAVA=1
 endif
@@ -10,8 +16,8 @@ all: libkruntime.so
 
 libkruntime.so: libkruntime.c
 	${CC} ${JAVA_CPPFLAGS} ${JAVA_CFLAGS} ${LIBKRUNTIME_CFLAGS} ${CFLAGS} \
-		${CPPFLAGS} ${JAVA_LDFLAGS} ${LDFLAGS} libkruntime.c \
-		-o libkruntime.so
+		${CPPFLAGS} libkruntime.c -o libkruntime.so \
+		${JAVA_LDFLAGS} ${LDFLAGS} ${LIBKRUNTIME_LDFLAGS}\
 
 clean:
 	rm -f libkruntime.so
