@@ -1,5 +1,10 @@
 LIBKRUNTIME_CFLAGS =	-Wall -shared -fPIC
-LIBKRUNTIME_LDFLAGS =	-lrt -ldl
+
+ifeq ($(shell uname -s),Linux)
+	LIBKRUNTIME_LDFLAGS =	-lrt -ldl
+else
+	LIBKRUNTIME_LDFLAGS =
+endif
 
 ifeq (${ENABLE_JAVA},1)
 LIBKRUNTIME_CFLAGS += -DWITH_JAVA=1
