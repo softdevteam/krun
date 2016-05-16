@@ -32,6 +32,7 @@ You need to have the following installed:
   * cpufrequtils (Linux only. `cpufrequtils` package in Debian)
   * cffi (`python-cffi` package in Debian)
   * cset (for pinning on Linux only. `cpuset` package in Debian)
+  * virt-what (Linux only. `virt-what` package in Debian)
 
 If you want to benchmark Java, you will also need:
   * A Java SDK 7 (`openjdk-7-jdk` package in Debian)
@@ -270,19 +271,16 @@ how to consume results in Krun format:
 
 It is often useful to test a configuration file, without actually
 running a full benchmark (especially if the benchmark program is
-long).
-Krun supports this with the `--dryrun` command line switch:
+long). The best to test a config is to do something like:
 
 ```bash
-$ ../krun.py --dryrun --debug=INFO example.krun
+$ ../krun.py --dry-run --quick --debug=INFO example.krun
 ```
 
-By passing in `--debug=INFO` you will see a full log of krun actions
-printed to STDOUT.
-Valid debug levels are: `DEBUG`, `INFO`, `WARN`, `DEBUG`,
-`CRITICAL`, `ERROR`.
+See the "Development and Debug Switches" section for a description of these
+switches.
 
-The `--info` switch reports various statistics about the setup described in the
+Another switch, `--info`, reports various statistics about the setup described in the
 specified config file, such as the total number of process executions and which
 benchmark keys will be skipped etc.
 
@@ -320,7 +318,7 @@ This file is compatible with some Linux machines.
 ### Testing a benchmark run with `--reboot`
 
 If you need to test a benchmark configuration with `--reboot`, you can
-still use the `--dryrun` flag.
+still use the `--dry-run` flag.
 In a dry run, Krun will not reboot your machine (it will simulate
 rebooting by restarting Krun automatically) and will not pause to
 wait for your network interface to come up.
@@ -372,21 +370,35 @@ The following platforms are currently supported:
 
 To add a new platform definition, add a new class to `krun/platform.py`.
 
-## Developer Mode
+## Development and Debug Switches
 
 If you are making changes to Krun itself (for example, to add a new platform or
-virtual machine definition), you may find the `--develop` switch useful. This
-will cause Krun to run with the following modifications:
+virtual machine definition), there are a few switches which can make your life
+easier.
 
-  * Krun will not run the system prerequisite checks. Checks relating to CPU
-    governors,  CPU scalers, CPU temperatures, tickless kernel, etc.
-  * Krun will not attempt to switch user to run benchmarks.
+  * `--debug=<level>`: Sets the verbosity of Krun.  Valid debug levels are:
+     `DEBUG`, `INFO`, `WARN`, `DEBUG`, `CRITICAL` and `ERROR`. The default is
+     `WARN`. For real benchmarks you should use the default.
 
-This makes it easier to develop krun on (e.g.) a personal laptop which has not
-been prepared for reliable benchmarking.
+  * `--quick`: There are several places where Krun would normally wait using
+    sleeps or a polling loop. These are essential for real benchmarking, but
+    annoying for development. Use `--quick` to skip these delays.
+
+  * `--no-user-change`: Usually Krun will switch to a user named `krun` to
+    perform benchmarking. This switch disables the user change.
+
+  * `--dry-run`: Fakes actual benchmark processes, making them finish
+    instantaneously.
+
+  * `--no-tickless-check`: Do not crash out if the Linux kernel is not
+    tickless.
+
+  * `--no-pstate-check`: Do not crash out if Intel P-states are not disabled.
+
+  * `--fake-reboots`: Restart Krun in-place (using execv) instead of rebooting.
 
 Note that you should not collect results intended for publication with
-`--develop`.
+development switches turned on.
 
 ## Re-running Part of your Experiment
 

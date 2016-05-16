@@ -35,7 +35,11 @@ class BasePlatform(object):
     TEMP_TOO_COLD = 2
 
     def __init__(self, mailer, config):
-        self.developer_mode = False
+        self.quick_mode = False
+        self.no_user_change = False
+        self.no_pstate_check = False
+        self.no_tickless_check = False
+        self.fake_reboots = False
         self.mailer = mailer
         self.audit = OrderedDict()
         self.config = config
@@ -50,6 +54,12 @@ class BasePlatform(object):
 
         self.last_dmesg = None
         self.last_dmesg_time = None
+
+    def sleep(self, secs):
+        if self.quick_mode:
+            warn("SIMULATED: `time.sleep(%s)` (--quick)" % secs)
+        else:
+            time.sleep(secs)
 
     def collect_starting_dmesg(self):
         # We will be looking for changes in the dmesg output.
@@ -150,8 +160,8 @@ class BasePlatform(object):
         When 'testing' is True, only one iteration of the wait loop will
         run (used only in unit tests)."""
 
-        if self.developer_mode:
-            warn("Not waiting for temperature sensors due to developer mode")
+        if self.quick_mode:
+            warn("Not waiting for temperature sensors (--quick)")
             return
 
         if not testing:
@@ -165,7 +175,7 @@ class BasePlatform(object):
             if flag == self.TEMP_OK:
                 break
             elif flag == self.TEMP_TOO_HOT:
-                time.sleep(1)
+                self.sleep(1)
             elif flag == self.TEMP_TOO_COLD:
                 # This takes a variable amount of time, but on a modern
                 # machine it takes only a fraction of a second.
@@ -232,11 +242,7 @@ class BasePlatform(object):
         pass
 
     def change_user_args(self, user="root"):
-        if self.developer_mode:
-            warn("Not switching user due to developer mode")
-            return []
-        else:
-            return self._change_user_args(user)
+        return self._change_user_args(user)
 
     @abstractmethod
     def process_priority_args(self):
@@ -247,12 +253,8 @@ class BasePlatform(object):
         pass
 
     def save_power(self):
-        if self.developer_mode:
-            warn("Not adjusting CPU governor due to developer mode")
-            return
-        else:
-            debug("Save power")
-            self._save_power()
+        debug("Save power")
+        self._save_power()
 
     @abstractmethod
     def _save_power(self):
@@ -275,6 +277,14 @@ class BasePlatform(object):
     def pin_process_args(self):
         pass
 
+    @abstractmethod
+    def is_virtual(self):
+        """Attempt to decide if Krun is running in a virtual machine.
+
+        Returns a boolean.
+        """
+
+        pass
 
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
@@ -319,7 +329,8 @@ class UnixLikePlatform(BasePlatform):
         return [self.change_user_cmd, "-u", user]
 
     def sanity_checks(self):
-        self._sanity_check_user_change()
+        if not self.no_user_change:
+            self._sanity_check_user_change()
         self._sanity_check_nice_priority()
 
     def _sanity_check_user_change(self):
@@ -352,7 +363,7 @@ class UnixLikePlatform(BasePlatform):
         # the buffers are completely flushed.", and the sync command is merely
         # a thin wrapper around the syscall. We wait a while. We have reports
         # that the sync command itself can take up to 10 seconds.
-        time.sleep(SYNC_SLEEP_SECS)
+        self.sleep(SYNC_SLEEP_SECS)
 
 
 class OpenBSDPlatform(UnixLikePlatform):
@@ -497,6 +508,11 @@ class OpenBSDPlatform(UnixLikePlatform):
     def pin_process_args(self):
         return []  # not supported on OpenBSD
 
+    def is_virtual(self):
+        """Not yet implemented on this platform, assume not virtualised"""
+
+        return False
+
 
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -540,6 +556,7 @@ class LinuxPlatform(UnixLikePlatform):
         self.temp_sensor_map = None
         UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
+        self.virt_what_cmd = None  # set later
 
 
     def _fatal_kernel_arg(self, arg, prefix, suffix):
@@ -638,11 +655,27 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_cset_installed()
         self._check_isolcpus()
         self._check_cset_shield()
+        self._check_virt_what_installed()
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
-        self._check_tickless_kernel()
+        if not self.no_tickless_check:
+            self._check_tickless_kernel()
         self._check_aslr_disabled()
+
+    def _check_virt_what_installed(self):
+        debug("Check virt-what is installed")
+
+        # the tool may not be in the path for an unpriveleged user
+        ec = EnvChangeAppend("PATH", "/usr/sbin")
+        env = ec.apply(os.environ)
+
+        from distutils.spawn import find_executable
+        exe = find_executable("virt-what")
+        if exe is None:
+            fatal("virt-what is not installed")
+
+        self.virt_what_cmd = exe
 
     # separate for testing
     def _configure_cset_shield_args(self):
@@ -784,8 +817,20 @@ class LinuxPlatform(UnixLikePlatform):
         for cpu_n in xrange(self.num_cpus):
             # Check CPU governors
             debug("Checking CPU governor for CPU%d" % cpu_n)
-            with open(LinuxPlatform.CPU_GOV_FMT % cpu_n, "r") as fh:
-                v = fh.read().strip()
+
+            path = LinuxPlatform.CPU_GOV_FMT % cpu_n
+            try:
+                fh = open(path, "r")
+            except IOError:
+                # On some virtulised systems, this info is unavailable.
+                if self.is_virtual():
+                    warn("Virtualised system doesn't allow Krun to check the CPU governor.")
+                    return
+                else:
+                    fatal("Unable to check the CPU governor (via %s)." % path)
+
+            v = fh.read().strip()
+            fh.close()
 
             if v != "performance":
                 debug("changing CPU governor for CPU %s" % cpu_n)
@@ -810,11 +855,26 @@ class LinuxPlatform(UnixLikePlatform):
         for cpu_n in xrange(self.num_cpus):
             # Check CPU scaler
             debug("Checking CPU scaler for CPU%d" % cpu_n)
-            with open(LinuxPlatform.CPU_SCALER_FMT % cpu_n, "r") as fh:
-                v = fh.read().strip()
+
+            path = LinuxPlatform.CPU_SCALER_FMT % cpu_n
+            try:
+                fh = open(path, "r")
+            except IOError:
+                if self.is_virtual():
+                    warn("Virtualised system doesn't allow Krun to check the CPU scaler")
+                    return
+                else:
+                    fatal("Unable to check the CPU scaler (via %s)." % path)
+
+            v = fh.read().strip()
+            fh.close()
 
             if v != "acpi-cpufreq":
                 if v == "intel_pstate":
+                    if self.no_pstate_check:
+                        warn("Ignoring enabled P-states (--no-pstate-check)")
+                        return
+
                     scaler_files = [ "  * " + LinuxPlatform.CPU_SCALER_FMT % x for
                                     x in xrange(self.num_cpus)]
                     self._fatal_kernel_arg(
@@ -960,6 +1020,22 @@ class LinuxPlatform(UnixLikePlatform):
         # thread priorities, then move this method into a super-class and call
         # out to C to sched_get_priority_max(2).
         return 99  # Linux specific maximum
+
+    def is_virtual(self):
+        # Needs to be run as root
+        args = self.change_user_args("root") + [self.virt_what_cmd]
+
+        virt_facts, _, _ = run_shell_cmd(" ".join(args))
+        virt_facts = virt_facts.strip()
+
+        debug("detect-virt: %s" % virt_facts)
+
+        # If any virtualisation fact is inferred, this is a virtualised host.
+        # Therefore an empty string means we are on bare-metal.
+        if virt_facts == "":
+            return False
+        else:
+            return True
 
 
 class DebianLinuxPlatform(LinuxPlatform):

@@ -141,6 +141,9 @@ class TestScheduler(BaseKrunTest):
                                    reboot=True, dry_run=True,
                                    started_by_init=True)
         sched.build_schedule()
+        # We will catch the (normally unreachable) 'assert False' in the
+        # fake reboot code to check reboot is being called.
+        sched.platform.fake_reboots = True
         assert len(sched) == 8
         with pytest.raises(AssertionError):
             sched.run()

@@ -283,11 +283,7 @@ class ExecutionScheduler(object):
         if self.reboot and self.started_by_init and jobs_left > 0:
             debug("Waiting %s seconds for the system to come up." %
                  str(STARTUP_WAIT_SECONDS))
-            if self.dry_run:
-                info("SIMULATED: time.sleep (would have waited %s seconds)." %
-                     STARTUP_WAIT_SECONDS)
-            else:
-                time.sleep(STARTUP_WAIT_SECONDS)
+            self.platform.sleep(STARTUP_WAIT_SECONDS)
 
         # Important that the dmesg is collected after the above startup wait.
         # Otherwise we get spurious dmesg changes.
@@ -418,12 +414,12 @@ class ExecutionScheduler(object):
                         "Krun was about to execute reboot number: %g. " +
                         "%g jobs have been completed, %g are left to go.") %
                        (self.results.reboots, self.jobs_done, len(self)))
-        if self.dry_run:
-            info("SIMULATED: reboot (restarting Krun in-place)")
+        if self.platform.fake_reboots:
+            warn("SIMULATED: reboot (--fake-reboots)")
             args =  sys.argv
             if not self.started_by_init:
                 args.extend(["--resume", "--started-by-init"])
-                debug("Simulated reboot with args: " + " ".join(args))
+            debug("Simulated reboot with args: " + " ".join(args))
             os.execv(args[0], args)  # replace myself
             assert False  # unreachable
         else:
