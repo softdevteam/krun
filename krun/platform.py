@@ -225,12 +225,7 @@ class BasePlatform(object):
         changes = self.bench_env_changes()
         EnvChange.apply_all(changes, combine_env)
 
-        new_args = self.adjust_env_cmd(combine_env)
-        if self.config.ENABLE_PINNING:
-            new_args += self.pin_process_args()
-        new_args += args
-
-        return new_args
+        return self.adjust_env_cmd(combine_env) + args
 
     @abstractmethod
     def _change_user_args(self, user="root"):
@@ -278,10 +273,6 @@ class BasePlatform(object):
 
     @abstractmethod
     def pin_process_args(self):
-        pass
-
-    @abstractmethod
-    def change_scheduler_args(self):
         pass
 
 
@@ -506,9 +497,6 @@ class OpenBSDPlatform(UnixLikePlatform):
     def pin_process_args(self):
         return []  # not supported on OpenBSD
 
-    def change_scheduler_args(self):
-        return []  # no control over scheduler
-
 
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -520,12 +508,8 @@ class LinuxPlatform(UnixLikePlatform):
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
     ASLR_FILE = "/proc/sys/kernel/randomize_va_space"
-
-    # The best realtime scheduler for our purposes. Also correctly schedules
-    # threads when a process is forced onto isolated cores:
-    # http://stackoverflow.com/questions/36604360/why-does-using-taskset-to-run-a-multi-threaded-linux-program-on-a-set-of-isolate
-    SCHED_ALGO = "fifo"
-    SCHED_RT_RUNTIME_US = "/proc/sys/kernel/sched_rt_runtime_us"
+    CSET_CMD = "/usr/bin/cset"
+    USER_CSET_DIR = "/cpusets/user"
 
     # Expected tickless kernel config
     #
@@ -651,53 +635,46 @@ class LinuxPlatform(UnixLikePlatform):
     def check_preliminaries(self):
         """Checks the system is in a suitable state for benchmarking"""
 
-        self._check_util_linux_installed()
+        self._check_cset_installed()
         self._check_isolcpus()
+        self._check_cset_shield()
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
         self._check_tickless_kernel()
         self._check_aslr_disabled()
-        self._check_realtime_throttle_disabled()
 
-    def _check_realtime_throttle_disabled(self):
-        """Linux kernel gets pretty upset if you run a CPU intensive thread
-        under the real-time thread schedule policy. By default Linux will
-        artificially pre-empt such threads to give other things a chance to run
-        on this core. A switch will flip at runtime leaving a message in dmesg
-        when this comes into effect.
+    # separate for testing
+    def _configure_cset_shield_args(self):
+        """Returns the commands (as a list of list of args)
+        needed to set up/destroy a shield"""
 
-        See the "Limiting the CPU usage of real-time and deadline processes"
-        section in sched(7).
+        if self.config.ENABLE_PINNING:
+            # create shield on all cores but boot core.
+            # OK to create shield when one is already created.
+            cpus = "1-%s" % (self.num_cpus - 1)
+            cmd1 =  self.change_user_args("root") + \
+                [LinuxPlatform.CSET_CMD, "shield", "-c", cpus]
+            # move as many kernel threads as you can, please
+            cmd2 = [LinuxPlatform.CSET_CMD, "shield", "-k", "on"]
+            return [cmd1, cmd2]
+        else:
+            # destroy shield (if existing)
+            if os.path.exists(LinuxPlatform.USER_CSET_DIR):
+                return [self.change_user_args("root") + \
+                    [LinuxPlatform.CSET_CMD, "shield", "-r"]]
+            else:
+                return []  # no commands
 
-        We don't want "throttling" on the benchmarking cores.
+    def _check_cset_shield(self):
+        """Create/reset and check cset sheild status"""
 
-        From sched(7):
-
-        "Specifying [sched_rt_runtime_us] -1 makes the runtime the same as the
-        period; that is, no CPU time is set aside for non-real-time processes."
-        """
-
-        debug("Check real-time thread throttling is off")
-
-        for itr in xrange(2):
-            with open(LinuxPlatform.SCHED_RT_RUNTIME_US) as fh:
-                val = fh.read().strip()
-
-            if val != "-1":
-                if itr == 0:
-                    debug("%s is not -1, adjusting." % LinuxPlatform.SCHED_RT_RUNTIME_US)
-
-                    # Needs to happen as root
-                    args = self.change_user_args() +  \
-                        ["sh", "-c",
-                         "'echo -1 > %s'" % LinuxPlatform.SCHED_RT_RUNTIME_US]
-
-                    cmd = " ".join(args)
-                    run_shell_cmd(cmd)
-                else:
-                    fatal("Could not set %s to -1" %
-                          LinuxPlatform.SCHED_RT_RUNTIME_US)
+        debug("create/check/remove cset shield")
+        cmds = self._configure_cset_shield_args()
+        for args in cmds:
+            cmd = " ".join(args)
+            out, _, _ = run_shell_cmd(cmd)
+            debug(out)  # cset is quite chatty on stdout
 
     @staticmethod
     def _tickless_config_info_str(modes):
@@ -897,35 +874,37 @@ class LinuxPlatform(UnixLikePlatform):
         return cmd
 
     def pin_process_args(self):
-        """Pin to a set of adaptive tick CPUs.
-        We are working the assumption that the kernel is NO_HZ_FULL_ALL meaning
-        that all but the first CPU are in adaptive tick mode."""
+        """Pin to a set of isolated (via cset shield), adaptive tick CPUs."""
 
         if self.num_cpus == 1:
             fatal("not enough CPUs to pin")
 
-        cpus = ",".join([str(x) for x in xrange(1, self.num_cpus)])
-        return ["taskset", "-c", cpus]
+        # cset shielding requires root
+        # double dash signifies end of cset args
+        return self.change_user_args("root") + \
+            [LinuxPlatform.CSET_CMD, "shield", "-e", "--"]
 
-    def _check_util_linux_installed(self):
-        debug("Check util-linux is installed")
+    def _check_cset_installed(self):
+        debug("Check cset is installed")
 
         from distutils.spawn import find_executable
-        if not find_executable("taskset"):
-            fatal("util-linix is not installed "
-                  "(needed for pinning and scheduler tweaking).")
+        if not find_executable("cset"):
+            fatal("cset is not installed (needed for pinning).")
 
     def sanity_checks(self):
         UnixLikePlatform.sanity_checks(self)
-        if self.config.ENABLE_PINNING:
-            self._sanity_check_cpu_affinity()
-            self._sanity_check_scheduler()
+        self._sanity_check_cpu_affinity()
+        self._sanity_check_scheduler()
 
     def _sanity_check_cpu_affinity(self):
         from krun.vm_defs import NativeCodeVMDef
         from krun import EntryPoint
 
-        ep = EntryPoint("check_linux_cpu_affinity.so")
+        if self.config.ENABLE_PINNING:
+            ep = EntryPoint("check_linux_cpu_affinity_pinned.so")
+        else:
+            ep = EntryPoint("check_linux_cpu_affinity_not_pinned.so")
+
         vd = NativeCodeVMDef()
         util.spawn_sanity_check(self, ep, vd, "CPU affinity",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
@@ -939,29 +918,19 @@ class LinuxPlatform(UnixLikePlatform):
         util.spawn_sanity_check(self, ep, vd, "Scheduler",
                                 force_dir=PLATFORM_SANITY_CHECK_DIR)
 
-    def _advise_isolcpus_arg(self, got_cpus, expect_cpus):
-        """Error out and guide user in isolating CPUs"""
-
-        arg = "isolcpus=%s" % ",".join(expect_cpus)
-        self._fatal_kernel_arg(
-            arg, "CPUs incorrectly isolated. Got: %s, expect: %s" %
-            (got_cpus, expect_cpus)
-        )
-
     def _check_isolcpus(self):
-        """Checks the correct CPUs have been isolated if pinning is enabled.
-        (All but the boot processor)
+        """Checks that the isolcpus kernel arg is not in use.
 
-        Conversely check cores are *not* isolated if pinning is disabled.
+        We used to use isolcpus to run processes on isolated cores, but this --
+        at the time -- had issues for multi-threaded programs:
+        https://bugzilla.kernel.org/show_bug.cgi?id=116701
+
+        Now we achieve the correct behaviour using a cset shield, which is
+        arguably better anyway, as it moves (some) kernel threads off the
+        benchmarking cores too.
         """
 
-        debug("Check cores are isolated correctly (pinning=%s)" % \
-              self.config.ENABLE_PINNING)
-
-        if self.config.ENABLE_PINNING:
-            expect_cpus = [str(x) for x in xrange(1, self.num_cpus)]
-        else:
-            expect_cpus = []
+        debug("Check isolcpus not in use")
 
         all_args = self._get_kernel_cmdline()
 
@@ -981,18 +950,16 @@ class LinuxPlatform(UnixLikePlatform):
         else:
             got_cpus = []
 
-        if expect_cpus != got_cpus:
-            self._advise_isolcpus_arg(got_cpus, expect_cpus)  # exits
+        if got_cpus != []:
+            self._fatal_kernel_arg(
+                "isolcpus", "isolcpus should not be in the kernel command line"
+            )
 
     def _sched_get_priority_max(self):
         # If we later support other operating systems which too support static
         # thread priorities, then move this method into a super-class and call
         # out to C to sched_get_priority_max(2).
         return 99  # Linux specific maximum
-
-    def change_scheduler_args(self):
-        algo_arg = "--%s" % LinuxPlatform.SCHED_ALGO
-        return ["chrt", algo_arg, str(self._sched_get_priority_max())]
 
 
 class DebianLinuxPlatform(LinuxPlatform):
@@ -1012,7 +979,7 @@ class DebianLinuxPlatform(LinuxPlatform):
             suffix += "\n"
 
         fatal("%s"
-              "Set `%s` in the kernel arguments.\n"
+              "Set/change/remove `%s` in the kernel arguments.\n"
               "To do this on Debian:\n"
               "  * Edit /etc/default/grub\n"
               "  * Amend GRUB_CMDLINE_LINUX_DEFAULT\n"

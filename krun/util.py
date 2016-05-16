@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from subprocess import Popen, PIPE
 from logging import error, debug, info
 
@@ -77,6 +78,12 @@ def run_shell_cmd_list(cmds, failure_fatal=True, extra_env=None):
 
 def check_and_parse_execution_results(stdout, stderr, rc):
     json_exn = None
+
+    # cset(1) on Linux prints to stdout information about which cpuset a pinned
+    # process went to. If this line is present, filter it out.
+    stdout = re.sub('^cset: --> last message, executed args into cpuset "/user",'
+           ' new pid is: [0-9]+\n', '', stdout)
+
     try:
         iterations_results = json.loads(stdout)  # expect a list of floats
     except Exception as e:  # docs don't say what can arise, play safe.

@@ -1,9 +1,8 @@
 /*
- * Dummy benchmark that checks the CPU affinity for a benchmark.
+ * Dummy benchmark that checks the CPU affinity mask for a *pinned* benchmark.
  *
- * We are assuming the Linux kernel is NO_HZ_FULL_ALL tickless, so the affinity
- * should be all but the boot processor (all the other CPUs will be in adaptive
- * tick mode)
+ * The mask should contain all CPUs apart from the boot processor (enforced by
+ * a cset shield).
  *
  * This code is Linux specific.
  */
@@ -40,7 +39,8 @@ run_iter(int param)
     }
 
     if (CPU_COUNT(&mask) != n_cpus - 1) {
-        fprintf(stderr, "Wrong number of CPUs in affinity mask\n");
+        fprintf(stderr, "Wrong number of CPUs in affinity mask\n"
+            "got %d, expect %ld\n", CPU_COUNT(&mask), n_cpus - 1);
         exit(EXIT_FAILURE);
     }
 

@@ -29,24 +29,22 @@ You need to have the following installed:
   * GNU make, a C compiler and libc (`build-essential` package in Debian)
   * cpufrequtils (Linux only. `cpufrequtils` package in Debian)
   * cffi (`python-cffi` package in Debian)
-  * taskset (Linux only. `util-linux` package in Debian)
+  * cset (for pinning on Linux only. `cpuset` package in Debian)
+
+Note that to use pinning on Linux, `cset shield` must be in a working state.
+Some Linux distributions have been known to ship with this functionality
+broken. See the `cset` tutorial for information on how to test `cset shield`:
+https://rt.wiki.kernel.org/index.php/Cpuset_Management_Utility/tutorial
 
 ### Kernel arguments
 
-If you are using a Linux system, you will need to set some kernel arguments.
-If your Linux bootloader is Grub, you can follow these steps:
+If you are using a Linux system, you will need to set a kernel arguments to
+disable Intel P-states. If your Linux bootloader is Grub, you can follow these
+steps:
 
   * Edit /etc/default/grub (e.g. `sudo gedit /etc/default/grub`)
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
-  * If you want to use CPU pinning, add `isolcpus=x,y,z` to
-    `GRUB_CMDLINE_LINUX_DEFAULT`, where 'x,y,z' is a comma separated list of
-    all logical CPUs apart from the boot processor.
-    (i.e. CPU 0). This ensures that the adaptive tick cores are used soley for
-    benchmarks (see 'Tickless Mode Linux Kernel').
   * Run `sudo update-grub`
-
-Note that CPU pinning is off by default due to a bug in the Linux kernel:
-https://bugzilla.kernel.org/show_bug.cgi?id=116701
 
 ### Tickless Mode Linux Kernel
 

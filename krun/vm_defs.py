@@ -184,16 +184,7 @@ class BaseVMDef(object):
 
         debug("Wrapper script:\n%s" % ("\n".join(lines)))
 
-        # The arguments used to invoke the wrapper script now
-        wrapper_args = self.platform.change_user_args("root")
-
-        if self.config.ENABLE_PINNING:
-            wrapper_args += self.platform.change_scheduler_args()
-
-        wrapper_args += self.platform.process_priority_args() + \
-            self.platform.change_user_args(BENCHMARK_USER) + \
-            [DASH, WRAPPER_SCRIPT]
-
+        wrapper_args = self._wrapper_args()
         debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
 
         # Do an OS-level sync. Forces pending writes on to the physical disk.
@@ -203,6 +194,21 @@ class BaseVMDef(object):
             self.platform.sync_disks()
 
         return self._run_exec_popen(wrapper_args)
+
+    # separate for testing
+    def _wrapper_args(self):
+        """Build arguments used to run the wrapper script"""
+
+        wrapper_args = self.platform.change_user_args("root") + \
+            self.platform.process_priority_args()
+
+        if self.config.ENABLE_PINNING:
+                wrapper_args += self.platform.pin_process_args()
+
+        wrapper_args += self.platform.change_user_args(BENCHMARK_USER) + \
+            [DASH, WRAPPER_SCRIPT]
+
+        return wrapper_args
 
     # separate for testing purposes
     def _run_exec_popen(self, args):
