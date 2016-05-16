@@ -21,5 +21,6 @@ script:
     - JAVA_CPPFLAGS='"-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"' JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1 make
     - cd examples/benchmarks
     - make
+    - make java-bench
     - cd ../
-    - PYTHONPATH=.. python ../krun.py --develop example.krun
+    - python ../krun.py --develop travis.krun

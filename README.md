@@ -6,13 +6,16 @@ The `examples/` directory contains a simple experiment using Krun.
 This is a good starting point for setting up your own Krun configuration.
 
 The example here contains two benchmark programs (*nbody* and *dummy*),
-executed on two VMs (*cPython* and a standard *JVM* such as HotSpot).
+executed on two VMs (*cPython* and native code with no VM). There is a separate
+example with Java (using *JVM* such as HotSpot), which requires you to set up
+some environment variables before you compile Krun.
 Each benchmark is run for 5 iterations on the same VM, then the VM is
 restarted and the benchmark is re-run for another 5 iterations.
 We say that the experiment runs 2 *process executions* and 5 *in-process iterations* of
 each benchmark.
 
-This configuration can be found in the file `examples/example.krun`.
+This configuration can be found in the file `examples/example.krun`. The
+example with Java can be found in `examples/java.krun`.
 
 ## Step 1: prepare the benchmarking machine
 
@@ -25,11 +28,13 @@ using, e.g. on Linux you should be able to run `sudo`.
 You need to have the following installed:
 
   * Python2.7 (pre-installed in Debian)
-  * A Java SDK 7 (`openjdk-7-jdk` package in Debian)
   * GNU make, a C compiler and libc (`build-essential` package in Debian)
   * cpufrequtils (Linux only. `cpufrequtils` package in Debian)
   * cffi (`python-cffi` package in Debian)
   * cset (for pinning on Linux only. `cpuset` package in Debian)
+
+If you want to benchmark Java, you will also need:
+  * A Java SDK 7 (`openjdk-7-jdk` package in Debian)
 
 Note that to use pinning on Linux, `cset shield` must be in a working state.
 Some Linux distributions have been known to ship with this functionality
@@ -120,25 +125,33 @@ $ git clone https://github.com/softdevteam/krun.git
 $ cd krun
 ```
 
-## Step 3: set `JAVA_HOME`
-
-```bash
-$ export JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64/
-```
-## Step 4: Build Krun
+## Step 3: Build Krun
 
 The Krun Makefile honours the standard variables: `CC`, `CPPFLAGS`, `CFLAGS`
 and `LDFLAGS`. For example, if you wish to use `clang` rather than `gcc` you
-can append `CC=/bin/clang` to the options here:
+can append `CC=clang` to the `make` command below. You should build Krun
+by invoking GNU make:
 
 ```bash
 $ pwd
 .../Krun
-$ make JAVA_CPPFLAGS='"-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"' \
+$ make  # gmake on non-Linux platforms.
+```
+
+If you want to benchmark Java programs, you will also need to set the
+`JAVA_HOME` environment variable, and build Krun with some extra flags. The
+invocation below comes from a Ubuntu Linux machine, you may need to replace
+some paths and invoke `gmake` on other platforms:
+
+```bash
+$ pwd
+.../Krun
+$ env JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/ make  \
+    JAVA_CPPFLAGS='"-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"' \
     JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1
 ```
 
-## Step 5: Build the benchmarks
+## Step 4: Build the benchmarks
 
 ```bash
 $ cd examples/benchmarks
@@ -147,17 +160,38 @@ $ pwd
 $ make
 ```
 
-## Step 6: Run the example experiment
+If you also want to try the example Java benchmarks, you must build them
+as a separate step:
+
+```bash
+$ pwd
+.../krun/examples/benchmarks
+$ make java-bench
+```
+
+## Step 5: Run the example experiment
 
 ```bash
 $ cd ../
 $ pwd
 .../krun/examples
-$ PYTHONPATH=../ ../krun.py example.krun
+$ ../krun.py example.krun
 ```
 
 You should see a log scroll past, and results will be stored in the file:
 `../krun/examples/example_results.json.bz2`.
+
+If you want to try the example Java benchmarks, there is a separate
+configuration file called `java.krun`, which contains configuration for the Java
+and Python examples:
+
+```bash
+$ pwd
+.../krun/examples
+$ ../krun.py java.krun
+
+Note, this will only work if you have followed the extra steps above to
+compile Krun for use with Java.
 
 ## Using a Krun results file
 
@@ -205,7 +239,7 @@ $ python krun.py --dump-config examples/example_results.json.bz2
 INFO:root:Krun starting...
 [2015-11-02 14:23:31: INFO] Krun starting...
 import os
-from krun.vm_defs import (PythonVMDef, JavaVMDef)
+from krun.vm_defs import (PythonVMDef, NativeVMDef)
 from krun import EntryPoint
 
 # Who to mail
@@ -240,7 +274,7 @@ long).
 Krun supports this with the `--dryrun` command line switch:
 
 ```bash
-$ PYTHONPATH=../ ../krun.py --dryrun --debug=INFO example.krun
+$ ../krun.py --dryrun --debug=INFO example.krun
 ```
 
 By passing in `--debug=INFO` you will see a full log of krun actions
@@ -261,14 +295,14 @@ benchmarks, and run the remaining process executions detailed in your configurat
 file.
 
 ```bash
-$ PYTHONPATH=../ ../krun.py --resume example.krun
+$ ../krun.py --resume example.krun
 ```
 
 You may wish to use this facility to reboot after every process execution.
 To do this, you can pass in the `--reboot` flag when you start Krun:
 
 ```bash
-$ PYTHONPATH=../ ../krun.py --reboot example.krun
+$ ../krun.py --reboot example.krun
 ```
 
 You will also need to ensure that Krun is restarted once the machine has
@@ -315,7 +349,7 @@ which is the entry point to the benchmark.
 In the case of compiled languages, it often makes sense to add an extra
 class to an existing benchmark, in order to provide an entry point.
 
-The example here uses Java and cPython.
+The examples here uses C, Java and cPython.
 The following VMs are currently supported:
 
   * Standard Java SDK (such as Hotspot)
@@ -345,7 +379,7 @@ virtual machine definition), you may find the `--develop` switch useful. This
 will cause Krun to run with the following modifications:
 
   * Krun will not run the system prerequisite checks. Checks relating to CPU
-    governers,  CPU scalers, CPU temperatures, tickless kernel, etc.
+    governors,  CPU scalers, CPU temperatures, tickless kernel, etc.
   * Krun will not attempt to switch user to run benchmarks.
 
 This makes it easier to develop krun on (e.g.) a personal laptop which has not
