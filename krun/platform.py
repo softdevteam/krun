@@ -652,7 +652,8 @@ class LinuxPlatform(UnixLikePlatform):
     def check_preliminaries(self):
         """Checks the system is in a suitable state for benchmarking"""
 
-        self._check_cset_installed()
+        if self.config.ENABLE_PINNING:
+            self._check_cset_installed()
         self._check_isolcpus()
         self._check_cset_shield()
         self._check_virt_what_installed()
