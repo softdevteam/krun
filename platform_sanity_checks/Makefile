@@ -1,4 +1,4 @@
-OS != uname
+OS = $(shell uname -s)
 
 .PHONY: clean all
 
@@ -8,32 +8,32 @@ all: check_openbsd_malloc_options.so check_nice_priority.so \
 	check_linux_scheduler.so
 
 check_openbsd_malloc_options.so: check_openbsd_malloc_options.c
-	if [ "${OS}" = "OpenBSD" ]; then \
-		${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -shared -Wall -Wextra -o \
-		check_openbsd_malloc_options.so check_openbsd_malloc_options.c \
-		; fi
+ifeq (${OS},OpenBSD)
+	${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -shared -Wall -Wextra -o \
+		check_openbsd_malloc_options.so check_openbsd_malloc_options.c
+endif
 
 check_nice_priority.so: check_nice_priority.c
 	${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -fPIC -shared -Wall -Wextra -o \
 		check_nice_priority.so check_nice_priority.c
 
 check_linux_cpu_affinity_pinned.so: check_linux_cpu_affinity_pinned.c
-	if [ "${OS}" = "Linux" ]; then \
-		${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -fPIC -shared -Wall -Wextra -o \
-		check_linux_cpu_affinity_pinned.so check_linux_cpu_affinity_pinned.c \
-		; fi
+ifeq (${OS},Linux)
+	${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -fPIC -shared -Wall -Wextra -o \
+		check_linux_cpu_affinity_pinned.so check_linux_cpu_affinity_pinned.c
+endif
 
 check_linux_cpu_affinity_not_pinned.so: check_linux_cpu_affinity_not_pinned.c
-	if [ "${OS}" = "Linux" ]; then \
+ifeq (${OS},Linux)
 		${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -fPIC -shared -Wall -Wextra -o \
-		check_linux_cpu_affinity_not_pinned.so check_linux_cpu_affinity_not_pinned.c \
-		; fi
+		check_linux_cpu_affinity_not_pinned.so check_linux_cpu_affinity_not_pinned.c
+endif
 
 check_linux_scheduler.so: check_linux_scheduler.c
-	if [ "${OS}" = "Linux" ]; then \
+ifeq (${OS},Linux)
 		${CC} ${CFLAGS} ${LDFLAGS} ${CPPFLAGS} -fPIC -shared -Wall -Wextra -o \
-		check_linux_scheduler.so check_linux_scheduler.c \
-		; fi
+		check_linux_scheduler.so check_linux_scheduler.c
+endif
 
 clean:
 	rm -f check_openbsd_malloc_options.so check_nice_priority.so \
