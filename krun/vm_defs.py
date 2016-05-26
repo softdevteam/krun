@@ -34,6 +34,9 @@ DASH = find_executable("dash")
 if DASH is None:
     fatal("dash shell not found")
 
+INSTRUMENTATION_END_PROC_ITER_PREFIX = "@@@ END_IN_PROC_ITER:"
+
+
 # !!!
 # Don't mutate any lists passed down from the user's config file!
 # !!!
@@ -58,55 +61,6 @@ def print_stderr_linewise(info):
             info("stderr: " + "".join(stderr_partial_line) + emit)
             stderr_partial_line = []
             startindex = nl + 1
-
-
-class Instrumentation(object):
-    def __init__(self, name, stderr_regex):
-        self.name = name
-        self.regex = re.compile(stderr_regex)
-        self.count = 0
-        self.counts = []
-
-    def store(self):
-        self.counts.append(self.count)
-        self.count = 0
-
-    def match(self, line):
-        if re.match(self.regex, line):
-            self.count += 1
-
-    def reset(self):
-        self.count = 0
-        self.counts = []
-
-    @staticmethod
-    def process_lines(stderr_lines, instrumentations):
-        iter_num = 0
-
-        for inst in instrumentations:
-            inst.reset()
-
-        # Iterate lines looking for instrumentation
-        for line in stderr_lines:
-            if line.startswith("@@@ END_IN_PROC_ITER:"):
-                # end of an iteration, store counters
-                for inst in instrumentations:
-                    inst.store()
-
-                elems = line.split(":")
-                assert(len(elems) == 2 and int(elems[1]) == iter_num)
-                iter_num += 1
-                continue
-
-            for inst in instrumentations:
-                inst.match(line.strip())
-
-        rv = {}
-
-        for inst in instrumentations:
-            rv[inst.name] = inst.counts
-
-        return rv
 
 
 class BaseVMDef(object):
@@ -355,9 +309,9 @@ class BaseVMDef(object):
     def __eq__(self, other):
         return isinstance(other, self.__class__)
 
-    def get_instrumentation_data(self, stderr):
-        lines = stderr.splitlines()
-        return Instrumentation.process_lines(lines, self.instrumentations)
+    @abstractmethod
+    def get_instrumentation_data(self, stderr_lines):
+        pass
 
 
 class NativeCodeVMDef(BaseVMDef):
@@ -367,6 +321,9 @@ class NativeCodeVMDef(BaseVMDef):
         iter_runner = os.path.join(ITERATIONS_RUNNER_DIR,
                                    "iterations_runner_c")
         BaseVMDef.__init__(self, iter_runner, env=env)
+
+    def get_instrumentation_data(self, stderr_lines):
+        pass
 
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None, sync_disks=True):
@@ -417,6 +374,9 @@ class JavaVMDef(BaseVMDef):
         self.vm_path = vm_path
         self.extra_vm_args = []
         BaseVMDef.__init__(self, "IterationsRunner", env=env)
+
+    def get_instrumentation_data(self, stderr_lines):
+        pass
 
     def run_exec(self, entry_point, benchmark, iterations,
                  param, heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
@@ -497,6 +457,9 @@ class GraalVMDef(JavaVMDef):
 
         self.extra_vm_args.append("-jvmci")
 
+    def get_instrumentation_data(self, stderr_lines):
+        pass
+
     def run_exec(self, entry_point, benchmark, iterations, param,
                  heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
         return JavaVMDef.run_exec(self, entry_point, benchmark,
@@ -523,6 +486,9 @@ class PythonVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
                                        env=env, instrument=instrument)
 
+    def get_instrumentation_data(self, stderr_lines):
+        pass
+
     def run_exec(self, entry_point, benchmark, iterations,
                  param, heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
         # heap_lim_k unused.
@@ -534,6 +500,10 @@ class PythonVMDef(GenericScriptingVMDef):
 
 
 class PyPyVMDef(PythonVMDef):
+    INST_START_COMPILATION_RE = re.compile("\[([0-9a-f]+)\] \{jit-tracing")
+    INST_STOP_COMPILATION_RE = re.compile("\[([0-9a-f]+)\] jit-tracing\}")
+    #"\[[0-9a-f]+\] \{gc-collect-step" XXX major gc
+
     def __init__(self, vm_path, env=None, instrument=False):
         """When instrument=True, record GC and compilation events"""
 
@@ -555,15 +525,67 @@ class PyPyVMDef(PythonVMDef):
         lib_dir = os.path.dirname(vm_path)
         self.add_env_change(EnvChangeAppend("LD_LIBRARY_PATH", lib_dir))
 
-        self.instrumentations = [
-            Instrumentation("tracing", "\[[0-9a-f]+\] \{jit-tracing"),
-            Instrumentation("major_gc", "\[[0-9a-f]+\] \{gc-collect-step")
-        ]
+    def get_instrumentation_data(self, stderr_lines):
+        """For PyPy we look in stderr for the start and end timestamps of
+        some VM events that we are interested in. These timestamps are not
+        in wall-clock time.
+        """
+
+        data = {
+            "gc_times": [],
+            "compilation_times": [],
+        }
+
+        data_this_iter = {
+            "gc_time": 0,
+            "compilation_time": 0
+        }
+
+        iter_num = 0
+        start_compile_time, end_compile_time = None, None
+
+        for line in stderr_lines:
+            if line.startswith(INSTRUMENTATION_END_PROC_ITER_PREFIX):
+                # first some sanity checking
+                elems = line.split(":")
+                assert(len(elems) == 2 and int(elems[1]) == iter_num)
+                iter_num += 1
+
+                # store this iteration's data and prepare for the next
+                data["compilation_times"].append(data_this_iter["compilation_time"])
+                data["gc_times"].append(data_this_iter["gc_time"])
+                for k in data_this_iter.iterkeys():
+                    data_this_iter[k] = 0
+                continue
+
+            # Compilation events (tracing)
+            match = re.match(PyPyVMDef.INST_START_COMPILATION_RE, line)
+            if match:
+                start_compile_time = int(match.groups(1)[0], 16)
+                assert end_compile_time is None
+                continue
+
+            match = re.match(PyPyVMDef.INST_STOP_COMPILATION_RE, line)
+            if match:
+                end_compile_time = int(match.groups(1)[0], 16)
+                assert start_compile_time is not None
+                delta = end_compile_time - start_compile_time
+                data_this_iter["compilation_time"] += delta
+                start_compile_time, end_compile_time = None, None
+                continue
+
+        # XXX GC events
+
+        return data
+
 
 class LuaVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path, env=None):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.lua",
                                        env=env)
+
+    def get_instrumentation_data(self, stderr_lines):
+        pass
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None, sync_disks=True):
@@ -578,6 +600,9 @@ class PHPVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.php",
                                        env=env)
 
+    def get_instrumentation_data(self, stderr_lines):
+        pass
+
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None, sync_disks=True):
         return self._generic_scripting_run_exec(interpreter, benchmark,
@@ -591,7 +616,13 @@ class RubyVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.rb",
                                        env=env)
 
+    def get_instrumentation_data(self, stderr_lines):
+        pass
+
 class JRubyVMDef(RubyVMDef):
+    def get_instrumentation_data(self, stderr_lines):
+        pass
+
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None, sync_disks=True):
         return self._generic_scripting_run_exec(interpreter, benchmark,
@@ -606,6 +637,9 @@ class JRubyTruffleVMDef(JRubyVMDef):
         self.add_env_change(EnvChangeAppend("JAVACMD", java_path))
 
         self.extra_vm_args += ['-X+T', '-J-server']
+
+    def get_instrumentation_data(self, stderr_lines):
+        pass
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None, sync_disks=True):
@@ -629,8 +663,14 @@ class JavascriptVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path, env=None):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.js", env=env)
 
+    def get_instrumentation_data(self, stderr_lines):
+        pass
+
 
 class V8VMDef(JavascriptVMDef):
+    def get_instrumentation_data(self, stderr_lines):
+        pass
+
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None, sync_disks=True):
         # Duplicates generic implementation. Need to pass args differently.
