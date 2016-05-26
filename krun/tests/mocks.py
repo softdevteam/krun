@@ -21,7 +21,6 @@ class MockPlatform(BasePlatform):
         self.mailer = mailer
         self.audit = dict()
         self.num_cpus = 0
-        self.developer_mode = False
 
     def pin_process_args(self):
         return []
@@ -85,3 +84,6 @@ class MockPlatform(BasePlatform):
 
     def find_temperature_sensors(self):
         return []
+
+    def is_virtual(self):
+        return False

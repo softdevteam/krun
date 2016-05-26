@@ -244,3 +244,9 @@ class TestLinuxPlatform(BaseKrunTest):
 
         find = "isolcpus should not be in the kernel command line"
         assert find in caplog.text()
+
+    def test_is_virtual0001(self, platform):
+        """check that virtualisation check doesn't crash"""
+
+        platform._check_virt_what_installed()  # needed to set the command path
+        platform.is_virtual()

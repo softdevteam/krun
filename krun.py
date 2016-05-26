@@ -69,11 +69,8 @@ def sanity_checks(config, platform):
             vm_info["vm_def"].sanity_checks()
 
     # platform specific sanity checks
-    if not platform.developer_mode:
-        debug("Running platform sanity checks")
-        platform.sanity_checks()
-    else:
-        warn("Not running platform sanity checks due to developer mode")
+    debug("Running platform sanity checks")
+    platform.sanity_checks()
 
 
 def create_arg_parser():
@@ -93,11 +90,6 @@ def create_arg_parser():
     parser.add_argument("--reboot", "-b", action="store_true", default=False,
                         dest="reboot", required=False,
                         help="Reboot before each benchmark is executed")
-    parser.add_argument("--dryrun", "-d", action="store_true", default=False,
-                        dest="dry_run", required=False,
-                        help=("Build and run a benchmarking schedule " +
-                              "But don't execute the benchmarks. " +
-                              "Useful for verifying configuration files"))
     parser.add_argument("--debug", "-g", action="store", default='INFO',
                         dest="debug_level", required=False,
                         help=("Debug level used by logger. Must be one of: " +
@@ -127,15 +119,31 @@ def create_arg_parser():
                         dest="dump", const="data", required=False,
                         help=("Print the data section of " +
                               "a Krun results file to STDOUT"))
-    parser.add_argument("--develop", action="store_true",
-                        dest="develop", required=False,
-                        help=("Enable developer mode"))
     parser.add_argument("--info", action="store_true",
                         help=("Print session info for specified "
                               "config file and exit"))
     parser.add_argument("--strip-results", action="store",
                         metavar="KEY-SPEC",
                         help="Strip result key from results file")
+
+    # Developer switches
+    parser.add_argument("--quick", action="store_true", default=False,
+                        help="No delays. For development only.")
+    parser.add_argument("--no-user-change", action="store_true", default=False,
+                        help="Do not change user to benchmark. "
+                        "For development only.")
+    parser.add_argument("--dry-run", "-d", action="store_true", default=False,
+                        help=("Don't really run benchmarks. "
+                              "For development only."))
+    parser.add_argument("--no-pstate-check", action="store_true", default=False,
+                        help=("Don't check Intel P-states are disabled in the"
+                              "Linux kernel. For development only."))
+    parser.add_argument("--no-tickless-check", action="store_true", default=False,
+                        help=("Don't check if the Linux kernel is tickless. "
+                              "Linux kernel. For development only."))
+    parser.add_argument("--fake-reboots", action="store_true", default=False,
+                        help=("Restart Krun in place instead of rebooting. "
+                              "For development only."))
 
     filename_help = ("Krun configuration or results file. FILENAME should" +
                      " be a configuration file when running benchmarks " +
@@ -233,21 +241,23 @@ def inner_main(mailer, config, args):
     if args.started_by_init and not args.resume:
         util.fatal("--started-by-init makes no sense without --resume")
 
-    if args.develop:
-        warn("Developer mode enabled. Results will not be reliable.")
-
     # Initialise platform instance and assign to VM defs.
     # This needs to be done early, so VM sanity checks can run.
     platform = detect_platform(mailer, config)
 
-    if not args.develop:
-        debug("Checking platform preliminaries")
-        platform.check_preliminaries()
-    else:
-        # Needed to skip the use of certain tools and techniques.
-        # E.g. switching user.
-        warn("Not checking platform prerequisites due to developer mode")
-        platform.developer_mode = True
+    platform.quick_mode = args.quick
+    platform.no_user_change = args.no_user_change
+    platform.no_tickless_check = args.no_tickless_check
+    platform.no_pstate_check = args.no_pstate_check
+    platform.fake_reboots = args.fake_reboots
+
+    debug("Checking platform preliminaries")
+    platform.check_preliminaries()
+
+    # Make a bit of noise if this is a virtualised environment
+    if platform.is_virtual:
+        warn("This appears to be a virtualised host. The results will be flawed. "
+             "Use bare-metal for reliable results!")
 
     platform.collect_audit()
 
@@ -279,11 +289,7 @@ def inner_main(mailer, config, args):
         info(("Wait %s secs to allow system to cool prior to "
              "collecting initial temperature readings") %
              config.TEMP_READ_PAUSE)
-
-        if args.develop or args.dry_run:
-            info("SIMULATED: time.sleep(%s)" % config.TEMP_READ_PAUSE)
-        else:
-            time.sleep(config.TEMP_READ_PAUSE)
+        platform.sleep(config.TEMP_READ_PAUSE)
 
         debug("Taking fresh initial temperature readings")
         platform.starting_temperatures = platform.take_temperature_readings()

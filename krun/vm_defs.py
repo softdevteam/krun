@@ -5,7 +5,7 @@ import fnmatch
 import json
 from abc import ABCMeta, abstractmethod
 
-from logging import info, debug
+from logging import info, debug, warn
 from krun import EntryPoint
 from krun.util import fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR
 from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
@@ -171,7 +171,7 @@ class BaseVMDef(object):
             args.append("0")
 
         if self.dry_run:
-            info("SIMULATED: Benchmark process execution")
+            warn("SIMULATED: Benchmark process execution (--dryrun)")
             return ("", "", 0)
 
         # We write out a wrapper script whose job is to enforce ulimits
@@ -205,8 +205,12 @@ class BaseVMDef(object):
         if self.config.ENABLE_PINNING:
                 wrapper_args += self.platform.pin_process_args()
 
-        wrapper_args += self.platform.change_user_args(BENCHMARK_USER) + \
-            [DASH, WRAPPER_SCRIPT]
+        if self.platform.no_user_change:
+            warn("Not changing user (--no-change-user)")
+        else:
+            wrapper_args += self.platform.change_user_args(BENCHMARK_USER)
+
+        wrapper_args += [DASH, WRAPPER_SCRIPT]
 
         return wrapper_args
 
