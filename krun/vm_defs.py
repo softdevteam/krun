@@ -500,9 +500,18 @@ class PythonVMDef(GenericScriptingVMDef):
 
 
 class PyPyVMDef(PythonVMDef):
-    INST_START_COMPILATION_RE = re.compile("\[([0-9a-f]+)\] \{jit-tracing")
-    INST_STOP_COMPILATION_RE = re.compile("\[([0-9a-f]+)\] jit-tracing\}")
-    #"\[[0-9a-f]+\] \{gc-collect-step" XXX major gc
+    # Describes PyPy's stderr instrumentation.
+    # event-prefix -> counter-this-contributes-to
+    #
+    # Any JIT-related event in one counter, all GC-related in another.
+    # Any other event is not counted.
+    INSTRUMENTATION = {
+        "jit-": "compilation_time",
+        "gc-": "gc_time",
+    }
+
+    INST_START_EVENT_REGEX = re.compile("\[([0-9a-f]+)\] \{(.+)$")
+    INST_STOP_EVENT_REGEX = re.compile("\[([0-9a-f]+)\] (.+)\}$")
 
     def __init__(self, vm_path, env=None, instrument=False):
         """When instrument=True, record GC and compilation events"""
@@ -531,6 +540,46 @@ class PyPyVMDef(PythonVMDef):
         in wall-clock time.
         """
 
+        # Events are not necessarily sequential.
+        #
+        # GC can happen inside tracing, so we have to be a bit clever about how
+        # we separate GC time from tracing.
+        #
+        # We treat the event stream like a tree. We walk this tree, and when
+        # computing the time for each event, we exclude each event's children.
+        # The children have their times computed separately.
+
+        class PyPyVMEvent(object):
+            def __init__(self, event_type, start_time, parent):
+                self.start_time = start_time
+                self.event_type = event_type
+                self.stop_time = None  # later
+                self.children = []
+                self.parent = parent
+                if parent is not None:
+                    parent.children.append(self)
+
+            def get_duration(self):
+                """Get the time this event consumed, but not including the time
+                spent in child events"""
+
+                assert self.start_time is not None and \
+                    self.stop_time is not None
+
+                total_time = self.stop_time - self.start_time
+                child_time = sum(
+                    [child.get_duration() for child in self.children])
+
+                assert total_time >= child_time
+                return total_time - child_time
+
+            def __repr__(self):
+                """For debugging"""
+
+                return "%s(start=%s, stop=%s, children=%s)" % \
+                    (self.event_type, self.start_time,
+                     self.stop_time, len(self.children))
+
         # This stores the counters for all in-process iterations
         data = {
             "gc_time": [],
@@ -544,21 +593,7 @@ class PyPyVMDef(PythonVMDef):
         }
 
         iter_num = 0
-
-        # We populate these to compute a time delta.
-        # Assertions below check that events run sequentially.
-        event_times = [None, None]
-
-        def event_start(match):
-            assert event_times[1] is None
-            event_times[0] = int(match.groups(1)[0], 16)
-
-        def event_end(match, event_name):
-            assert event_times[0] is not None
-            event_times[1] = int(match.groups(1)[0], 16)
-            delta = event_times[1] - event_times[0]
-            data_this_iter[event_name] += delta
-            event_times[0], event_times[1] = None, None
+        current_event = None
 
         for line in stderr_lines:
             if line.startswith(INSTRUMENTATION_END_PROC_ITER_PREFIX):
@@ -566,6 +601,7 @@ class PyPyVMDef(PythonVMDef):
                 elems = line.split(":")
                 assert(len(elems) == 2 and int(elems[1]) == iter_num)
                 iter_num += 1
+                assert current_event is None
 
                 # store this iteration's data and prepare for the next
                 for event in data_this_iter.iterkeys():
@@ -573,16 +609,41 @@ class PyPyVMDef(PythonVMDef):
                     data_this_iter[event] = 0  # reset
                 continue
 
-            # Compilation events (tracing)
-            match = re.match(PyPyVMDef.INST_START_COMPILATION_RE, line)
-            if match:
-                event_start(match)
+            # Is it the start of an event?
+            start_match = re.match(PyPyVMDef.INST_START_EVENT_REGEX, line)
+            if start_match:
+                start_time = int(start_match.groups()[0], 16)
+                event_type = start_match.groups()[1]
+
+                new_event = PyPyVMEvent(event_type, start_time, current_event)
+                current_event = new_event
                 continue
 
-            match = re.match(PyPyVMDef.INST_STOP_COMPILATION_RE, line)
-            if match:
-                event_end(match, "compilation_time")
+            # Is it the end of an event?
+            stop_match = re.match(PyPyVMDef.INST_STOP_EVENT_REGEX, line)
+            if stop_match:
+                event_type = stop_match.groups()[1]
+                current_event.stop_time = int(stop_match.groups()[0], 16)
+
+                # check event is correctly nested
+                assert event_type == current_event.event_type
+
+                # Find which counter this event contributes to (if any)
+                for prefix, counter_name in \
+                        PyPyVMDef.INSTRUMENTATION.iteritems():
+                    if event_type.startswith(prefix):
+                        break  # found one
+                else:
+                    counter_name = None
+
+                if counter_name is not None:
+                    data_this_iter[counter_name] += current_event.get_duration()
+
+                current_event = current_event.parent
                 continue
+
+        # All events should be done and dusted
+        assert current_event is None
 
         return data
 
