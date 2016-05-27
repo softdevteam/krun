@@ -103,8 +103,6 @@ class BaseVMDef(object):
 
         self.instrument = instrument
 
-        self.instrumentations = []
-
     def _get_benchmark_path(self, benchmark, entry_point, force_dir=None):
         if force_dir is not None:
             # Forcing a directory! Used for sanity checks.
