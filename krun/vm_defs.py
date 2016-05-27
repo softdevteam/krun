@@ -531,18 +531,34 @@ class PyPyVMDef(PythonVMDef):
         in wall-clock time.
         """
 
+        # This stores the counters for all in-process iterations
         data = {
-            "gc_times": [],
-            "compilation_times": [],
+            "gc_time": [],
+            "compilation_time": [],
         }
 
+        # This stores the counters for the current in-process iteration
         data_this_iter = {
             "gc_time": 0,
             "compilation_time": 0
         }
 
         iter_num = 0
-        start_compile_time, end_compile_time = None, None
+
+        # We populate these to compute a time delta.
+        # Assertions below check that events run sequentially.
+        event_times = [None, None]
+
+        def event_start(match):
+            assert event_times[1] is None
+            event_times[0] = int(match.groups(1)[0], 16)
+
+        def event_end(match, event_name):
+            assert event_times[0] is not None
+            event_times[1] = int(match.groups(1)[0], 16)
+            delta = event_times[1] - event_times[0]
+            data_this_iter[event_name] += delta
+            event_times[0], event_times[1] = None, None
 
         for line in stderr_lines:
             if line.startswith(INSTRUMENTATION_END_PROC_ITER_PREFIX):
@@ -552,29 +568,21 @@ class PyPyVMDef(PythonVMDef):
                 iter_num += 1
 
                 # store this iteration's data and prepare for the next
-                data["compilation_times"].append(data_this_iter["compilation_time"])
-                data["gc_times"].append(data_this_iter["gc_time"])
-                for k in data_this_iter.iterkeys():
-                    data_this_iter[k] = 0
+                for event in data_this_iter.iterkeys():
+                    data[event].append(data_this_iter[event])
+                    data_this_iter[event] = 0  # reset
                 continue
 
             # Compilation events (tracing)
             match = re.match(PyPyVMDef.INST_START_COMPILATION_RE, line)
             if match:
-                start_compile_time = int(match.groups(1)[0], 16)
-                assert end_compile_time is None
+                event_start(match)
                 continue
 
             match = re.match(PyPyVMDef.INST_STOP_COMPILATION_RE, line)
             if match:
-                end_compile_time = int(match.groups(1)[0], 16)
-                assert start_compile_time is not None
-                delta = end_compile_time - start_compile_time
-                data_this_iter["compilation_time"] += delta
-                start_compile_time, end_compile_time = None, None
+                event_end(match, "compilation_time")
                 continue
-
-        # XXX GC events
 
         return data
 
