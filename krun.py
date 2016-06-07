@@ -255,7 +255,7 @@ def inner_main(mailer, config, args):
     platform.check_preliminaries()
 
     # Make a bit of noise if this is a virtualised environment
-    if platform.is_virtual:
+    if platform.is_virtual():
         warn("This appears to be a virtualised host. The results will be flawed. "
              "Use bare-metal for reliable results!")
 
