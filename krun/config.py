@@ -27,7 +27,7 @@ class Config(object):
         self.HEAP_LIMIT = None
         self.STACK_LIMIT = None
         self.TEMP_READ_PAUSE = 60
-        self.ENABLE_PINNING = True
+        self.ENABLE_PINNING = False
 
         self.PRE_EXECUTION_CMDS = []
         self.POST_EXECUTION_CMDS = []

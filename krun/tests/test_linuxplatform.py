@@ -152,6 +152,7 @@ class TestLinuxPlatform(BaseKrunTest):
 
     def test_configure_cset_shield_args0001(self, platform):
         platform.num_cpus = 4
+        platform.config.ENABLE_PINNING = True
         got = platform._configure_cset_shield_args()
         expect = [['/usr/bin/sudo', '-u', 'root', '/usr/bin/cset',
                    'shield', '-c', '1-3'],
@@ -159,6 +160,7 @@ class TestLinuxPlatform(BaseKrunTest):
         assert got == expect
 
     def test_configure_cset_shield_args0002(self, platform):
+        platform.config.ENABLE_PINNING = True
         platform.num_cpus = 128
         got = platform._configure_cset_shield_args()
         expect = [['/usr/bin/sudo', '-u', 'root', '/usr/bin/cset',
@@ -172,9 +174,8 @@ class TestLinuxPlatform(BaseKrunTest):
         vm_def.set_platform(platform)
         got = vm_def._wrapper_args()
         expect = ['/usr/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
-                  '/usr/bin/sudo', '-u', 'root', '/usr/bin/cset',
-                  'shield', '-e', '--', '/usr/bin/sudo', '-u', 'krun',
-                  '/bin/dash', '/tmp/krun_wrapper.dash']
+                  '/usr/bin/sudo', '-u', 'krun', '/bin/dash',
+                  '/tmp/krun_wrapper.dash']
         assert got == expect
 
     def test_wrapper_args0002(self, platform):
