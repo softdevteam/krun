@@ -71,5 +71,5 @@ TEMP_READ_PAUSE = 1
 #PRE_EXECUTION_CMDS = ["sudo service cron stop"]
 #POST_EXECUTION_CMDS = ["sudo service cron start"]
 
-# CPU pinning (on by default)
-#ENABLE_PINNING = True
+# CPU pinning (off by default)
+#ENABLE_PINNING = False
