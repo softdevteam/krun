@@ -17,6 +17,7 @@ DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
 BENCHMARK_USER = "krun"  # user is expected to have made this
+INST_STDERR_FILE = "/tmp/krun.stderr"
 
 # Pipe buffer sizes vary. I've seen reports on the Internet ranging from a
 # page size (Linux pre-2.6.11) to 64K (Linux in 2015). Ideally we would
@@ -178,9 +179,12 @@ class BaseVMDef(object):
 
         # Instrumentation flag counters
         # XXX all iterations runners need to support this flag?
+        stderr_filename = None
         if isinstance(self, PythonVMDef):
             if self.instrument:
                 args.append("1")
+                # Store stderr in a file that we suck in later
+                stderr_filename = INST_STDERR_FILE
             else:
                 args.append("0")
 
@@ -207,7 +211,7 @@ class BaseVMDef(object):
         if sync_disks:
             self.platform.sync_disks()
 
-        return self._run_exec_popen(wrapper_args)
+        return self._run_exec_popen(wrapper_args, stderr_filename)
 
     # separate for testing
     def _wrapper_args(self):
@@ -229,8 +233,13 @@ class BaseVMDef(object):
         return wrapper_args
 
     # separate for testing purposes
-    def _run_exec_popen(self, args):
-        """popen to the wrapper script"""
+    def _run_exec_popen(self, args, stderr_filename=None):
+        """popen to the wrapper script
+
+        arguments:
+          args: list of arguments to pass to popen().
+          stderr_filename: if specified (as a string), write stderr to this filename.
+        """
 
         # We pass the empty environment dict here.
         # This is the *outer* environment that the current user will invoke the
@@ -241,15 +250,32 @@ class BaseVMDef(object):
             args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env={})
 
-        rv = self._run_exec_capture(p)
+        if stderr_filename is not None:
+            stderr_file = open(stderr_filename, "w")
+        else:
+            stderr_file = None
+
+        rv = self._run_exec_capture(p, stderr_file)
+
+        if stderr_filename is not None:
+            stderr_file.close()
+
         os.unlink(WRAPPER_SCRIPT)
         return rv
 
-    def _run_exec_capture(self, child_pipe):
+    def _run_exec_capture(self, child_pipe, stderr_file=None):
         """Allows the subprocess (whose pipes we have handles on) to run
         to completion. We print stderr as it arrives.
 
-        Returns a triple: stderr, stdout and the returncode."""
+        arguments:
+          child_pipe: pipe to read from.
+          stderr_file: if not None, a file handle to write stderr to.
+
+        Returns a triple: stderr, stdout and the returncode.
+
+        If a stderr_file is specified, standard error goes to the file instead
+        of to the first element of the return value. In this case, the stderr
+        element will be the empty string."""
 
         # Get raw OS-level file descriptors
         stderr_fd, stdout_fd = \
@@ -280,7 +306,10 @@ class BaseVMDef(object):
                 if d == "":  # EOF
                     open_fds.remove(stderr_fd)
                 else:
-                    stderr_data.append(d)
+                    if stderr_file is None:
+                        stderr_data.append(d)
+                    else:
+                        stderr_file.write(d)
                     stderr_consumer.send(d)
         # We know stderr and stdout are closed.
         # Now we are just waiting for the process to exit, which may have

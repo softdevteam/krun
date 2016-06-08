@@ -1,4 +1,7 @@
 import pytest
+import sys
+import subprocess
+import StringIO
 from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef
 from krun.config import Config
 from distutils.spawn import find_executable
@@ -68,7 +71,7 @@ class TestVMDef(object):
             sync_called[0] = True
         monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
 
-        def fake_run_exec_popen(args):
+        def fake_run_exec_popen(args, stderr_file=None):
             return "[1]", "", 0  # stdout, stderr, exit_code
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
@@ -89,9 +92,29 @@ class TestVMDef(object):
             sync_called[0] = True
         monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
 
-        def fake_run_exec_popen(args):
+        def fake_run_exec_popen(args, stderr_file=None):
             return "[1]", "", 0  # stdout, stderr, exit_code
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
         util.spawn_sanity_check(platform, ep, vm_def, "test")
         assert sync_called == [False]
+
+    def test_write_stderr_to_file0001(self, monkeypatch):
+        """Check that writing stderr to a file works. Used for instrumentation"""
+
+        config = Config()
+        platform = MockPlatform(None, config)
+        ep = EntryPoint("test")
+        vm_def = PythonVMDef('/dummy/bin/python')
+        vm_def.set_platform(platform)
+
+        args = [sys.executable, "-c",
+                "import sys; sys.stdout.write('STDOUT'); sys.stderr.write('STDERR')"]
+        pipe = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={})
+        fh = StringIO.StringIO()  # pretend to be a file
+        out, err, rv = vm_def._run_exec_capture(pipe, fh)
+
+        assert fh.getvalue() == "STDERR"
+        assert err == ""  # should be empty, as we asked for this to go to file
+        assert out == "STDOUT"  # behaviour should be unchanged
+        assert rv == 0
