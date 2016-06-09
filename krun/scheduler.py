@@ -89,7 +89,7 @@ class ExecutionJob(object):
                 iterations_results = []
 
             if vm_def.instrument:
-                inst_data = vm_def.get_instrumentation_data(stderr.splitlines())
+                inst_data = vm_def.get_instrumentation_data()
                 for k, v in inst_data.iteritems():
                     assert len(inst_data[k]) == in_proc_iters
             else:

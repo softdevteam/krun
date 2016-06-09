@@ -337,8 +337,12 @@ class BaseVMDef(object):
         return isinstance(other, self.__class__)
 
     @abstractmethod
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
+
+    def get_instrumentation_data(self):
+        with open(INST_STDERR_FILE, "r") as fh:
+            return self.parse_instrumentation_stderr_file(fh)
 
 
 class NativeCodeVMDef(BaseVMDef):
@@ -349,7 +353,7 @@ class NativeCodeVMDef(BaseVMDef):
                                    "iterations_runner_c")
         BaseVMDef.__init__(self, iter_runner, env=env)
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
@@ -402,7 +406,7 @@ class JavaVMDef(BaseVMDef):
         self.extra_vm_args = []
         BaseVMDef.__init__(self, "IterationsRunner", env=env)
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, entry_point, benchmark, iterations,
@@ -484,7 +488,7 @@ class GraalVMDef(JavaVMDef):
 
         self.extra_vm_args.append("-jvmci")
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, entry_point, benchmark, iterations, param,
@@ -513,7 +517,7 @@ class PythonVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
                                        env=env, instrument=instrument)
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, entry_point, benchmark, iterations,
@@ -561,9 +565,9 @@ class PyPyVMDef(PythonVMDef):
         lib_dir = os.path.dirname(vm_path)
         self.add_env_change(EnvChangeAppend("LD_LIBRARY_PATH", lib_dir))
 
-    def get_instrumentation_data(self, stderr_lines):
-        """For PyPy we look in stderr for the start and end timestamps of
-        some VM events that we are interested in. These timestamps are not
+    def parse_instrumentation_stderr_file(self, file_handle):
+        """For PyPy we look in the stderr file for the start and end timestamps
+        of some VM events that we are interested in. These timestamps are not
         in wall-clock time.
         """
 
@@ -572,9 +576,10 @@ class PyPyVMDef(PythonVMDef):
         # GC can happen inside tracing, so we have to be a bit clever about how
         # we separate GC time from tracing.
         #
-        # We treat the event stream like a tree. We walk this tree, and when
-        # computing the time for each event, we exclude each event's children.
-        # The children have their times computed separately.
+        # We treat the event stream like a tree. We walk this tree, keeping
+        # track of the nesting, and when computing the time for each event, we
+        # exclude each event's children. The children have their times computed
+        # separately.
 
         class PyPyVMEvent(object):
             def __init__(self, event_type, start_time, parent):
@@ -622,7 +627,7 @@ class PyPyVMDef(PythonVMDef):
         iter_num = 0
         current_event = None
 
-        for line in stderr_lines:
+        for line in file_handle:
             if line.startswith(INSTRUMENTATION_END_PROC_ITER_PREFIX):
                 # first some sanity checking
                 elems = line.split(":")
@@ -680,7 +685,7 @@ class LuaVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.lua",
                                        env=env)
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
@@ -696,7 +701,7 @@ class PHPVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.php",
                                        env=env)
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
@@ -712,11 +717,11 @@ class RubyVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.rb",
                                        env=env)
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
 class JRubyVMDef(RubyVMDef):
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
@@ -734,7 +739,7 @@ class JRubyTruffleVMDef(JRubyVMDef):
 
         self.extra_vm_args += ['-X+T', '-J-server']
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
@@ -759,12 +764,12 @@ class JavascriptVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path, env=None):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.js", env=env)
 
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
 
 class V8VMDef(JavascriptVMDef):
-    def get_instrumentation_data(self, stderr_lines):
+    def parse_instrumentation_stderr_file(self, file_handle):
         pass
 
     def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
