@@ -2,7 +2,9 @@ from krun.tests import BaseKrunTest, no_sleep
 from krun.util import FatalKrunError
 from krun.platform import BasePlatform
 import pytest
+import re
 from krun import util
+from time import localtime
 
 class TestGenericPlatform(BaseKrunTest):
     """Platform tests that can be run on any platform"""
@@ -128,3 +130,57 @@ class TestGenericPlatform(BaseKrunTest):
 
         expect = "Inconsistent sensors. ['a', 'b'] vs ['a']"
         assert expect in caplog.text()
+
+    def test_dmesg_filter0001(self, mock_platform, caplog):
+        last_dmesg = ["line1", "line2"]
+        new_dmesg = ["line1", "line2", "line3"]
+
+        # this should indicate change
+        assert mock_platform._check_dmesg_for_changes([], last_dmesg, new_dmesg)
+
+        # and the log will indicate this also
+        assert "New dmesg lines" in caplog.text()
+        assert "\nline3" in caplog.text()
+
+    def test_dmesg_filter0002(self, mock_platform, caplog):
+        last_dmesg = ["line1", "line2"]
+        new_dmesg = ["line1", "line2", "sliced_bread"]
+
+        # this should indicate no change because we allowed the change
+        patterns = [re.compile("red.*herring"), re.compile("sl[ixd]c.*bread$")]
+        assert not mock_platform._check_dmesg_for_changes(patterns, last_dmesg,
+                                                          new_dmesg)
+
+    def test_dmesg_filter0003(self, mock_platform, caplog):
+        # simulate 2 lines falling off the top of the dmesg buffer
+        last_dmesg = ["line1", "line2", "line3", "line4"]
+        new_dmesg = ["line3", "line4"]
+
+        # despite lines dropping off, this should still indicate no change
+        assert not mock_platform._check_dmesg_for_changes([], last_dmesg,
+                                                          new_dmesg)
+
+    def test_dmesg_filter0004(self, mock_platform, caplog):
+        # simulate 2 lines falling off the top of the dmesg buffer, *and* a
+        # new line coming on the bottom of the buffer.
+        last_dmesg = ["line1", "line2", "line3", "line4"]
+        new_dmesg = ["line3", "line4", "line5"]
+
+        # line5 is a problem
+        assert mock_platform._check_dmesg_for_changes([], last_dmesg,
+                                                      new_dmesg)
+        log = caplog.text()
+        assert "\nline5\n" in caplog.text()
+        for num in xrange(1, 5):
+            assert not ("\nline%s\n" % num) in caplog.text()
+
+    def test_dmesg_filter0005(self, mock_platform, caplog):
+        # simulate 2 lines falling off the top of the dmesg buffer, *and* a
+        # new line coming on the bottom of the buffer, but the filter accepts
+        # the new line.
+        last_dmesg = ["line1", "line2", "line3", "line4"]
+        new_dmesg = ["line3", "line4", "line5"]
+
+        patterns = [re.compile(".*5$")]
+        assert not mock_platform._check_dmesg_for_changes(patterns, last_dmesg,
+                                                          new_dmesg)

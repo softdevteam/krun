@@ -7,6 +7,7 @@ import random
 import sys
 import glob
 import subprocess
+import re
 from distutils.spawn import find_executable
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
@@ -53,7 +54,6 @@ class BasePlatform(object):
         self.find_temperature_sensors()
 
         self.last_dmesg = None
-        self.last_dmesg_time = None
 
     def sleep(self, secs):
         if self.quick_mode:
@@ -67,7 +67,6 @@ class BasePlatform(object):
         # errors and warnings in the Linux dmesg. If that happens, we
         # really want to know about it!
         self.last_dmesg = self._collect_dmesg_lines()
-        self.last_dmesg_time = localtime()
 
     @property
     def starting_temperatures(self):
@@ -132,26 +131,67 @@ class BasePlatform(object):
     def _timestamp_to_str(self, lt):
         return time.strftime(ABS_TIME_FORMAT, lt)
 
-    def check_dmesg_for_changes(self):
-        new_dmesg_time = localtime()
-        new_dmesg = self._collect_dmesg_lines()
+    def get_allowed_dmesg_patterns(self):
+        return []
 
-        old_fn = self._timestamp_to_str(self.last_dmesg_time)
-        new_fn = self._timestamp_to_str(new_dmesg_time)
-        lines = [x for x in difflib.unified_diff(
-            self.last_dmesg, new_dmesg, old_fn, new_fn, lineterm="")]
-
-        if lines:
-            # dmesg changed!
-            diff = "\n".join(lines)
-            warn_s = "dmesg seems to have changed! Diff follows:\n" + diff
-            log_and_mail(self.mailer, warn, "dmesg changed", warn_s)
-
-            self.last_dmesg = new_dmesg
-            self.last_dmesg_time = new_dmesg_time
-
-            return True  # i.e. a (potential) error occurred
+    def filter_new_dmesg_line(self, line, patterns):
+        for p in patterns:
+            if p.match(line):
+                debug("Allowed dmesg change: '%s'" % line)
+                return True  # allowed change of dmesg
         return False
+
+    def check_dmesg_for_changes(self):
+        new_dmesg = self._collect_dmesg_lines()
+        patterns = self.get_allowed_dmesg_patterns()
+
+        rv = self._check_dmesg_for_changes(patterns, self.last_dmesg, new_dmesg)
+        self.last_dmesg = new_dmesg
+
+        return rv
+
+    def _check_dmesg_for_changes(self, patterns, last_dmesg, new_dmesg):
+        differ = difflib.Differ()
+        delta = list(differ.compare(last_dmesg, new_dmesg))
+        delta_len = len(delta)
+        new_lines = []
+
+        # Lines can fall off the top of the dmesg buffer. We shouldn't report
+        # this as a change, so we first consume these lines from the generator.
+        for line_no in xrange(delta_len):
+            rec = delta[line_no]
+
+            if not rec.startswith("- "):
+                break
+        else:
+            return False  # don't go around second loop
+
+        # As we enter this loop, line_no is the index of the first line that
+        # didn't fall off the top of the dmesg.
+        while line_no < delta_len:
+            rec = delta[line_no]
+            code = rec[0:2]
+            line = rec[2:]
+
+            if code == "  ":  # in both
+                pass
+            elif code == "+ ":  #  new line in dmesg
+                if not self.filter_new_dmesg_line(line, patterns):
+                    # this is a new line which we did not expect
+                    new_lines.append(line)
+            else:
+                assert False  # should not happen
+
+            line_no += 1
+
+        rv = False
+        if new_lines:
+            # dmesg changed!
+            warn_s = ("New dmesg lines:\n%s" % "\n  ".join(new_lines))
+            log_and_mail(self.mailer, warn, "dmesg changed", warn_s)
+            rv = True  # i.e. a (potential) error occurred
+
+        return rv
 
     def wait_for_temperature_sensors(self, testing=False):
         """A polling loop waiting for temperature sensors to return (close) to
@@ -512,6 +552,12 @@ class OpenBSDPlatform(UnixLikePlatform):
         """Not yet implemented on this platform, assume not virtualised"""
 
         return False
+
+    def get_allowed_dmesg_patterns(self):
+        # PyPy uses write+executable pages, which causes this dmesg entry
+        # in OpenBSD-current (as of around 6.0-beta)
+        return UnixLikePlatform.get_allowed_dmesg_patterns(self) + \
+            [re.compile("pypy\([0-9]+\): mmap W\^X violation$")]
 
 
 class LinuxPlatform(UnixLikePlatform):
