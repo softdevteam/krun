@@ -24,7 +24,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         assert all([x.startswith("hw.sensors.") for x in temps.iterkeys()])
         # check temperature readings are within reasonable parameters
         assert all([type(v) == float for v in temps.itervalues()])
-        assert all([10 <= v <= 100 for v in temps.itervalues()])
+        assert all([10 <= v <= 120 for v in temps.itervalues()])
 
     def test_take_temperature_readings0002(self, platform, monkeypatch):
         """Test with fake readings"""
