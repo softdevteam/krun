@@ -255,20 +255,8 @@ class BaseVMDef(object):
         # command with. Command line arguments will have been appended *inside*
         # to adjust the new user's environment once the user switch has
         # occurred.
-        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=stderr_file,
-                             env={})
-
-        return self._run_exec_capture(p)
-
-    def _run_exec_capture(self, child_pipe):
-        """Allows the subprocess (whose pipes we have handles on) to run
-        to completion. We print stderr as it arrives.
-
-        arguments:
-          child_pipe: pipe to read from.
-          stderr_file: if not None, a file handle to write stderr to.
-
-        Returns a triple: stderr, stdout and the returncode."""
+        child_pipe = subprocess.Popen(args, stdout=subprocess.PIPE,
+                                      stderr=stderr_file, env={})
 
         # Get raw OS-level file descriptors and ensure they are unbuffered
         stdout_fd = child_pipe.stdout.fileno()
