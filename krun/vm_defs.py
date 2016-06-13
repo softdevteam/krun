@@ -2,7 +2,6 @@ import subprocess
 import os
 import select
 import fnmatch
-import json
 import re
 from abc import ABCMeta, abstractmethod
 
@@ -10,7 +9,6 @@ from logging import info, debug, warn
 from krun import EntryPoint
 from krun.util import fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR
 from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
-from krun.util import SANITY_CHECK_HEAP_KB
 from distutils.spawn import find_executable
 
 DIR = os.path.abspath(os.path.dirname(__file__))
@@ -180,7 +178,6 @@ class BaseVMDef(object):
         # Tack on the instrumentation flag
         # All runners accept this flag, even if instrumentation is not
         # implemented for the VM in question.
-        stderr_filename = None
         if self.instrument:
             args.append("1")
             # we will redirect stderr to this handle
@@ -451,7 +448,7 @@ def find_internal_jvmci_java_bin(base_dir):
 
     try:
         matches = fnmatch.filter(os.listdir(base_dir), 'jdk1.8.0*internal*')
-    except OSError as e:
+    except OSError:
         # we didn't find an internal JDK
         fatal("couldn't find the JVMCI internal JDK")
 
