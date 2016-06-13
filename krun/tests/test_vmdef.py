@@ -2,6 +2,8 @@ import pytest
 import sys
 import subprocess
 import StringIO
+import os
+import tempfile
 from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef
 from krun.config import Config
 from distutils.spawn import find_executable
@@ -99,7 +101,24 @@ class TestVMDef(object):
         util.spawn_sanity_check(platform, ep, vm_def, "test")
         assert sync_called == [False]
 
-    def test_write_stderr_to_file0001(self, monkeypatch):
+    def test_run_exec_popen0001(self, monkeypatch):
+        """Check normal operation of _run_exec_popen()"""
+
+        config = Config()
+        platform = MockPlatform(None, config)
+        ep = EntryPoint("test")
+        vm_def = PythonVMDef('/dummy/bin/python')
+        vm_def.set_platform(platform)
+
+        args = [sys.executable, "-c",
+                "import sys; sys.stdout.write('STDOUT'); sys.stderr.write('STDERR')"]
+        out, err, rv = vm_def._run_exec_popen(args)
+
+        assert err == "STDERR"
+        assert out == "STDOUT"
+        assert rv == 0
+
+    def test_run_exec_popen0002(self, monkeypatch):
         """Check that writing stderr to a file works. Used for instrumentation"""
 
         config = Config()
@@ -110,11 +129,18 @@ class TestVMDef(object):
 
         args = [sys.executable, "-c",
                 "import sys; sys.stdout.write('STDOUT'); sys.stderr.write('STDERR')"]
-        pipe = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={})
-        fh = StringIO.StringIO()  # pretend to be a file
-        out, err, rv = vm_def._run_exec_capture(pipe, fh)
 
-        assert fh.getvalue() == "STDERR"
-        assert err == ""  # should be empty, as we asked for this to go to file
+        with tempfile.NamedTemporaryFile(delete=False, prefix="kruntest") as fh:
+            filename = fh.name
+            out, err, rv = vm_def._run_exec_popen(args, fh)
+
+        assert err == ""  # not here due to redirection
         assert out == "STDOUT"  # behaviour should be unchanged
         assert rv == 0
+
+        # stderr should be in this file
+        with open(filename) as fh:
+            assert fh.read() == "STDERR"
+
+        fh.close()
+        os.unlink(filename)

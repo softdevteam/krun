@@ -183,9 +183,11 @@ class BaseVMDef(object):
         stderr_filename = None
         if self.instrument:
             args.append("1")
-            stderr_filename = INST_STDERR_FILE
+            # we will redirect stderr to this handle
+            stderr_file = open(INST_STDERR_FILE, "w")
         else:
             args.append("0")
+            stderr_file = subprocess.PIPE
 
         if self.dry_run:
             warn("SIMULATED: Benchmark process execution (--dryrun)")
@@ -210,7 +212,13 @@ class BaseVMDef(object):
         if sync_disks:
             self.platform.sync_disks()
 
-        return self._run_exec_popen(wrapper_args, stderr_filename)
+        rv = self._run_exec_popen(wrapper_args, stderr_file)
+
+        if self.instrument:
+            stderr_file.close()
+
+        os.unlink(WRAPPER_SCRIPT)
+        return rv
 
     # separate for testing
     def _wrapper_args(self):
@@ -232,12 +240,14 @@ class BaseVMDef(object):
         return wrapper_args
 
     # separate for testing purposes
-    def _run_exec_popen(self, args, stderr_filename=None):
+    def _run_exec_popen(self, args, stderr_file=subprocess.PIPE):
         """popen to the wrapper script
 
         arguments:
           args: list of arguments to pass to popen().
           stderr_filename: if specified (as a string), write stderr to this filename.
+
+        Returns a 3-tuple: stderr, stdout, returncode.
         """
 
         # We pass the empty environment dict here.
@@ -245,24 +255,12 @@ class BaseVMDef(object):
         # command with. Command line arguments will have been appended *inside*
         # to adjust the new user's environment once the user switch has
         # occurred.
-        p = subprocess.Popen(
-            args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            env={})
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=stderr_file,
+                             env={})
 
-        if stderr_filename is not None:
-            stderr_file = open(stderr_filename, "w")
-        else:
-            stderr_file = None
+        return self._run_exec_capture(p)
 
-        rv = self._run_exec_capture(p, stderr_file)
-
-        if stderr_filename is not None:
-            stderr_file.close()
-
-        os.unlink(WRAPPER_SCRIPT)
-        return rv
-
-    def _run_exec_capture(self, child_pipe, stderr_file=None):
+    def _run_exec_capture(self, child_pipe):
         """Allows the subprocess (whose pipes we have handles on) to run
         to completion. We print stderr as it arrives.
 
@@ -270,26 +268,26 @@ class BaseVMDef(object):
           child_pipe: pipe to read from.
           stderr_file: if not None, a file handle to write stderr to.
 
-        Returns a triple: stderr, stdout and the returncode.
+        Returns a triple: stderr, stdout and the returncode."""
 
-        If a stderr_file is specified, standard error goes to the file instead
-        of to the first element of the return value. In this case, the stderr
-        element will be the empty string."""
+        # Get raw OS-level file descriptors and ensure they are unbuffered
+        stdout_fd = child_pipe.stdout.fileno()
+        self.platform.unbuffer_fd(stdout_fd)
+        open_fds = [stdout_fd]
 
-        # Get raw OS-level file descriptors
-        stderr_fd, stdout_fd = \
-            child_pipe.stderr.fileno(), child_pipe.stdout.fileno()
-
-        # Ensure both fds are unbuffered.
-        # stderr should already be, but it doesn't hurt to force it.
-        for f in [stderr_fd, stdout_fd]:
-            self.platform.unbuffer_fd(f)
+        if child_pipe.stderr is None:
+            # stderr was redirected to file, forget it
+            stderr_fd = None
+        else:
+            # Krun is consuming stderr
+            stderr_fd = child_pipe.stderr.fileno()
+            open_fds.append(stderr_fd)
+            self.platform.unbuffer_fd(stderr_fd)
 
         stderr_data, stdout_data = [], []
         stderr_consumer = print_stderr_linewise(info)
         stderr_consumer.next() # start the generator
 
-        open_fds = [stderr_fd, stdout_fd]
         while open_fds:
             ready = select.select(open_fds, [], [], SELECT_TIMEOUT)
 
@@ -305,11 +303,9 @@ class BaseVMDef(object):
                 if d == "":  # EOF
                     open_fds.remove(stderr_fd)
                 else:
-                    if stderr_file is None:
-                        stderr_data.append(d)
-                    else:
-                        stderr_file.write(d)
+                    stderr_data.append(d)
                     stderr_consumer.send(d)
+
         # We know stderr and stdout are closed.
         # Now we are just waiting for the process to exit, which may have
         # already happened of course.
