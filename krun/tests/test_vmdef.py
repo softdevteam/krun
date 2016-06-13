@@ -1,7 +1,4 @@
-import pytest
 import sys
-import subprocess
-import StringIO
 import os
 import tempfile
 from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef
@@ -106,7 +103,6 @@ class TestVMDef(object):
 
         config = Config()
         platform = MockPlatform(None, config)
-        ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
 
@@ -123,7 +119,6 @@ class TestVMDef(object):
 
         config = Config()
         platform = MockPlatform(None, config)
-        ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
 
