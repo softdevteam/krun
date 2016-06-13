@@ -599,20 +599,27 @@ class PyPyVMDef(PythonVMDef):
         self.add_env_change(EnvChangeAppend("LD_LIBRARY_PATH", lib_dir))
 
     def parse_instrumentation_stderr_file(self, file_handle):
-        """For PyPy we look in the stderr file for the start and end timestamps
-        of some VM events that we are interested in. These timestamps are not
-        in wall-clock time.
-        """
+        """PyPy instrumentation data collected from the PYPYLOG.
 
-        # Events are not necessarily sequential.
-        #
-        # GC can happen inside tracing, so we have to be a bit clever about how
-        # we separate GC time from tracing.
-        #
-        # We treat the event stream like a tree. We walk this tree, keeping
-        # track of the nesting, and when computing the time for each event, we
-        # exclude each event's children. The children have their times computed
-        # separately.
+        We collect:
+          * The time spent in compilation-related tasks.
+          * The time spent in GC-related tasks.
+
+        Note that the times are not in wall-clock time. Consider the units
+        arbitrary.
+
+        Events are not necessarily sequential. They can be nested. E.g. GC can
+        happen inside tracing. The upshot is: we have to be a bit clever about
+        how we separate GC time from compilation time.
+
+        We treat the event stream like a tree. We walk this tree, keeping track
+        of the nesting of events. When computing the time for each event, we
+        exclude the time spent in nested events. The nested children have their
+        times computed separately.
+
+        The INSTRUMENTATION mapping decides which kind of events contribute
+        to which time counter (gc or compilation).
+        """
 
         # This stores the counters for all in-process iterations
         data = {
