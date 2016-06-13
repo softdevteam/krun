@@ -177,16 +177,15 @@ class BaseVMDef(object):
         else:
             args.append("0")
 
-        # Instrumentation flag counters
-        # XXX all iterations runners need to support this flag?
+        # Tack on the instrumentation flag
+        # All runners accept this flag, even if instrumentation is not
+        # implemented for the VM in question.
         stderr_filename = None
-        if isinstance(self, PythonVMDef):
-            if self.instrument:
-                args.append("1")
-                # Store stderr in a file that we suck in later
-                stderr_filename = INST_STDERR_FILE
-            else:
-                args.append("0")
+        if self.instrument:
+            args.append("1")
+            stderr_filename = INST_STDERR_FILE
+        else:
+            args.append("0")
 
         if self.dry_run:
             warn("SIMULATED: Benchmark process execution (--dryrun)")

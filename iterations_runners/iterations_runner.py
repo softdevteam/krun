@@ -19,7 +19,8 @@ clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
 if __name__ == "__main__":
     if len(sys.argv) != 6:
         print("usage: iterations_runner.py "
-        "<benchmark> <# of iterations> <benchmark param> <debug flag> <instrument_flag>\n")
+              "<benchmark> <# of iterations> <benchmark param> <debug flag> "
+              "<instrument flag>\n")
         sys.exit(1)
 
     benchmark, iters, param, debug, instrument = sys.argv[1:]

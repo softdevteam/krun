@@ -29,8 +29,9 @@ end
 
 # main
 if __FILE__ == $0
-    if ARGV.length != 4
-        puts "usage: iterations_runner.rb <benchmark> <#iterations> <benchmark_param> <debug flag>\n"
+    if ARGV.length != 5
+        puts "usage: iterations_runner.rb <benchmark> <# of iterations> "\
+             "<benchmark param> <debug flag> <instrument flag>\n"
         Kernel.exit(1)
     end
 
