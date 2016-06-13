@@ -530,6 +530,40 @@ class PythonVMDef(GenericScriptingVMDef):
                                                 sync_disks=sync_disks)
 
 
+class PyPyVMEvent(object):
+    """Represents an event of interest inside PyPy"""
+
+    def __init__(self, event_type, start_time, parent):
+        self.start_time = start_time
+        self.event_type = event_type
+        self.stop_time = None  # later
+        self.children = []
+        self.parent = parent
+        if parent is not None:
+            parent.children.append(self)
+
+    def get_duration(self):
+        """Get the time this event consumed, but not including the time
+        spent in child events"""
+
+        assert self.start_time is not None and \
+            self.stop_time is not None
+
+        total_time = self.stop_time - self.start_time
+        child_time = sum(
+            [child.get_duration() for child in self.children])
+
+        assert total_time >= child_time
+        return total_time - child_time
+
+    def __repr__(self):
+        """For debugging"""
+
+        return "%s(start=%s, stop=%s, children=%s)" % \
+            (self.event_type, self.start_time,
+             self.stop_time, len(self.children))
+
+
 class PyPyVMDef(PythonVMDef):
     # Describes PyPy's stderr instrumentation.
     # event-prefix -> counter-this-contributes-to
@@ -580,37 +614,6 @@ class PyPyVMDef(PythonVMDef):
         # track of the nesting, and when computing the time for each event, we
         # exclude each event's children. The children have their times computed
         # separately.
-
-        class PyPyVMEvent(object):
-            def __init__(self, event_type, start_time, parent):
-                self.start_time = start_time
-                self.event_type = event_type
-                self.stop_time = None  # later
-                self.children = []
-                self.parent = parent
-                if parent is not None:
-                    parent.children.append(self)
-
-            def get_duration(self):
-                """Get the time this event consumed, but not including the time
-                spent in child events"""
-
-                assert self.start_time is not None and \
-                    self.stop_time is not None
-
-                total_time = self.stop_time - self.start_time
-                child_time = sum(
-                    [child.get_duration() for child in self.children])
-
-                assert total_time >= child_time
-                return total_time - child_time
-
-            def __repr__(self):
-                """For debugging"""
-
-                return "%s(start=%s, stop=%s, children=%s)" % \
-                    (self.event_type, self.start_time,
-                     self.stop_time, len(self.children))
 
         # This stores the counters for all in-process iterations
         data = {
