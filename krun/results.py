@@ -103,9 +103,6 @@ class Results(object):
         """Record instrumentation data into results object."""
 
         for inst_key, v in inst_dct.iteritems():
-            # Keys in dict are not known ahead of time (VMDefs are free to put
-            # whatever keys they like here). We therefore scaffold the lists on
-            # an ad-hoc basis when we see a key for the first time.
             if inst_key not in self.inst_data[bench_key]:
                 self.inst_data[bench_key][inst_key] = []
             self.inst_data[bench_key][inst_key].append(v)
