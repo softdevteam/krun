@@ -5,6 +5,7 @@ from krun.util import fatal
 
 import bz2  # decent enough compression with Python 2.7 compatibility.
 import json
+from collections import defaultdict
 
 
 class Results(object):
@@ -66,7 +67,7 @@ class Results(object):
                 for variant in vm_info["variants"]:
                     key = ":".join((bmark, vm_name, variant))
                     self.data[key] = []
-                    self.inst_data[key] = {}
+                    self.inst_data[key] = defaultdict(list)
                     self.eta_estimates[key] = []
 
     def read_from_file(self, results_file):
@@ -103,8 +104,6 @@ class Results(object):
         """Record instrumentation data into results object."""
 
         for inst_key, v in inst_dct.iteritems():
-            if inst_key not in self.inst_data[bench_key]:
-                self.inst_data[bench_key][inst_key] = []
             self.inst_data[bench_key][inst_key].append(v)
 
     def jobs_completed(self, key):
