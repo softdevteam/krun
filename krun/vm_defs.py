@@ -33,7 +33,7 @@ DASH = find_executable("dash")
 if DASH is None:
     fatal("dash shell not found")
 
-INSTRUMENTATION_END_PROC_ITER_PREFIX = "@@@ END_IN_PROC_ITER:"
+INST_END_PROC_ITER_PREFIX = "@@@ END_IN_PROC_ITER:"
 
 
 # !!!
@@ -587,7 +587,13 @@ class PyPyVMDef(PythonVMDef):
           * The time spent in GC-related tasks.
 
         Note that the times are not in wall-clock time. Consider the units
-        arbitrary.
+        arbitrary. This means these times can be compared to make claims like:
+
+        "In iteration X the VM spent twice as long compiling than in iteration
+        Y. This is reflected by a larger spike in the iteration time for X."
+
+        But you can not compare them against the wall-clock times such as
+        iteration times.
 
         Events are not necessarily sequential. They can be nested. E.g. GC can
         happen inside tracing. The upshot is: we have to be a bit clever about
@@ -599,7 +605,7 @@ class PyPyVMDef(PythonVMDef):
         times computed separately.
 
         The INSTRUMENTATION mapping decides which kind of events contribute
-        to which time counter (gc or compilation).
+        to which time counter (GC or compilation).
         """
 
         # This stores the counters for all in-process iterations
@@ -616,9 +622,8 @@ class PyPyVMDef(PythonVMDef):
 
         iter_num = 0
         current_event = None
-
         for line in file_handle:
-            if line.startswith(INSTRUMENTATION_END_PROC_ITER_PREFIX):
+            if line.startswith(INST_END_PROC_ITER_PREFIX):
                 # first some sanity checking
                 elems = line.split(":")
                 assert(len(elems) == 2 and int(elems[1]) == iter_num)
@@ -637,6 +642,7 @@ class PyPyVMDef(PythonVMDef):
                 start_time = int(start_match.groups()[0], 16)
                 event_type = start_match.groups()[1]
 
+                # The new event stores a reference to its parent.
                 new_event = PyPyVMEvent(event_type, start_time, current_event)
                 current_event = new_event
                 continue
@@ -661,10 +667,13 @@ class PyPyVMDef(PythonVMDef):
                 if counter_name is not None:
                     data_this_iter[counter_name] += current_event.get_duration()
 
+                # When the event is complete, the new current event is restored
+                # from the parent of the finished event.
                 current_event = current_event.parent
                 continue
 
-        # All events should be done and dusted
+        # When we are done, we should be at nesting level 0, indicated by a
+        # current event of None (i.e. root node).
         assert current_event is None
 
         return data
