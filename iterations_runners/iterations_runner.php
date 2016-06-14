@@ -11,8 +11,9 @@
  */
 
 # main
-if ($argc != 5) {
-	echo "usage: iterations_runner.php <benchmark> <# of iterations> <benchmark param> <debug flag>\n";
+if ($argc != 6) {
+    echo "usage: iterations_runner.php <benchmark> <# of iterations> " .
+         "<benchmark param> <debug flag> <instrument flag>\n";
 	exit(1);
 }
 

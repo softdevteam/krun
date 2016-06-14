@@ -17,13 +17,15 @@ clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
 
 # main
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
+    if len(sys.argv) != 6:
         print("usage: iterations_runner.py "
-        "<benchmark> <# of iterations> <benchmark param> <debug flag>\n")
+              "<benchmark> <# of iterations> <benchmark param> <debug flag> "
+              "<instrument flag>\n")
         sys.exit(1)
 
-    benchmark, iters, param, debug = sys.argv[1:]
-    iters, param, debug = int(iters), int(param), int(debug)
+    benchmark, iters, param, debug, instrument = sys.argv[1:]
+    iters, param, debug, instrument = \
+        int(iters), int(param), int(debug) == 1, int(instrument) == 1
 
     assert benchmark.endswith(".py")
     bench_mod_name = os.path.basename(benchmark[:-3])
@@ -44,6 +46,11 @@ if __name__ == "__main__":
         start_time = clock_gettime_monotonic()
         bench_func(param)
         stop_time = clock_gettime_monotonic()
+
+        # In instrumentation mode, write a iteration separator to stderr.
+        if instrument:
+            sys.stderr.write("@@@ END_IN_PROC_ITER: %d\n" % i)
+            sys.stderr.flush()
 
         iter_times[i] = stop_time - start_time
 

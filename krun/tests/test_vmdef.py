@@ -1,4 +1,6 @@
-import pytest
+import sys
+import os
+import tempfile
 from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef
 from krun.config import Config
 from distutils.spawn import find_executable
@@ -68,7 +70,7 @@ class TestVMDef(object):
             sync_called[0] = True
         monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
 
-        def fake_run_exec_popen(args):
+        def fake_run_exec_popen(args, stderr_file=None):
             return "[1]", "", 0  # stdout, stderr, exit_code
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
@@ -89,9 +91,51 @@ class TestVMDef(object):
             sync_called[0] = True
         monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
 
-        def fake_run_exec_popen(args):
+        def fake_run_exec_popen(args, stderr_file=None):
             return "[1]", "", 0  # stdout, stderr, exit_code
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
         util.spawn_sanity_check(platform, ep, vm_def, "test")
         assert sync_called == [False]
+
+    def test_run_exec_popen0001(self, monkeypatch):
+        """Check normal operation of _run_exec_popen()"""
+
+        config = Config()
+        platform = MockPlatform(None, config)
+        vm_def = PythonVMDef('/dummy/bin/python')
+        vm_def.set_platform(platform)
+
+        args = [sys.executable, "-c",
+                "import sys; sys.stdout.write('STDOUT'); sys.stderr.write('STDERR')"]
+        out, err, rv = vm_def._run_exec_popen(args)
+
+        assert err == "STDERR"
+        assert out == "STDOUT"
+        assert rv == 0
+
+    def test_run_exec_popen0002(self, monkeypatch):
+        """Check that writing stderr to a file works. Used for instrumentation"""
+
+        config = Config()
+        platform = MockPlatform(None, config)
+        vm_def = PythonVMDef('/dummy/bin/python')
+        vm_def.set_platform(platform)
+
+        args = [sys.executable, "-c",
+                "import sys; sys.stdout.write('STDOUT'); sys.stderr.write('STDERR')"]
+
+        with tempfile.NamedTemporaryFile(delete=False, prefix="kruntest") as fh:
+            filename = fh.name
+            out, err, rv = vm_def._run_exec_popen(args, fh)
+
+        assert err == ""  # not here due to redirection
+        assert out == "STDOUT"  # behaviour should be unchanged
+        assert rv == 0
+
+        # stderr should be in this file
+        with open(filename) as fh:
+            assert fh.read() == "STDERR"
+
+        fh.close()
+        os.unlink(filename)

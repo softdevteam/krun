@@ -21,9 +21,10 @@ class IterationsRunner {
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
 
-        if (args.length != 4) {
+        if (args.length != 5) {
             System.out.println("usage: iterations_runner <benchmark> " +
-                    "<# of iterations> <benchmark param> <debug flag>\n");
+                    "<# of iterations> <benchmark param> <debug flag>" +
+                    "<instrument flag>\n");
             System.exit(1);
         }
         String benchmark = args[0];
