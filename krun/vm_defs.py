@@ -409,7 +409,7 @@ def find_internal_jvmci_java_bin(base_dir):
     base_dir -- base jvmci directory"""
 
     try:
-        matches = fnmatch.filter(os.listdir(base_dir), 'jdk1.8.0*internal*')
+        matches = fnmatch.filter(os.listdir(base_dir), 'jdk1.8*')
     except OSError as e:
         # we didn't find an internal JDK
         fatal("couldn't find the JVMCI internal JDK")
