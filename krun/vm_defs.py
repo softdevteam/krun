@@ -526,7 +526,7 @@ class JRubyTruffleVMDef(JRubyVMDef):
         JRubyVMDef.__init__(self, vm_path, env=env)
         self.add_env_change(EnvChangeAppend("JAVACMD", java_path))
 
-        self.extra_vm_args += ['-X+T', '-J-server']
+        self.extra_vm_args += ['-J-Djvmci.Compiler=graal', '-X+T']
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None, sync_disks=True):
