@@ -1,10 +1,10 @@
 def run_iter(param)
 	begin
-		if (not Truffle.graal?) then
+		if (not Truffle::Graal.graal?) then
 			raise "Graal is not enabled"
 		end
 	rescue NameError
-		raise "Failed to find Truffle.graal? attribute."
+		raise "Failed to find Truffle::Graal.graal? attribute."
 	end
 end
 
