@@ -75,9 +75,10 @@ class ExecutionJob(object):
         # Set heap limit
         heap_limit_kb = self.sched.config.HEAP_LIMIT
         stack_limit_kb = self.sched.config.STACK_LIMIT
+        in_proc_iters = self.vm_info["n_iterations"]
 
         stdout, stderr, rc = vm_def.run_exec(
-            entry_point, self.benchmark, self.vm_info["n_iterations"],
+            entry_point, self.benchmark, in_proc_iters,
             self.parameter, heap_limit_kb, stack_limit_kb)
 
         if not dry_run:
@@ -86,8 +87,16 @@ class ExecutionJob(object):
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
                 iterations_results = []
+
+            if vm_def.instrument:
+                instr_data = vm_def.get_instr_data()
+                for k, v in instr_data.iteritems():
+                    assert len(instr_data[k]) == in_proc_iters
+            else:
+                instr_data = {}
         else:
             iterations_results = []
+            instr_data = {}
 
         # We print the status *after* benchmarking, so that I/O cannot be
         # commited during benchmarking. In production, we will be rebooting
@@ -95,7 +104,7 @@ class ExecutionJob(object):
         info("Finished '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
 
-        return iterations_results
+        return iterations_results, instr_data
 
 
 class ExecutionScheduler(object):
@@ -310,7 +319,8 @@ class ExecutionScheduler(object):
             # crashing benchmark will give an empty list of iteration times,
             # meaning we can't use 'raw_exec_result' below for estimates.
             exec_start_time = time.time()
-            raw_exec_result = job.run(self.mailer, self.dry_run)
+            raw_exec_result, instr_data = \
+                job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
             exec_result = util.format_raw_exec_results(raw_exec_result)
@@ -319,7 +329,7 @@ class ExecutionScheduler(object):
                 self.results.error_flag = True
 
             self.results.data[job.key].append(exec_result)
-
+            self.results.add_instr_data(job.key, instr_data)
 
             eta_info = exec_end_time - exec_start_time
             if self.reboot:

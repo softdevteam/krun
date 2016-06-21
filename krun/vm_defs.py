@@ -2,20 +2,20 @@ import subprocess
 import os
 import select
 import fnmatch
-import json
+import re
 from abc import ABCMeta, abstractmethod
 
 from logging import info, debug, warn
 from krun import EntryPoint
 from krun.util import fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR
 from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
-from krun.util import SANITY_CHECK_HEAP_KB
 from distutils.spawn import find_executable
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
 BENCHMARK_USER = "krun"  # user is expected to have made this
+INST_STDERR_FILE = "/tmp/krun.stderr"
 
 # Pipe buffer sizes vary. I've seen reports on the Internet ranging from a
 # page size (Linux pre-2.6.11) to 64K (Linux in 2015). Ideally we would
@@ -32,6 +32,9 @@ WRAPPER_SCRIPT = os.sep + os.path.join("tmp", "krun_wrapper.dash")
 DASH = find_executable("dash")
 if DASH is None:
     fatal("dash shell not found")
+
+INST_END_PROC_ITER_PREFIX = "@@@ END_IN_PROC_ITER:"
+
 
 # !!!
 # Don't mutate any lists passed down from the user's config file!
@@ -62,7 +65,7 @@ def print_stderr_linewise(info):
 class BaseVMDef(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, iterations_runner, env=None):
+    def __init__(self, iterations_runner, env=None, instrument=False):
         self.iterations_runner = iterations_runner
 
         # List of EnvChange instances to apply prior to each experiment.
@@ -96,6 +99,8 @@ class BaseVMDef(object):
         # Do not execute the benchmark program
         # (useful for testing configurations.).
         self.dry_run = False
+
+        self.instrument = instrument
 
     def _get_benchmark_path(self, benchmark, entry_point, force_dir=None):
         if force_dir is not None:
@@ -170,6 +175,17 @@ class BaseVMDef(object):
         else:
             args.append("0")
 
+        # Tack on the instrumentation flag
+        # All runners accept this flag, even if instrumentation is not
+        # implemented for the VM in question.
+        if self.instrument:
+            args.append("1")
+            # we will redirect stderr to this handle
+            stderr_file = open(INST_STDERR_FILE, "w")
+        else:
+            args.append("0")
+            stderr_file = subprocess.PIPE
+
         if self.dry_run:
             warn("SIMULATED: Benchmark process execution (--dryrun)")
             return ("", "", 0)
@@ -193,7 +209,13 @@ class BaseVMDef(object):
         if sync_disks:
             self.platform.sync_disks()
 
-        return self._run_exec_popen(wrapper_args)
+        rv = self._run_exec_popen(wrapper_args, stderr_file)
+
+        if self.instrument:
+            stderr_file.close()
+
+        os.unlink(WRAPPER_SCRIPT)
+        return rv
 
     # separate for testing
     def _wrapper_args(self):
@@ -215,42 +237,42 @@ class BaseVMDef(object):
         return wrapper_args
 
     # separate for testing purposes
-    def _run_exec_popen(self, args):
-        """popen to the wrapper script"""
+    def _run_exec_popen(self, args, stderr_file=subprocess.PIPE):
+        """popen to the wrapper script
+
+        arguments:
+          args: list of arguments to pass to popen().
+          stderr_filename: if specified (as a string), write stderr to this filename.
+
+        Returns a 3-tuple: stderr, stdout, returncode.
+        """
 
         # We pass the empty environment dict here.
         # This is the *outer* environment that the current user will invoke the
         # command with. Command line arguments will have been appended *inside*
         # to adjust the new user's environment once the user switch has
         # occurred.
-        p = subprocess.Popen(
-            args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            env={})
+        child_pipe = subprocess.Popen(args, stdout=subprocess.PIPE,
+                                      stderr=stderr_file, env={})
 
-        rv = self._run_exec_capture(p)
-        os.unlink(WRAPPER_SCRIPT)
-        return rv
+        # Get raw OS-level file descriptors and ensure they are unbuffered
+        stdout_fd = child_pipe.stdout.fileno()
+        self.platform.unbuffer_fd(stdout_fd)
+        open_fds = [stdout_fd]
 
-    def _run_exec_capture(self, child_pipe):
-        """Allows the subprocess (whose pipes we have handles on) to run
-        to completion. We print stderr as it arrives.
-
-        Returns a triple: stderr, stdout and the returncode."""
-
-        # Get raw OS-level file descriptors
-        stderr_fd, stdout_fd = \
-            child_pipe.stderr.fileno(), child_pipe.stdout.fileno()
-
-        # Ensure both fds are unbuffered.
-        # stderr should already be, but it doesn't hurt to force it.
-        for f in [stderr_fd, stdout_fd]:
-            self.platform.unbuffer_fd(f)
+        if child_pipe.stderr is None:
+            # stderr was redirected to file, forget it
+            stderr_fd = None
+        else:
+            # Krun is consuming stderr
+            stderr_fd = child_pipe.stderr.fileno()
+            open_fds.append(stderr_fd)
+            self.platform.unbuffer_fd(stderr_fd)
 
         stderr_data, stdout_data = [], []
         stderr_consumer = print_stderr_linewise(info)
         stderr_consumer.next() # start the generator
 
-        open_fds = [stderr_fd, stdout_fd]
         while open_fds:
             ready = select.select(open_fds, [], [], SELECT_TIMEOUT)
 
@@ -268,6 +290,7 @@ class BaseVMDef(object):
                 else:
                     stderr_data.append(d)
                     stderr_consumer.send(d)
+
         # We know stderr and stdout are closed.
         # Now we are just waiting for the process to exit, which may have
         # already happened of course.
@@ -292,6 +315,14 @@ class BaseVMDef(object):
 
     def __eq__(self, other):
         return isinstance(other, self.__class__)
+
+    def parse_instr_stderr_file(self, file_handle):
+        """Parse instrumentation data. Override as necessary"""
+        pass
+
+    def get_instr_data(self):
+        with open(INST_STDERR_FILE, "r") as fh:
+            return self.parse_instr_stderr_file(fh)
 
 
 class NativeCodeVMDef(BaseVMDef):
@@ -319,11 +350,12 @@ class NativeCodeVMDef(BaseVMDef):
 
 class GenericScriptingVMDef(BaseVMDef):
     def __init__(self, vm_path, iterations_runner, entry_point=None,
-                 subdir=None, env=None):
+                 subdir=None, env=None, instrument=False):
         self.vm_path = vm_path
         self.extra_vm_args = []
         fp_iterations_runner = os.path.join(ITERATIONS_RUNNER_DIR, iterations_runner)
-        BaseVMDef.__init__(self, fp_iterations_runner, env=env)
+        BaseVMDef.__init__(self, fp_iterations_runner, env=env,
+                           instrument=instrument)
 
     def _generic_scripting_run_exec(self, entry_point, benchmark, iterations,
                                     param, heap_lim_k, stack_lim_k,
@@ -411,6 +443,7 @@ def find_internal_jvmci_java_bin(base_dir):
     try:
         matches = fnmatch.filter(os.listdir(base_dir), 'jdk1.8*')
     except OSError as e:
+        matches = fnmatch.filter(os.listdir(base_dir), 'jdk1.8.0*internal*')
         # we didn't find an internal JDK
         fatal("couldn't find the JVMCI internal JDK")
 
@@ -452,9 +485,9 @@ class GraalVMDef(JavaVMDef):
         self._check_jvmci_server_enabled()
 
 class PythonVMDef(GenericScriptingVMDef):
-    def __init__(self, vm_path, env=None):
+    def __init__(self, vm_path, env=None, instrument=False):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
-                                       env=env)
+                                       env=env, instrument=instrument)
 
     def run_exec(self, entry_point, benchmark, iterations,
                  param, heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
@@ -467,9 +500,20 @@ class PythonVMDef(GenericScriptingVMDef):
 
 
 class PyPyVMDef(PythonVMDef):
-    def __init__(self, vm_path, env=None):
-        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
-                                       env=env)
+    INST_START_EVENT_REGEX = re.compile("\[([0-9a-f]+)\] \{(.+)$")
+    INST_STOP_EVENT_REGEX = re.compile("\[([0-9a-f]+)\] (.+)\}$")
+
+    def __init__(self, vm_path, env=None, instrument=False):
+        """When instrument=True, record GC and compilation events"""
+
+        if instrument:
+            if env is None:
+                env = {}
+            # Causes PyPy to emit VM events on stderr
+            EnvChangeSet("PYPYLOG", "-").apply(env)
+
+        PythonVMDef.__init__(self, vm_path, env=env, instrument=instrument)
+
         # XXX: On OpenBSD the PyPy build fails to encode the rpath to libpypy-c.so
         # into the VM executable, so we have to force it ourselves.
         #
@@ -479,6 +523,94 @@ class PyPyVMDef(PythonVMDef):
         # The user's environment (if any) comes first however
         lib_dir = os.path.dirname(vm_path)
         self.add_env_change(EnvChangeAppend("LD_LIBRARY_PATH", lib_dir))
+
+    def parse_instr_stderr_file(self, file_handle):
+        """PyPy instrumentation data collected from the PYPYLOG.
+
+        We record when VM events begin and end. Events occur in a nested
+        fashion, e.g. GC can happen inside tracing. We consume the event
+        stream, building a tree of events which are emitted into the results
+        file for post-processing.
+
+        The tree itself is a (compact) JSON-compatible representation. Each
+        in-process iteration has one such tree, whose nodes represent VM
+        events. The nodes are lists of the form:
+          [event_type, start_time, stop_time, parent, children]
+
+        Time-stamps in the tree nodes are not in wall-clock time. Consider the
+        units arbitrary. This means that comparisons to wall clock times are
+        invalid, however you can report the times relative to each other, e.g.:
+
+        "In iteration X the VM spent twice as long in compilation-related
+        events than iteration Y. This is reflected by a larger spike in the
+        iteration time for X."
+
+        Each tree always starts with a dummy root node, whose event type is
+        "root" and whose start and stop times are None.
+
+        This function returns a dict with a single key "raw_vm_events", mapping
+        to a list of root nodes, one per in-process iteration."""
+
+        def root_node():
+            return ["root", None, None, []]
+
+        trees = []
+        parent_stack = []
+        current_node = root_node()
+        iter_num = 0
+        for line in file_handle:
+            if line.startswith(INST_END_PROC_ITER_PREFIX):
+                # first some sanity checking
+                elems = line.split(":")
+                assert(len(elems) == 2 and int(elems[1]) == iter_num)
+                iter_num += 1
+
+                # Nesting level at the end of an iteration should be 0.
+                assert current_node[0] == "root" and len(parent_stack) == 0
+
+                trees.append(current_node)
+                current_node = root_node()  # new tree for next iteration
+
+            # Is it the start of an event?
+            start_match = re.match(PyPyVMDef.INST_START_EVENT_REGEX, line)
+            if start_match:
+                start_time = int(start_match.groups()[0], 16)
+                event_type = start_match.groups()[1]
+
+                # The new node stores a reference to its parent.
+                # The stop time is not yet known, and is thus None.
+                new_node = [event_type, start_time, None, []]
+                current_node[3].append(new_node)  # register as child
+                parent_stack.append(current_node)
+                current_node = new_node
+                continue
+
+            # Is it the end of an event?
+            stop_match = re.match(PyPyVMDef.INST_STOP_EVENT_REGEX, line)
+            if stop_match:
+                # Check the events are properly nested
+                event_type = stop_match.groups()[1]
+                assert event_type == current_node[0]
+
+                # Now we know the stop time, so fill it in
+                stop_time = int(stop_match.groups()[0], 16)
+                current_node[2] = stop_time
+
+                # Check the event times make sense
+                assert current_node[1] < current_node[2]
+
+                # Restore the parent as the current event
+                current_node = parent_stack.pop()
+                continue
+
+        # When we are done, we should be at nesting level 0. Note that the root
+        # node may have children, even at this stage. Most typically, PyPy
+        # emits a jit-summary event as it terminates. That is fine, we are only
+        # interested in what happens in timed sections of the in-process
+        # execution.
+        assert current_node[0] == "root" and len(parent_stack) == 0
+
+        return {"raw_vm_events": trees}
 
 
 class LuaVMDef(GenericScriptingVMDef):

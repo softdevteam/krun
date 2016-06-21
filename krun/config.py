@@ -2,6 +2,8 @@ from logging import error
 
 import os.path
 import time
+import sys
+import traceback
 
 from krun import LOGFILE_FILENAME_TIME_FORMAT
 from krun.util import fatal
@@ -35,13 +37,19 @@ class Config(object):
         if config_file is not None:
             self.read_from_file(config_file)
 
+    def _fatal_exception_execing_config(self, exc_info):
+        lines = ["error importing config file: %s\n" % str(exc_info[1])]
+        for frame in traceback.format_tb(exc_info[2]):
+            lines.append(frame)
+        fatal("".join(lines))
+
     def read_from_string(self, config_str):
         config_dict = {}
         try:
             exec(config_str, config_dict)
         except Exception as e:
-            error("error importing config file:\n%s" % str(e))
-            raise
+            self._fatal_exception_execing_config(sys.exc_info())
+
         self.__dict__.update(config_dict)
         self.filename = ""
         self.text = config_str
@@ -52,8 +60,7 @@ class Config(object):
         try:
             execfile(config_file, config_dict)
         except Exception as e:
-            error("error importing config file:\n%s" % str(e))
-            raise
+            self._fatal_exception_execing_config(sys.exc_info())
 
         for key in CHECK_FIELDS:
             if key not in config_dict:
