@@ -74,7 +74,7 @@ class Config(object):
     def log_filename(self, resume=False):
         assert self.filename.endswith(".krun")
         if resume:
-            config_mtime = time.gmtime(os.path.getmtime(self.filename))
+            config_mtime = time.localtime(os.path.getmtime(self.filename))
             tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT, config_mtime)
         else:
             tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT)

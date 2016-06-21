@@ -7,9 +7,8 @@ usage: runner.py <config_file.krun>
 """
 
 import argparse, json, logging, os, sys
-from logging import debug, info, warn, error
+from logging import debug, info, warn
 import locale
-import time
 
 import krun.util as util
 from krun.config import Config

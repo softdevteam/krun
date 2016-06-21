@@ -29,18 +29,19 @@ def test_eq():
     assert not example_config == Config("krun/tests/quick.krun")
 
 
-def test_log_filename(monkeypatch):
+def test_log_filename():
     path = os.path.join(TEST_DIR, "example.krun")
     example_config = Config(path)
     tstamp = time.strftime(LOGFILE_FILENAME_TIME_FORMAT)
     expect_path = os.path.join(TEST_DIR, "example_%s.log" % tstamp)
     assert example_config.log_filename(False) == expect_path
-    def mock_mtime(path):
-        return 1445964109.9363003
-    monkeypatch.setattr(os.path, 'getmtime', mock_mtime)
-    tstamp = '20151027_164149'
-    expect_path = os.path.join(TEST_DIR, "example_%s.log" % tstamp)
-    assert example_config.log_filename(True) == expect_path
+    touch(path)
+    tstamp_expected = time.strftime(LOGFILE_FILENAME_TIME_FORMAT,
+                                    time.localtime(os.path.getmtime(path)))
+    path_from_krun = example_config.log_filename(True)
+    path_from_krun = path_from_krun.split('.')[0]
+    tstamp = path_from_krun.split('_')[-2] + '_' + path_from_krun.split('_')[-1]
+    assert tstamp_expected == tstamp
 
 
 def test_read_config_from_file():
