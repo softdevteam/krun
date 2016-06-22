@@ -572,7 +572,7 @@ class OpenBSDPlatform(UnixLikePlatform):
         # PyPy uses write+executable pages, which causes this dmesg entry
         # in OpenBSD-current (as of around 6.0-beta)
         return UnixLikePlatform.get_allowed_dmesg_patterns(self) + \
-            [re.compile("pypy\([0-9]+\): mmap W\^X violation$")]
+            [re.compile("^.*\([0-9]+\): .*W\^X violation$")]
 
 
 class LinuxPlatform(UnixLikePlatform):
