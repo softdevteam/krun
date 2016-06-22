@@ -1,8 +1,8 @@
 // NOTE: you need to provide clock_gettime_monotonic.
 
 if (this.arguments.length != 5) {
-    throw "usage: iterations_runner.js <benchmark> <# of iterations>" + \
-        "<benchmark param> <debug flag> <instrument flag>";
+    throw "usage: iterations_runner.js <benchmark> <# of iterations> " +
+          "<benchmark param> <debug flag> <instrument flag>";
 }
 
 var BM_entry_point = this.arguments[0];
