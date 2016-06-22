@@ -195,3 +195,12 @@ class TestGenericPlatform(BaseKrunTest):
         patterns = [re.compile("^xx$")]
         assert not mock_platform._check_dmesg_for_changes(patterns, last_dmesg,
                                                           new_dmesg)
+
+    def test_dmesg_filter0007(self, mock_platform, caplog):
+        # Simulate partial dmesg buffer completely replaced!
+        # This should be an error as we have potentially missed other
+        # important messages that flew off the top of the buffer too!
+        last_dmesg = ["x", "x", "x"]
+        new_dmesg = ["y", "y", "y"]
+
+        assert mock_platform._check_dmesg_for_changes([], last_dmesg, new_dmesg)

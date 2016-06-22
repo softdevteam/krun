@@ -173,9 +173,12 @@ class BasePlatform(object):
                 if not dmesg_buffer_full:
                     dmesg_buffer_full = True
                     debug("Detected full dmesg buffer")
-
         else:
-            return False  # don't go around second loop
+            debug("No common line between old and new dmesg seen")
+            # This is a problem, as we don't know what else has whizzed off the
+            # top of the buffer. Arguably, if the dmesg can be completely
+            # replaced in the time of a benchmark, we have issues anyway.
+            return True
 
         # As we enter this loop, line_no is the index of the first line that
         # didn't fall off the top of the dmesg.
