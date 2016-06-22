@@ -155,14 +155,25 @@ class BasePlatform(object):
         delta = list(differ.compare(last_dmesg, new_dmesg))
         delta_len = len(delta)
         new_lines = []
+        dmesg_buffer_full = False
 
-        # Lines can fall off the top of the dmesg buffer. We shouldn't report
-        # this as a change, so we first consume these lines from the generator.
+        # Lines (or, more likely, partial lines) can fall off the top of the
+        # dmesg ring-buffer. We shouldn't report this as a change, so we first
+        # consume delta lines that appear to have been caused by this. So we
+        # effectively start diffing on the first common line present in both of
+        # the dmesgs. Note that sometimes difflib flags a partial line with a
+        # '? ' code, but it doesn't always get it right. We therefore don't
+        # rely on this.
         for line_no in xrange(delta_len):
-            rec = delta[line_no]
+            code = delta[line_no][0:2]
 
-            if not rec.startswith("- "):
+            if code not in ["- ", "+ ", "? "]:
                 break
+            else:
+                if not dmesg_buffer_full:
+                    dmesg_buffer_full = True
+                    debug("Detected full dmesg buffer")
+
         else:
             return False  # don't go around second loop
 

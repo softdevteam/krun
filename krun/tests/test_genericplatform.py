@@ -184,3 +184,14 @@ class TestGenericPlatform(BaseKrunTest):
         patterns = [re.compile(".*5$")]
         assert not mock_platform._check_dmesg_for_changes(patterns, last_dmesg,
                                                           new_dmesg)
+
+    def test_dmesg_filter0006(self, mock_platform, caplog):
+        # Simulate partial line falling off the dmesg buffer due to a new line.
+        # The change incurred by the partial line should not trigger our "dmesg
+        # changed" flagging code.
+        last_dmesg = ["line1", "line2", "line3"]
+        new_dmesg = ["e1", "line2", "line3", "xx"]  # 3 chars 'xx\n'
+
+        patterns = [re.compile("^xx$")]
+        assert not mock_platform._check_dmesg_for_changes(patterns, last_dmesg,
+                                                          new_dmesg)
