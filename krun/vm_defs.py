@@ -3,6 +3,7 @@ import os
 import select
 import fnmatch
 import re
+import json
 from abc import ABCMeta, abstractmethod
 
 from logging import info, debug, warn
@@ -318,7 +319,7 @@ class BaseVMDef(object):
 
     def parse_instr_stderr_file(self, file_handle):
         """Parse instrumentation data. Override as necessary"""
-        pass
+        return {}
 
     def get_instr_data(self):
         with open(INST_STDERR_FILE, "r") as fh:
@@ -378,10 +379,13 @@ class GenericScriptingVMDef(BaseVMDef):
             fatal("Benchmark file non-existent: %s" % script_path)
 
 class JavaVMDef(BaseVMDef):
-    def __init__(self, vm_path, env=None):
+    INSTR_MARKER = "@@@ JDK_EVENTS: "
+
+    def __init__(self, vm_path, env=None, instrument=False):
         self.vm_path = vm_path
         self.extra_vm_args = []
-        BaseVMDef.__init__(self, "IterationsRunner", env=env)
+        BaseVMDef.__init__(self, "IterationsRunner", env=env,
+                           instrument=instrument)
 
     def run_exec(self, entry_point, benchmark, iterations,
                  param, heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
@@ -421,6 +425,29 @@ class JavaVMDef(BaseVMDef):
         classfile_path = self._get_classfile_path(benchmark, entry_point)
         if not os.path.exists(classfile_path):
             fatal("Benchmark file non-existent: %s" % classfile_path)
+
+    def parse_instr_stderr_file(self, file_handle):
+        """Read in compilation and GC event info from our strategically placed
+        stderr lines.
+
+        This function returns a dict with a single key "raw_vm_events", mapping
+        to a list containing JVM instrumentation records (one per in-process
+        iteration). See the comment in the iterations runner for the format of
+        the records."""
+
+        iter_num = 0
+        iter_data = []
+        prefix_len = len(JavaVMDef.INSTR_MARKER)
+        for line in file_handle:
+            if not line.startswith(JavaVMDef.INSTR_MARKER):
+                continue
+            line = line[prefix_len:]
+            data = json.loads(line)
+            assert data[0] == iter_num
+            iter_data.append(data)
+            iter_num += 1
+
+        return {"raw_vm_events": iter_data}
 
 
 def find_internal_jvmci_java_bin(base_dir):

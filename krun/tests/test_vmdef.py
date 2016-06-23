@@ -3,7 +3,7 @@ import os
 import tempfile
 import pytest
 from StringIO import StringIO
-from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef
+from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef, JavaVMDef
 from krun.config import Config
 from distutils.spawn import find_executable
 from krun.env import EnvChange
@@ -218,3 +218,33 @@ class TestVMDef(object):
         vmd = PyPyVMDef("/pretend/pypy")
         with pytest.raises(AssertionError):
             vmd.parse_instr_stderr_file(pypylog_file)
+
+    def test_jdk_instrumentation0001(self):
+        """Check the json passes through correctly"""
+
+        stderr_file = StringIO("\n".join([
+            '@@@ JDK_EVENTS: [0, "dummy"]',
+            '@@@ JDK_EVENTS: [1, "dummy"]',
+            '@@@ JDK_EVENTS: [2, "dummy"]',
+        ]))
+
+        vmd = JavaVMDef("/pretend/java")
+        got = vmd.parse_instr_stderr_file(stderr_file)
+
+        elems = got["raw_vm_events"]
+        assert len(elems) == 3
+        for i in xrange(3):
+            assert elems[i][0] == i
+
+    def test_jdk_instrumentation0002(self):
+        """Check the parser will bail if json entries out of sequence"""
+
+        stderr_file = StringIO("\n".join([
+            '@@@ JDK_EVENTS: [0, "dummy"]',
+            '@@@ JDK_EVENTS: [3, "dummy"]',  # uh-oh!
+            '@@@ JDK_EVENTS: [2, "dummy"]',
+        ]))
+
+        vmd = JavaVMDef("/pretend/java")
+        with pytest.raises(AssertionError):
+            got = vmd.parse_instr_stderr_file(stderr_file)
