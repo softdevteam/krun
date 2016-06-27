@@ -34,8 +34,6 @@ DASH = find_executable("dash")
 if DASH is None:
     fatal("dash shell not found")
 
-INST_END_PROC_ITER_PREFIX = "@@@ END_IN_PROC_ITER:"
-
 
 # !!!
 # Don't mutate any lists passed down from the user's config file!
@@ -528,6 +526,7 @@ class PythonVMDef(GenericScriptingVMDef):
 class PyPyVMDef(PythonVMDef):
     INST_START_EVENT_REGEX = re.compile("\[([0-9a-f]+)\] \{(.+)$")
     INST_STOP_EVENT_REGEX = re.compile("\[([0-9a-f]+)\] (.+)\}$")
+    INST_END_PROC_ITER_PREFIX = "@@@ END_IN_PROC_ITER:"
 
     def __init__(self, vm_path, env=None, instrument=False):
         """When instrument=True, record GC and compilation events"""
@@ -585,7 +584,7 @@ class PyPyVMDef(PythonVMDef):
         current_node = root_node()
         iter_num = 0
         for line in file_handle:
-            if line.startswith(INST_END_PROC_ITER_PREFIX):
+            if line.startswith(PyPyVMDef.INST_END_PROC_ITER_PREFIX):
                 # first some sanity checking
                 elems = line.split(":")
                 assert(len(elems) == 2 and int(elems[1]) == iter_num)
