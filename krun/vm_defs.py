@@ -391,8 +391,8 @@ class JavaVMDef(BaseVMDef):
         doesn't simply accept the path to a program to run. We have to set
         the CLASSPATH and then provide a class name instead"""
 
-        bench_dir = os.path.dirname(self._get_benchmark_path(benchmark,
-                                             entry_point, force_dir=force_dir))
+        bench_dir = os.path.dirname(self._get_benchmark_path(
+            benchmark, entry_point, force_dir=force_dir))
 
         # deal with CLASSPATH
         # This has to be added here as it is benchmark specific
@@ -448,19 +448,12 @@ class JavaVMDef(BaseVMDef):
         return {"raw_vm_events": iter_data}
 
 
-def find_internal_jvmci_java_bin(base_dir):
+def find_internal_jvmci_java_home(base_dir):
     """
-    The jvmci internal jdk8 seems to move around depending upon
-    the JVM with which it was built.
+    The jvmci jdk8 is named according to the JVM that was used to build it.
 
-    E.g. the java binary could be:
-    jvmci/jdk1.8.0-internal/product/bin/java
-
-    or it could be:
-    jvmci/jdk1.8.0_66-internal/product/bin/java
-
-    This is a helper function to try and find the 'java' binary
-    inside this "moving" directory.
+    Point this function at the 'jvmci' dir and it will return the JAVA_HOME for
+    the jvmci JDK.
 
     arguments:
     base_dir -- base jvmci directory"""
@@ -472,20 +465,28 @@ def find_internal_jvmci_java_bin(base_dir):
         fatal("couldn't find the JVMCI internal JDK")
 
     if len(matches) == 1:
-        return os.path.join(base_dir, matches[0], "product", "bin", "java")
+        return os.path.join(base_dir, matches[0], "product")
     elif len(matches) > 1:
         raise Exception("Found more than one jvmci internal jdk in %s" % base_dir)
     else:
         raise Exception("couldn't locate jvmci internal jdk in %s" % base_dir)
 
 
+def find_internal_jvmci_java_bin(base_dir):
+    return os.path.join(find_internal_jvmci_java_home(base_dir), "bin", "java")
+
+
 class GraalVMDef(JavaVMDef):
-    def __init__(self, vm_path, java_home=None, env=None):
-        JavaVMDef.__init__(self, vm_path, env=env)
+    def __init__(self, graal_dir, mx_path, java_home=None, env=None):
+        JavaVMDef.__init__(self, mx_path, env=env)
+
+        # This is for the JDK8 targetted version of graal.  Once JDK9 is
+        # available it will include Graal and running the VM should be much
+        # simpler. Hopefully just invoking 'java' with some flag.
+        self.extra_vm_args += ['-p', graal_dir, '-Mjit', 'vm']
+
         if java_home is not None:
             self.add_env_change(EnvChangeSet("JAVA_HOME", java_home))
-
-        self.extra_vm_args.append("-jvmci")
 
     def run_exec(self, entry_point, benchmark, iterations, param,
                  heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
@@ -503,8 +504,8 @@ class GraalVMDef(JavaVMDef):
     def sanity_checks(self):
         JavaVMDef.sanity_checks(self)
 
-        if not self.vm_path.endswith("java"):
-            fatal("Graal vm_path should be a path to a jvmci enabled java binary")
+        if not self.vm_path != "mx":
+            fatal("Graal's vm_path should be a path to an 'mx' script")
 
         self._check_jvmci_server_enabled()
 
