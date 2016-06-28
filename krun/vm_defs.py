@@ -471,6 +471,7 @@ def find_internal_jvmci_java_home(base_dir):
     else:
         raise Exception("couldn't locate jvmci internal jdk in %s" % base_dir)
 
+
 def find_internal_jvmci_java_bin(base_dir):
     return os.path.join(find_internal_jvmci_java_home(base_dir), "bin", "java")
 
