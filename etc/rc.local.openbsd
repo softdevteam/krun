@@ -1,11 +1,6 @@
-#!/bin/sh -e
+#!/bin/sh
 
-# This script is executed at the end of each multiuser runlevel. This means
-# that once Krun has rebooted the machine for the first time, Krun will run in
-# the backgrond.
-#
-# Verify this script by running:
-#    sudo service rc.local start
+# After first reboot, Krun runs in the background.
 
 # Edit the following variables as needed.
 
@@ -25,13 +20,11 @@ CONFIG_FILE=warmup.krun
 KRUN_DIR=krun
 
 # Path to Python 2.7 interpreter
-PYTHON=/usr/bin/python2.7
+PYTHON=/usr/local/bin/python2.7
 
 # --------------------------------
 # Don't change anything below here
 
-sudo -u ${INITIAL_USER} sh -c "cd ${EXPERIMENT_DIR}  && \
-    ${PYTHON} ${KRUN_DIR}/krun.py --resume --reboot --started-by-init \
-    ${CONFIG_FILE}" &
-
-exit 0  # must return 0 on Linux
+env PATH=${PATH}:/usr/local/bin sudo -u ${INITIAL_USER} sh -c \
+    "cd ${EXPERIMENT_DIR} && ${PYTHON} ${KRUN_DIR}/krun.py \
+   --resume --reboot --started-by-init ${CONFIG_FILE}" &
