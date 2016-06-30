@@ -7,9 +7,6 @@ before_install:
     - sudo apt-get install linux-libc-dev libc6-dev
     - sudo apt-get install oracle-java8-installer
     - sudo apt-get install virt-what
-    - sudo useradd krun
-    - sudo adduser krun sudo
-    - sudo passwd -d krun
 
 install:
     - pip install -r requirements.txt
@@ -25,4 +22,4 @@ script:
     - make
     - make java-bench
     - cd ../
-    - python ../krun.py --no-pstate-check --no-tickless-check travis.krun
+    - python ../krun.py --no-pstate-check --no-tickless-check --no-user-change travis.krun
