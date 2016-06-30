@@ -7,6 +7,7 @@ import sys
 import glob
 import subprocess
 import re
+import pwd
 from distutils.spawn import find_executable
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
@@ -16,6 +17,7 @@ import krun.util as util
 from logging import warn, debug
 from abc import ABCMeta, abstractmethod, abstractproperty
 from krun.env import EnvChangeSet, EnvChange, EnvChangeAppend
+from krun.vm_defs import BENCHMARK_USER
 
 NICE_PRIORITY = -20
 DIR = os.path.abspath(os.path.dirname(__file__))
@@ -335,8 +337,14 @@ class BasePlatform(object):
 
         Returns a boolean.
         """
-
         pass
+
+    @abstractmethod
+    def make_fresh_krun_user(self):
+        """Make the krun user account from scratch, forcibly deleting any
+        remnants of any existing krun user."""
+        pass
+
 
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
@@ -416,6 +424,32 @@ class UnixLikePlatform(BasePlatform):
         # a thin wrapper around the syscall. We wait a while. We have reports
         # that the sync command itself can take up to 10 seconds.
         self.sleep(SYNC_SLEEP_SECS)
+
+    def extra_userdel_args(self):
+        return []
+
+    def make_fresh_krun_user(self):
+        try:
+            pwd.getpwnam(BENCHMARK_USER)
+        except KeyError:
+            pass  # krun user does not exist, fine.
+        else:
+            # krun user does exist, remove it
+            debug("Delete krun user")
+            args = self.change_user_args("root") + ["userdel", "-r"] + \
+                self.extra_userdel_args() + [BENCHMARK_USER]
+            run_shell_cmd(" ".join(args))
+
+        # Create fresh user
+        debug("Create krun user")
+        args = self.change_user_args("root") + ["useradd", "-m", BENCHMARK_USER]
+        run_shell_cmd(" ".join(args))
+
+        # This should now not raise
+        try:
+            pwd.getpwnam(BENCHMARK_USER)
+        except KeyError:
+            fatal("Creating krun user failed")
 
 
 class OpenBSDPlatform(UnixLikePlatform):
@@ -1093,6 +1127,11 @@ class LinuxPlatform(UnixLikePlatform):
             return False
         else:
             return True
+
+    def extra_userdel_args(self):
+        # Needed on Linux because the default mail spool ownership causes
+        # non-zero userdel exit status.
+        return ["-f"]  # force
 
 
 class DebianLinuxPlatform(LinuxPlatform):

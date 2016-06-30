@@ -87,3 +87,6 @@ class MockPlatform(BasePlatform):
 
     def is_virtual(self):
         return False
+
+    def make_fresh_krun_user(self):
+        pass
