@@ -1,5 +1,3 @@
-from logging import error
-
 import os.path
 import time
 import sys

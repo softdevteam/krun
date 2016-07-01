@@ -5,8 +5,6 @@
 # modified by Tupteq, Fredrik Johansson, and Daniel Nanz
 # modified by Maciej Fijalkowski
 
-import sys 
-
 def combinations(l):
     result = []
     for x in xrange(len(l) - 1):

@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from logging import debug
 
 
 class Audit(object):

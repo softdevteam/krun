@@ -3,7 +3,6 @@
 import time
 import os
 import difflib
-import random
 import sys
 import glob
 import subprocess
@@ -14,8 +13,7 @@ from krun import ABS_TIME_FORMAT
 from krun.util import (fatal, run_shell_cmd, log_and_mail,
                        PLATFORM_SANITY_CHECK_DIR)
 import krun.util as util
-from logging import warn, info, debug
-from time import localtime
+from logging import warn, debug
 from abc import ABCMeta, abstractmethod, abstractproperty
 from krun.env import EnvChangeSet, EnvChange, EnvChangeAppend
 
@@ -554,7 +552,6 @@ class OpenBSDPlatform(UnixLikePlatform):
         ep = EntryPoint("check_openbsd_malloc_options.so")
 
         from krun.vm_defs import NativeCodeVMDef
-        from krun.util import SANITY_CHECK_HEAP_KB
         vd = NativeCodeVMDef()
 
         util.spawn_sanity_check(self, ep, vd, "OpenBSD malloc options",
@@ -665,8 +662,6 @@ class LinuxPlatform(UnixLikePlatform):
         self.temp_sensor_map = sensor_map
 
     def _get_num_cpus(self):
-        err = False
-
         # most reliable method generic to all Linux
         out, _, rv = run_shell_cmd("grep -c ^processor  /proc/cpuinfo")
         if rv == 0:
