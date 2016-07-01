@@ -1,12 +1,11 @@
 from krun.time_estimate import TimeEstimateFormatter, now_str
 from krun.results import Results
 from krun import util
-from krun.platform import SYNC_SLEEP_SECS
 
 from collections import deque
 from logging import warn, info, error, debug
 
-import os, resource, subprocess, sys, time
+import os, subprocess, sys, time
 
 # Wait this many seconds for the init system to finish bringing up services.
 STARTUP_WAIT_SECONDS = 2 * 60
