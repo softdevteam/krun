@@ -13,7 +13,7 @@ INITIAL_USER=someuser
 EXPERIMENT_DIR=/home/${INITIAL_USER}/path/to/experiment
 
 # Config file
-CONFIG_FILE=warmup.krun
+CONFIG_FILE=yourconfig.krun
 
 # Path to Krun.
 # If you don't use an absolute path, this will be relative to ${EXPERIMENT_DIR}
