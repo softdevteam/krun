@@ -15,11 +15,13 @@
 #include <dlfcn.h>
 #include <err.h>
 #include <string.h>
+#include <inttypes.h>
 
 #define BENCH_FUNC_NAME "run_iter"
 
 /* from libkruntime */
 double clock_gettime_monotonic();
+u_int64_t read_ts_reg();
 
 int
 convert_str_to_int(char *s)
@@ -51,8 +53,10 @@ main(int argc, char **argv)
     int       krun_debug = 0;
     void     *krun_dl_handle = 0;
     int     (*krun_bench_func)(int); /* func ptr to benchmark entry */
-    double    start_time = -1, stop_time = -1;
+    double    krun_wallclock_start = -1, krun_wallclock_stop = -1;
     double   *krun_iter_times = NULL;
+    u_int64_t krun_tsr_start = 0, krun_tsr_stop = 0;
+    u_int64_t *krun_tsr_iter_times = NULL;
 
     if (argc != 6) {
         printf("usage: iterations_runner_c "
@@ -85,9 +89,16 @@ main(int argc, char **argv)
         goto clean;
     }
 
+    krun_tsr_iter_times = calloc(krun_total_iters, sizeof(u_int64_t));
+    if (krun_tsr_iter_times == NULL) {
+        errx(EXIT_FAILURE, "%s", strerror(errno));
+        goto clean;
+    }
+
     for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
         krun_iter_num++) {
-        krun_iter_times[krun_iter_num] = -1.0;
+        krun_iter_times[krun_iter_num] = 0;
+        krun_tsr_iter_times[krun_iter_num] = 0;
     }
 
     for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
@@ -99,14 +110,20 @@ main(int argc, char **argv)
         }
 
         /* timed section */
-        start_time = clock_gettime_monotonic();
+        krun_wallclock_start = clock_gettime_monotonic();
+        krun_tsr_start = read_ts_reg();
         (void) (*krun_bench_func)(krun_param);
-        stop_time = clock_gettime_monotonic();
+        krun_tsr_stop = read_ts_reg();
+        krun_wallclock_stop = clock_gettime_monotonic();
 
-        krun_iter_times[krun_iter_num] = stop_time - start_time;
+        krun_iter_times[krun_iter_num] =
+            krun_wallclock_stop - krun_wallclock_start;
+        krun_tsr_iter_times[krun_iter_num] =
+            krun_tsr_stop - krun_tsr_start;
     }
 
-    fprintf(stdout, "[");
+    /* Emit results */
+    fprintf(stdout, "[[");
     for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
         krun_iter_num++) {
         fprintf(stdout, "%f", krun_iter_times[krun_iter_num]);
@@ -115,7 +132,16 @@ main(int argc, char **argv)
             fprintf(stdout, ", ");
         }
     }
-    fprintf(stdout, "]\n");
+    fprintf(stdout, "], \n[");
+    for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
+        krun_iter_num++) {
+        fprintf(stdout, "%" PRIu64, krun_tsr_iter_times[krun_iter_num]);
+
+        if (krun_iter_num < krun_total_iters - 1) {
+            fprintf(stdout, ", ");
+        }
+    }
+    fprintf(stdout, "]]\n");
 
 clean:
     free(krun_iter_times);

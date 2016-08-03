@@ -1,5 +1,8 @@
 local ffi = require("ffi")
-ffi.cdef[[double clock_gettime_monotonic();]]
+ffi.cdef[[
+    double clock_gettime_monotonic();
+    double read_ts_reg_double();
+]]
 local kruntime = ffi.load("kruntime")
 
 local BM_benchmark = arg[1]
@@ -17,7 +20,12 @@ dofile(BM_benchmark)
 
 local BM_iter_times = {}
 for BM_i = 1, BM_iters, 1 do
-    BM_iter_times[BM_i] = -1.0
+    BM_iter_times[BM_i] = 0
+end
+
+local BM_tsr_iter_times = {}
+for BM_i = 1, BM_iters, 1 do
+    BM_tsr_iter_times[BM_i] = 0
 end
 
 for BM_i = 1, BM_iters, 1 do
@@ -26,17 +34,27 @@ for BM_i = 1, BM_iters, 1 do
     end
 
     local BM_start_time = kruntime.clock_gettime_monotonic()
+    local BM_tsr_start_time = kruntime.read_ts_reg_double();
     run_iter(BM_param) -- run one iteration of benchmark
+    local BM_tsr_end_time = kruntime.read_ts_reg_double();
     local BM_end_time = kruntime.clock_gettime_monotonic()
 
     BM_iter_times[BM_i] = BM_end_time - BM_start_time
+    BM_tsr_iter_times[BM_i] = BM_tsr_end_time - BM_tsr_start_time
 end
 
-io.stdout:write("[")
+io.stdout:write("[[")
 for BM_i = 1, BM_iters, 1 do
     io.stdout:write(BM_iter_times[BM_i])
     if BM_i < BM_iters then
         io.stdout:write(", ")
     end
 end
-io.stdout:write("]\n")
+io.stdout:write("], [")
+for BM_i = 1, BM_iters, 1 do
+    io.stdout:write(BM_tsr_iter_times[BM_i])
+    if BM_i < BM_iters then
+        io.stdout:write(", ")
+    end
+end
+io.stdout:write("]]\n")

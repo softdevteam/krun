@@ -13,10 +13,13 @@ install:
     - pip install colorlog
 
 script:
+    - sudo update-java-alternatives -l || true  # returns 1 on success!
+    - sudo update-java-alternatives -s `sudo update-java-alternatives -l | grep 8-oracle | awk '{print $1}'`
     - py.test --cov-report term --cov=krun  krun
     - uname -a
     - make --version
     - ldd --version
+    - java -version
     - JAVA_CPPFLAGS='"-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"' JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1 make
     - cd examples/benchmarks
     - make
