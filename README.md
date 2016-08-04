@@ -2,6 +2,9 @@
 
 Krun is a framework for running software benchmarking experiments.
 
+**Krun uses sudo to elevate priveleges! Please read these instructions in
+full.**
+
 The `examples/` directory contains a simple experiment using Krun.
 This is a good starting point for setting up your own Krun configuration.
 
@@ -384,8 +387,12 @@ easier.
     sleeps or a polling loop. These are essential for real benchmarking, but
     annoying for development. Use `--quick` to skip these delays.
 
-  * `--no-user-change`: Usually Krun will switch to a user named `krun` to
-    perform benchmarking. This switch disables the user change.
+  * `--no-user-change`: Without this flag, For each process execution, Krun
+    will use a fresh user account called 'krun'. This involves deleting any
+    exising user account (with `userdel -r`) and creating a new user account
+    (with `useradd -m`).  This switch disables the use of a fresh user account,
+    meaning that `userdel` and `useradd` are not invoked, nor does Krun switch
+    user; the user Krun was invoked with is used for benchmarking.
 
   * `--dry-run`: Fakes actual benchmark processes, making them finish
     instantaneously.
@@ -424,6 +431,24 @@ literally '*'.
 Once you have stripped results, if you ran an experiment in reboot mode you
 will need to reboot manually to re-run the stripped results (with rc.local set
 up correctly).
+
+## Security Notes
+
+Krun is not intended to be run on a secure multi-user system, as it uses sudo
+to elevate proveleges.
+
+Sudo is used to:
+
+ * Add and remove a fresh benchmarking user for each process execution.
+ * Switch users.
+ * Change the CPU speed.
+ * Set the perf sample rate (Linux only)
+ * Automatically reboot the system.
+ * Set process priorities.
+ * Create cgroup shields (Linux only, off by default)
+ * Detect virtualised hosts.
+
+Please make sure you understand the implications of this.
 
 ## Licenses
 

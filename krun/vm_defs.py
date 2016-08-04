@@ -202,6 +202,9 @@ class BaseVMDef(object):
         wrapper_args = self._wrapper_args()
         debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
 
+        if not self.platform.no_user_change:
+            self.platform.make_fresh_krun_user()
+
         # Do an OS-level sync. Forces pending writes on to the physical disk.
         # We do this in an attempt to prevent disk commits happening during
         # benchmarking.
