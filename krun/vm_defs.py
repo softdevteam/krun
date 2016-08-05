@@ -564,7 +564,7 @@ class PyPyVMDef(PythonVMDef):
         The tree itself is a (compact) JSON-compatible representation. Each
         in-process iteration has one such tree, whose nodes represent VM
         events. The nodes are lists of the form:
-          [event_type, start_time, stop_time, parent, children]
+          [event_type, start_time, stop_time, children]
 
         Time-stamps in the tree nodes are not in wall-clock time. Consider the
         units arbitrary. This means that comparisons to wall clock times are
@@ -599,6 +599,7 @@ class PyPyVMDef(PythonVMDef):
 
                 trees.append(current_node)
                 current_node = root_node()  # new tree for next iteration
+                continue
 
             # Is it the start of an event?
             start_match = re.match(PyPyVMDef.INST_START_EVENT_REGEX, line)
@@ -632,12 +633,10 @@ class PyPyVMDef(PythonVMDef):
                 current_node = parent_stack.pop()
                 continue
 
-        # When we are done, we should be at nesting level 0. Note that the root
-        # node may have children, even at this stage. Most typically, PyPy
-        # emits a jit-summary event as it terminates. That is fine, we are only
-        # interested in what happens in timed sections of the in-process
-        # execution.
-        assert current_node[0] == "root" and len(parent_stack) == 0
+        # When we are done, we should be at nesting level 0 and we should see a
+        # lonely jit-summary event.
+        assert current_node[0] == "root" and len(parent_stack) == 0 and \
+            len(current_node[3]) == 1 and current_node[3][0][0] == "jit-summary"
 
         return {"raw_vm_events": trees}
 
