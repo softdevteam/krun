@@ -564,7 +564,7 @@ class PyPyVMDef(PythonVMDef):
         The tree itself is a (compact) JSON-compatible representation. Each
         in-process iteration has one such tree, whose nodes represent VM
         events. The nodes are lists of the form:
-          [event_type, start_time, stop_time, parent, children]
+          [event_type, start_time, stop_time, children]
 
         Time-stamps in the tree nodes are not in wall-clock time. Consider the
         units arbitrary. This means that comparisons to wall clock times are
