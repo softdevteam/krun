@@ -11,6 +11,9 @@ from krun.tests.mocks import MockPlatform
 from krun import EntryPoint
 from krun import util
 
+PYPY_JIT_SUMMARY_EVENT = ["[fffffffffffe] {jit-summary",
+                          "[ffffffffffff] jit-summary}"]
+
 class TestVMDef(object):
     """Test stuff in VM definitions"""
 
@@ -149,7 +152,7 @@ class TestVMDef(object):
             "[41720a942814] gc-minor-walkroots}",
             "[41720a9455be] gc-minor}",
             "@@@ END_IN_PROC_ITER: 0"
-        ]))
+        ] + PYPY_JIT_SUMMARY_EVENT))
 
         expect = {'raw_vm_events': [
             ['root', None, None, [
@@ -172,7 +175,7 @@ class TestVMDef(object):
             "[41720a942814] gc-minor-walkroots}",
             "[41720a9455be] gc-minor}",
             "@@@ END_IN_PROC_ITER: 1"
-        ]))
+        ] + PYPY_JIT_SUMMARY_EVENT))
 
         expect_one_iter = ['root', None, None, [
             ['gc-minor', 71958059544423, 71958059570622, [
@@ -190,7 +193,7 @@ class TestVMDef(object):
             "[41720a93ef67] {gc-minor",
             "[41720a900000] gc-minor}",  # stop time invalid
             "@@@ END_IN_PROC_ITER: 0"
-        ]))
+        ] + PYPY_JIT_SUMMARY_EVENT))
 
         vmd = PyPyVMDef("/pretend/pypy")
         with pytest.raises(AssertionError):
@@ -203,7 +206,7 @@ class TestVMDef(object):
             "[000000000003] gc-minor}",  # bad nesting
             "[000000000004] gc-step}",
             "@@@ END_IN_PROC_ITER: 0"
-        ]))
+        ] + PYPY_JIT_SUMMARY_EVENT))
 
         vmd = PyPyVMDef("/pretend/pypy")
         with pytest.raises(AssertionError):
@@ -213,11 +216,28 @@ class TestVMDef(object):
         pypylog_file = StringIO("\n".join([
             "[000000000001] {gc-minor",  # unfinished event
             "@@@ END_IN_PROC_ITER: 0"
-        ]))
+        ] + PYPY_JIT_SUMMARY_EVENT))
 
         vmd = PyPyVMDef("/pretend/pypy")
         with pytest.raises(AssertionError):
             vmd.parse_instr_stderr_file(pypylog_file)
+
+    def test_pypy_instrumentation0006(self):
+        pypylog_file = StringIO("\n".join([
+            "[41720a93ef67] {gc-minor",
+            "[41720a941224] {gc-minor-walkroots",
+            "[41720a942814] gc-minor-walkroots}",
+            "[41720a9455be] gc-minor}",
+            "@@@ END_IN_PROC_ITER: 0"
+        ]))
+
+        vmd = PyPyVMDef("/pretend/pypy")
+        try:
+            vmd.parse_instr_stderr_file(pypylog_file)
+        except AssertionError:
+            pass  # OK!
+        else:
+            assert False
 
     def test_jdk_instrumentation0001(self):
         """Check the json passes through correctly"""
