@@ -24,76 +24,100 @@ class KrunJDKInstrumentation {
     }
 
     // Emit cumulative compilation time in milliseconds to stderr
-    private String getCompJSON() {
-        return "" + this.compBean.getTotalCompilationTime();
+    private void getCompJSON(StringBuilder sb) {
+        sb.append(this.compBean.getTotalCompilationTime());
     }
 
 
-    // Get GC info for the specified collector
-    private String getGCJSON(GarbageCollectorMXBean gcBean) {
-        String json = "[";
+    /**
+     * Write GC info for the specified collector bean to a StringBuilder.
+     *
+     * @param sb The StringBuilder to write to.
+     * @param gcBean Collector in question
+     *
+     * Note, we resisted the temptation to use a mapping from name to info,
+     * since it's not clear if names are always unique.
+     */
+    private void getGCJSON(StringBuilder sb, GarbageCollectorMXBean gcBean) {
+        sb.append("[\"");
+        sb.append(gcBean.getName());
+        sb.append("\", ");
 
         // Memory pools
-        json += "[";
+        sb.append("[");
         String[] poolNames = gcBean.getMemoryPoolNames();
         for (int i = 0; i < poolNames.length; i++) {
-            json += '"' + poolNames[i] + '"';
+            sb.append('"');
+            sb.append(poolNames[i]);
+            sb.append('"');
             if (i < poolNames.length - 1) {
-                json += ", ";
+                sb.append(", ");
             }
         }
-        json += "], ";
+        sb.append("], ");
 
         // Collection time and counts
-        json +=  gcBean.getCollectionTime() + ", ";
-        json +=  gcBean.getCollectionCount();
+        sb.append(gcBean.getCollectionTime());
+        sb.append(", ");
+        sb.append(gcBean.getCollectionCount());
 
-        json += "]";
-        return json;
-
+        sb.append("]");
     }
 
-    // Get GC info for each collector
-    private String getGCJSON() {
+    /**
+     * Write GC info for each collector to a StringBuilder
+     *
+     * @param sb The StringBuilder to write to.
+     */
+    private void getGCJSON(StringBuilder sb) {
         // Ask for a new list of collectors each time, in-case they change.
         List<GarbageCollectorMXBean> gcBeans =
             ManagementFactory.getGarbageCollectorMXBeans();
 
-        String json = "{";
+        sb.append("[");
         for (int i = 0; i < gcBeans.size(); i++) {
             GarbageCollectorMXBean gcBean = gcBeans.get(i);
-            json += "\"" + gcBean.getName() + "\": " + this.getGCJSON(gcBean);
+            this.getGCJSON(sb, gcBean);
             if (i < gcBeans.size() - 1) {
-                json += ", ";
+                sb.append(", ");
             }
         }
-        return json += "}";
+        sb.append("]");
     }
 
     /**
-     * Build a JSON compatible string which Krun can parse in later.
+     * Write a JSON compatible VM event line to a StringBuilder.
      *
      * The JSON is of the form:
-     * [iterNum, cumuCompTime, [collector1Info, ..., collectorNInfo]]
+     * [iterNum, cumuCompTime, collectorInfo]
      *
-     * Each collectorInfo record is of the form:
-     * [collectorName: [[PoolName1, ..., PoolNameN],
-     *                  cumuCollectTime, cumuCollectCount]
+     * Where collectorInfo is a list of the form:
+     * [collectorName, PoolNames, cumuCollectTime, cumuCollectCount]
      *
      * Here "cumu" means "cumulative" and times are in milliseconds.
+     *
+     * It is not clear if collectorNames are unique, so we assume they are not.
      *
      * Each collector manages one or more memory pools, and one memory
      * pool may be managed by multiple collectors.
      *
+     * The JSON line is prefixed with a '@@@  JDK_EVENTS: '. Krun uses
+     * this marker to locate instrumentation details.
+     *
+     * Example line:
+     * @@@ JDK_EVENTS: [0, 17, [["PS Scavenge", ["PS Eden Space", "PS Survivor Space"], 0, 0]]]
+     *
+     * @param sb The StringBuilder to write to.
      * @param iterNum The iteration number we are emitting.
      */
-    public String getInstJSON(int iterNum) {
-        String json= "[" + iterNum + ", ";
-        json += this.getCompJSON() + ", ";
-        json += this.getGCJSON();
-        json += "]";
-
-        return json;
+    public void getInstJSON(StringBuilder sb, int iterNum) {
+        sb.append("[");
+        sb.append(iterNum);
+        sb.append(", ");
+        this.getCompJSON(sb);
+        sb.append(", ");
+        this.getGCJSON(sb);
+        sb.append("]");
     }
 }
 
@@ -129,6 +153,12 @@ class IterationsRunner {
             krunInst = new KrunJDKInstrumentation();
         }
 
+        StringBuilder sb = null;
+        if (instrument) {
+            // only instantiate if needed, and use the same one throughout
+            sb = new StringBuilder();
+        }
+
         // reflectively call the benchmark's run_iter
         Class<?> cls = Class.forName(benchmark);
         java.lang.reflect.Constructor<?>[] constructors = cls.getDeclaredConstructors();
@@ -151,8 +181,11 @@ class IterationsRunner {
 
             // Instrumentation mode emits a JSON dict onto a marker line.
             if (instrument) {
-                System.err.println("@@@ JDK_EVENTS: " + krunInst.getInstJSON(i));
+                sb.append("@@@ JDK_EVENTS: ");
+                krunInst.getInstJSON(sb, i);
+                System.err.println(sb);
                 System.err.flush();
+                sb.setLength(0);  // clear
             }
 
             iter_times[i] = stopTime - startTime;
