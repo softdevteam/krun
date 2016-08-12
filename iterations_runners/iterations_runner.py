@@ -10,10 +10,14 @@ In Kalibera terms, this script represents one executions level run.
 import cffi, sys, imp, os
 
 ffi = cffi.FFI()
-ffi.cdef("double clock_gettime_monotonic();")
+ffi.cdef("""
+    double clock_gettime_monotonic();
+    uint64_t read_ts_reg();
+""")
 libkruntime = ffi.dlopen("libkruntime.so")
 
 clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
+read_ts_reg = libkruntime.read_ts_reg
 
 # main
 if __name__ == "__main__":
@@ -37,14 +41,17 @@ if __name__ == "__main__":
 
     # OK, all is well, let's run.
 
-    iter_times = [-1.0] * iters
+    iter_times = [0] * iters
+    tsr_iter_times = [0] * iters
     for i in xrange(iters):
         if debug:
             sys.stderr.write(
                 "[iterations_runner.py] iteration %d/%d\n" % (i + 1, iters))
 
         start_time = clock_gettime_monotonic()
+        tsr_start_time = read_ts_reg()
         bench_func(param)
+        tsr_stop_time = read_ts_reg()
         stop_time = clock_gettime_monotonic()
 
         # In instrumentation mode, write an iteration separator to stderr.
@@ -53,10 +60,9 @@ if __name__ == "__main__":
             sys.stderr.flush()
 
         iter_times[i] = stop_time - start_time
+        tsr_iter_times[i] = tsr_stop_time - tsr_start_time
 
-    sys.stdout.write("[")
-    for i in xrange(iters):
-        print("%f" % iter_times[i])
-        if i < iters - 1:
-            sys.stdout.write(", ")
-    sys.stdout.write("]\n")
+    iter_times_ls = ", ".join(str(x) for x in iter_times)
+    tsc_iter_times_ls = ", ".join(str(x) for x in tsr_iter_times)
+
+    sys.stdout.write("[[%s], [%s]]\n" % (iter_times_ls, tsc_iter_times_ls))

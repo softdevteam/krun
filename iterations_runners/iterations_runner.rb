@@ -18,6 +18,15 @@ def assert(cond)
     end
 end
 
+# use only on the result of read_tsr_reg() which should only return signed64
+def signed64_to_unsigned(x)
+    if x >= 0 then
+        return x
+    else
+        return x + 2**64  # will make a bigum
+    end
+end
+
 # main
 if __FILE__ == $0
     if ARGV.length != 5
@@ -34,7 +43,8 @@ if __FILE__ == $0
     assert benchmark.end_with?(".rb")
     require("#{benchmark}")
 
-    iter_times = [-1.0] * iters
+    iter_times = [0] * iters
+    tsr_iter_times = [0] * iters
 
     for iter_num in 0..iters - 1 do
         if debug then
@@ -43,18 +53,28 @@ if __FILE__ == $0
         end
 
         start_time = clock_gettime_monotonic()
+        tsr_start_time = read_ts_reg()
         run_iter(param)
+        tsr_stop_time = read_ts_reg()
         stop_time = clock_gettime_monotonic()
 
         iter_times[iter_num] = stop_time - start_time
+        tsr_iter_times[iter_num] = signed64_to_unsigned(tsr_stop_time) - signed64_to_unsigned(tsr_start_time)
     end
 
-    STDOUT.write "["
+    STDOUT.write "[["
     for iter_num in 0..iters - 1 do
         STDOUT.write String(iter_times[iter_num])
         if iter_num < iters - 1 then
             STDOUT.write ", "
         end
     end
-    STDOUT.write "]\n"
+    STDOUT.write "], ["
+    for iter_num in 0..iters - 1 do
+        STDOUT.write String(tsr_iter_times[iter_num])
+        if iter_num < iters - 1 then
+            STDOUT.write ", "
+        end
+    end
+    STDOUT.write "]]\n"
 end

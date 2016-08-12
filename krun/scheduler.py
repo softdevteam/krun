@@ -82,10 +82,12 @@ class ExecutionJob(object):
 
         if not dry_run:
             try:
-                iterations_results = util.check_and_parse_execution_results(stdout, stderr, rc)
+                wallclock_times, tsr_times = \
+                    util.check_and_parse_execution_results(stdout, stderr, rc)
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
-                iterations_results = []
+                wallclock_times = []
+                tsr_times = []
 
             if vm_def.instrument:
                 instr_data = vm_def.get_instr_data()
@@ -94,16 +96,16 @@ class ExecutionJob(object):
             else:
                 instr_data = {}
         else:
-            iterations_results = []
+            wallclock_times, tsr_times = [], []
             instr_data = {}
 
         # We print the status *after* benchmarking, so that I/O cannot be
-        # commited during benchmarking. In production, we will be rebooting
+        # committed during benchmarking. In production, we will be rebooting
         # before the next execution, so we are grand.
         info("Finished '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
 
-        return iterations_results, instr_data
+        return wallclock_times, tsr_times, instr_data
 
 
 class ExecutionScheduler(object):
@@ -318,16 +320,18 @@ class ExecutionScheduler(object):
             # crashing benchmark will give an empty list of iteration times,
             # meaning we can't use 'raw_exec_result' below for estimates.
             exec_start_time = time.time()
-            raw_exec_result, instr_data = \
+            raw_wallclock_times, tsr_times, instr_data = \
                 job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
-            exec_result = util.format_raw_exec_results(raw_exec_result)
+            wallclock_times = util.format_raw_exec_results(raw_wallclock_times)
+            assert len(wallclock_times) == len(tsr_times)
 
-            if not exec_result and not self.dry_run:
+            if not wallclock_times and not self.dry_run:
                 self.results.error_flag = True
 
-            self.results.data[job.key].append(exec_result)
+            self.results.data[job.key].append(wallclock_times)
+            self.results.tsr_data[job.key].append(tsr_times)
             self.results.add_instr_data(job.key, instr_data)
 
             eta_info = exec_end_time - exec_start_time

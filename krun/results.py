@@ -18,7 +18,9 @@ class Results(object):
 
         # Maps key to results:
         # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
-        self.data = dict()
+        self.data = dict()      # wall-clock times
+        self.tsr_data = dict()  # timestamp register times
+
         self.reboots = 0
 
         # Instrumentation counters
@@ -67,6 +69,7 @@ class Results(object):
                 for variant in vm_info["variants"]:
                     key = ":".join((bmark, vm_name, variant))
                     self.data[key] = []
+                    self.tsr_data[key] = []
                     self.instr_data[key] = defaultdict(list)
                     self.eta_estimates[key] = []
 
@@ -89,6 +92,7 @@ class Results(object):
         to_write = {
             "config": self.config.text,
             "data": self.data,
+            "tsr_data": self.tsr_data,
             "instr_data": self.instr_data,
             "audit": self.audit.audit,
             "reboots": self.reboots,

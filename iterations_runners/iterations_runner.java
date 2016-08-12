@@ -132,6 +132,7 @@ class IterationsRunner {
     }
 
     public static native double JNI_clock_gettime_monotonic();
+    public static native long JNI_read_ts_reg();
 
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
@@ -167,16 +168,31 @@ class IterationsRunner {
         BaseKrunEntry ke = (BaseKrunEntry) instance; // evil
 
         double[] iter_times = new double[iterations];
-        Arrays.fill(iter_times, -1.0);
+        Arrays.fill(iter_times, 0);
 
-        // Please, no refelction inside the timed code!
+        /*
+         * TSR values are unsigned 64-bit, whereas Java long is *signed*
+         * 64-bit. We are safe since:
+         *
+         *   - The only arithmetic we use is subtract, which is the same
+         *     operation regardless of sign (due to two's compliment).
+         *
+         *   - We print the result using toUnsignedString, thus interpreting
+         *     the number as unsigned.
+         */
+        long[] tsr_iter_times = new long[iterations];
+        Arrays.fill(tsr_iter_times, 0);
+
+        // Please, no reflection inside the timed code!
         for (int i = 0; i < iterations; i++) {
             if (debug) {
                 System.err.println("[iterations_runner.java] iteration: " + (i + 1) + "/" + iterations);
             }
 
             double startTime = IterationsRunner.JNI_clock_gettime_monotonic();
+            long tsrStartTime = IterationsRunner.JNI_read_ts_reg();
             ke.run_iter(param);
+            long tsrStopTime = IterationsRunner.JNI_read_ts_reg();
             double stopTime = IterationsRunner.JNI_clock_gettime_monotonic();
 
             // Instrumentation mode emits a JSON dict onto a marker line.
@@ -189,9 +205,11 @@ class IterationsRunner {
             }
 
             iter_times[i] = stopTime - startTime;
+            tsr_iter_times[i] = tsrStopTime - tsrStartTime;
         }
 
-        System.out.print("[");
+        // wall clock
+        System.out.print("[[");
         for (int i = 0; i < iterations; i++) {
             System.out.print(iter_times[i]);
 
@@ -199,6 +217,15 @@ class IterationsRunner {
                 System.out.print(", ");
             }
         }
-        System.out.print("]\n");
+        System.out.print("], [");
+        // TSR
+        for (int i = 0; i < iterations; i++) {
+            System.out.print(Long.toUnsignedString(tsr_iter_times[i]));
+
+            if (i < iterations - 1) {
+                System.out.print(", ");
+            }
+        }
+        System.out.print("]]");
     }
 }

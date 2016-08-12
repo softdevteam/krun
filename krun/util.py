@@ -85,7 +85,7 @@ def check_and_parse_execution_results(stdout, stderr, rc):
            ' new pid is: [0-9]+\n', '', stdout)
 
     try:
-        iterations_results = json.loads(stdout)  # expect a list of floats
+        json_data = json.loads(stdout)  # expect a list of floats
     except Exception as e:  # docs don't say what can arise, play safe.
         json_exn = e
 
@@ -100,7 +100,8 @@ def check_and_parse_execution_results(stdout, stderr, rc):
         err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
         raise ExecutionFailed(err_s)
 
-    return iterations_results
+    assert len(json_data) == 2
+    return json_data  # [wall-clock times, TSR reg times]
 
 def spawn_sanity_check(platform, entry_point, vm_def,
                        check_name, force_dir=None):
