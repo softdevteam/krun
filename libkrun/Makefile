@@ -1,4 +1,5 @@
 LIBKRUNTIME_CFLAGS =	-Wall -shared -fPIC
+COMMON_CFLAGS = -Wall -pedantic -std=gnu99
 
 ifeq ($(shell uname -s),Linux)
 	LIBKRUNTIME_LDFLAGS =	-lrt -ldl
@@ -12,12 +13,16 @@ endif
 
 .PHONY: clean
 
-all: libkruntime.so
+all: libkruntime.so test/test_prog
 
-libkruntime.so: libkruntime.c
+libkruntime.so: libkruntime.c libkruntime.h
 	${CC} ${JAVA_CPPFLAGS} ${JAVA_CFLAGS} ${LIBKRUNTIME_CFLAGS} ${CFLAGS} \
-		${CPPFLAGS} libkruntime.c -o libkruntime.so \
-		${JAVA_LDFLAGS} ${LDFLAGS} ${LIBKRUNTIME_LDFLAGS}\
+		${CPPFLAGS} ${COMMON_CFLAGS} libkruntime.c -o libkruntime.so \
+		${JAVA_LDFLAGS} ${LDFLAGS} ${LIBKRUNTIME_LDFLAGS}
+
+test/test_prog: test/test_prog.c libkruntime.so
+	${CC} ${CFLAGS} ${CPPFLAGS} ${COMMON_CFLAGS} test/test_prog.c \
+		-o test/test_prog ${LDFLAGS} -L. -lkruntime -Wl,-rpath=$(shell pwd)
 
 clean:
-	rm -f libkruntime.so
+	rm -f libkruntime.so test/test_prog

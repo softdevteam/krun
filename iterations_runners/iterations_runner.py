@@ -9,15 +9,19 @@ In Kalibera terms, this script represents one executions level run.
 
 import cffi, sys, imp, os
 
+
 ffi = cffi.FFI()
+
 ffi.cdef("""
     double clock_gettime_monotonic();
-    uint64_t read_ts_reg();
+    uint64_t read_ts_reg_start();
+    uint64_t read_ts_reg_stop();
 """)
 libkruntime = ffi.dlopen("libkruntime.so")
 
 clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
-read_ts_reg = libkruntime.read_ts_reg
+read_ts_reg_start = libkruntime.read_ts_reg_start
+read_ts_reg_stop = libkruntime.read_ts_reg_stop
 
 # main
 if __name__ == "__main__":
@@ -54,9 +58,9 @@ if __name__ == "__main__":
                 "[iterations_runner.py] iteration %d/%d\n" % (i + 1, iters))
 
         start_time = clock_gettime_monotonic()
-        tsr_start_time = read_ts_reg()
+        tsr_start_time = read_ts_reg_start()
         bench_func(param)
-        tsr_stop_time = read_ts_reg()
+        tsr_stop_time = read_ts_reg_stop()
         stop_time = clock_gettime_monotonic()
 
         # In instrumentation mode, write an iteration separator to stderr.

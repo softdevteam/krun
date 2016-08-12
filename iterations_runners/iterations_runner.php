@@ -47,9 +47,9 @@ for ($BM_i = 0; $BM_i < $BM_iters; $BM_i++) {
     }
 
     $BM_start_time = clock_gettime_monotonic();
-    $BM_tsr_start_time = read_ts_reg();
+    $BM_tsr_start_time = read_ts_reg_start_double();
     run_iter($BM_param);
-    $BM_tsr_stop_time = read_ts_reg();
+    $BM_tsr_stop_time = read_ts_reg_stop_double();
     $BM_stop_time = clock_gettime_monotonic();
 
     $BM_iter_times[$BM_i] = $BM_stop_time - $BM_start_time;
