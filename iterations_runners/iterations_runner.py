@@ -31,6 +31,9 @@ if __name__ == "__main__":
     iters, param, debug, instrument = \
         int(iters), int(param), int(debug) == 1, int(instrument) == 1
 
+    if instrument:
+        import pypyjit # instrumentation not supported on CPython yet anyway
+
     assert benchmark.endswith(".py")
     bench_mod_name = os.path.basename(benchmark[:-3])
     bench_mod = imp.load_source(bench_mod_name, benchmark)
@@ -44,6 +47,8 @@ if __name__ == "__main__":
     iter_times = [0] * iters
     tsr_iter_times = [0] * iters
     for i in xrange(iters):
+        if instrument:
+            start_snap = pypyjit.get_stats_snapshot()
         if debug:
             sys.stderr.write(
                 "[iterations_runner.py] iteration %d/%d\n" % (i + 1, iters))
@@ -57,6 +62,12 @@ if __name__ == "__main__":
         # In instrumentation mode, write an iteration separator to stderr.
         if instrument:
             sys.stderr.write("@@@ END_IN_PROC_ITER: %d\n" % i)
+            end_snap = pypyjit.get_stats_snapshot()
+            jit_time = (end_snap.counter_times["TRACING"] -
+                        start_snap.counter_times["TRACING"])
+            jit_time += (end_snap.counter_times["BACKEND"] -
+                        start_snap.counter_times["BACKEND"])
+            sys.stderr.write("@@@ JIT_TIME: %s\n" % jit_time)
             sys.stderr.flush()
 
         iter_times[i] = stop_time - start_time

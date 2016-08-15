@@ -151,14 +151,16 @@ class TestVMDef(object):
             "[41720a941224] {gc-minor-walkroots",
             "[41720a942814] gc-minor-walkroots}",
             "[41720a9455be] gc-minor}",
-            "@@@ END_IN_PROC_ITER: 0"
+            "@@@ END_IN_PROC_ITER: 0",
+            "@@@ JIT_TIME: 0.001",
         ] + PYPY_JIT_SUMMARY_EVENT))
 
         expect = {'raw_vm_events': [
             ['root', None, None, [
                 ['gc-minor', 71958059544423, 71958059570622, [
                     ['gc-minor-walkroots', 71958059553316, 71958059558932, []]]]]]
-        ]}
+            ],
+            "jit_times": [0.001]}
 
         vmd = PyPyVMDef("/pretend/pypy")
         assert vmd.parse_instr_stderr_file(pypylog_file) == expect
@@ -170,11 +172,13 @@ class TestVMDef(object):
             "[41720a942814] gc-minor-walkroots}",
             "[41720a9455be] gc-minor}",
             "@@@ END_IN_PROC_ITER: 0",
+            "@@@ JIT_TIME: 0.001",
             "[41720a93ef67] {gc-minor",
             "[41720a941224] {gc-minor-walkroots",
             "[41720a942814] gc-minor-walkroots}",
             "[41720a9455be] gc-minor}",
-            "@@@ END_IN_PROC_ITER: 1"
+            "@@@ END_IN_PROC_ITER: 1",
+            "@@@ JIT_TIME: 0.002",
         ] + PYPY_JIT_SUMMARY_EVENT))
 
         expect_one_iter = ['root', None, None, [
@@ -183,7 +187,8 @@ class TestVMDef(object):
         ]
         expect = {'raw_vm_events': [
             expect_one_iter, expect_one_iter
-        ]}
+            ],
+            "jit_times": [0.001, 0.002]}
 
         vmd = PyPyVMDef("/pretend/pypy")
         assert vmd.parse_instr_stderr_file(pypylog_file) == expect
@@ -192,7 +197,8 @@ class TestVMDef(object):
         pypylog_file = StringIO("\n".join([
             "[41720a93ef67] {gc-minor",
             "[41720a900000] gc-minor}",  # stop time invalid
-            "@@@ END_IN_PROC_ITER: 0"
+            "@@@ END_IN_PROC_ITER: 0",
+            "@@@ JIT_TIME: 0.001",
         ] + PYPY_JIT_SUMMARY_EVENT))
 
         vmd = PyPyVMDef("/pretend/pypy")
@@ -205,7 +211,8 @@ class TestVMDef(object):
             "[000000000002] {gc-step",
             "[000000000003] gc-minor}",  # bad nesting
             "[000000000004] gc-step}",
-            "@@@ END_IN_PROC_ITER: 0"
+            "@@@ END_IN_PROC_ITER: 0",
+            "@@@ JIT_TIME: 0.001",
         ] + PYPY_JIT_SUMMARY_EVENT))
 
         vmd = PyPyVMDef("/pretend/pypy")
@@ -215,7 +222,8 @@ class TestVMDef(object):
     def test_pypy_instrumentation0005(self):
         pypylog_file = StringIO("\n".join([
             "[000000000001] {gc-minor",  # unfinished event
-            "@@@ END_IN_PROC_ITER: 0"
+            "@@@ END_IN_PROC_ITER: 0",
+            "@@@ JIT_TIME: 0.001",
         ] + PYPY_JIT_SUMMARY_EVENT))
 
         vmd = PyPyVMDef("/pretend/pypy")
@@ -228,7 +236,8 @@ class TestVMDef(object):
             "[41720a941224] {gc-minor-walkroots",
             "[41720a942814] gc-minor-walkroots}",
             "[41720a9455be] gc-minor}",
-            "@@@ END_IN_PROC_ITER: 0"
+            "@@@ END_IN_PROC_ITER: 0",
+            "@@@ JIT_TIME: 0.001",
         ]))
 
         vmd = PyPyVMDef("/pretend/pypy")

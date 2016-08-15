@@ -531,6 +531,7 @@ class PyPyVMDef(PythonVMDef):
     INST_START_EVENT_REGEX = re.compile("\[([0-9a-f]+)\] \{(.+)$")
     INST_STOP_EVENT_REGEX = re.compile("\[([0-9a-f]+)\] (.+)\}$")
     INST_END_PROC_ITER_PREFIX = "@@@ END_IN_PROC_ITER:"
+    INST_JIT_TIME_PREFIX = "@@@ JIT_TIME:"
 
     def __init__(self, vm_path, env=None, instrument=False):
         """When instrument=True, record GC and compilation events"""
@@ -583,6 +584,7 @@ class PyPyVMDef(PythonVMDef):
         def root_node():
             return ["root", None, None, []]
 
+        jit_times = []
         trees = []
         parent_stack = []
         current_node = root_node()
@@ -599,6 +601,9 @@ class PyPyVMDef(PythonVMDef):
 
                 trees.append(current_node)
                 current_node = root_node()  # new tree for next iteration
+                continue
+            if line.startswith(PyPyVMDef.INST_JIT_TIME_PREFIX):
+                jit_times.append(float(line[len(PyPyVMDef.INST_JIT_TIME_PREFIX):]))
                 continue
 
             # Is it the start of an event?
@@ -638,7 +643,8 @@ class PyPyVMDef(PythonVMDef):
         assert current_node[0] == "root" and len(parent_stack) == 0 and \
             len(current_node[3]) == 1 and current_node[3][0][0] == "jit-summary"
 
-        return {"raw_vm_events": trees}
+        return {"raw_vm_events": trees,
+                "jit_times": jit_times}
 
 
 class LuaVMDef(GenericScriptingVMDef):
