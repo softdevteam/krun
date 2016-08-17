@@ -18,15 +18,6 @@ def assert(cond)
     end
 end
 
-# use only on the result of read_tsr_reg() which should only return signed64
-def signed64_to_unsigned(x)
-    if x >= 0 then
-        return x
-    else
-        return x + 2**64  # will make a bigum
-    end
-end
-
 # main
 if __FILE__ == $0
     if ARGV.length != 5
@@ -53,13 +44,13 @@ if __FILE__ == $0
         end
 
         start_time = clock_gettime_monotonic()
-        tsr_start_time = read_ts_reg()
+        tsr_start_time = read_ts_reg_start()
         run_iter(param)
-        tsr_stop_time = read_ts_reg()
+        tsr_stop_time = read_ts_reg_stop()
         stop_time = clock_gettime_monotonic()
 
         iter_times[iter_num] = stop_time - start_time
-        tsr_iter_times[iter_num] = signed64_to_unsigned(tsr_stop_time) - signed64_to_unsigned(tsr_start_time)
+        tsr_iter_times[iter_num] = tsr_stop_time - tsr_start_time
     end
 
     STDOUT.write "[["

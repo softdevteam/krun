@@ -15,7 +15,6 @@ install:
 script:
     - sudo update-java-alternatives -l || true  # returns 1 on success!
     - sudo update-java-alternatives -s `sudo update-java-alternatives -l | grep 8-oracle | awk '{print $1}'`
-    - py.test --cov-report term --cov=krun  krun
     - uname -a
     - make --version
     - ldd --version
@@ -24,5 +23,8 @@ script:
     - cd examples/benchmarks
     - make
     - make java-bench
-    - cd ../
+    - cd ../../
+    - make
+    - py.test --cov-report term --cov=krun krun libkrun
+    - cd examples
     - python ../krun.py --no-pstate-check --no-tickless-check --no-user-change travis.krun

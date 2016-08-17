@@ -1,4 +1,4 @@
-C_ITER_RUNNER_CFLAGS = -fPIC -Wall -Wextra -pedantic
+C_ITER_RUNNER_CFLAGS = -fPIC -Wall -Wextra -pedantic -std=gnu99
 
 ifeq ($(shell uname -s),Linux)
 	C_ITER_RUNNER_LDFLAGS = -ldl -lrt

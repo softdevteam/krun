@@ -132,7 +132,8 @@ class IterationsRunner {
     }
 
     public static native double JNI_clock_gettime_monotonic();
-    public static native long JNI_read_ts_reg();
+    public static native long JNI_read_ts_reg_start();
+    public static native long JNI_read_ts_reg_stop();
 
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
@@ -190,9 +191,9 @@ class IterationsRunner {
             }
 
             double startTime = IterationsRunner.JNI_clock_gettime_monotonic();
-            long tsrStartTime = IterationsRunner.JNI_read_ts_reg();
+            long tsrStartTime = IterationsRunner.JNI_read_ts_reg_start();
             ke.run_iter(param);
-            long tsrStopTime = IterationsRunner.JNI_read_ts_reg();
+            long tsrStopTime = IterationsRunner.JNI_read_ts_reg_stop();
             double stopTime = IterationsRunner.JNI_clock_gettime_monotonic();
 
             // Instrumentation mode emits a JSON dict onto a marker line.

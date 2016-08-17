@@ -17,11 +17,10 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include "../libkrun/libkruntime.h"
+
 #define BENCH_FUNC_NAME "run_iter"
 
-/* from libkruntime */
-double clock_gettime_monotonic();
-u_int64_t read_ts_reg();
 
 int
 convert_str_to_int(char *s)
@@ -111,9 +110,9 @@ main(int argc, char **argv)
 
         /* timed section */
         krun_wallclock_start = clock_gettime_monotonic();
-        krun_tsr_start = read_ts_reg();
+        krun_tsr_start = read_ts_reg_start();
         (void) (*krun_bench_func)(krun_param);
-        krun_tsr_stop = read_ts_reg();
+        krun_tsr_stop = read_ts_reg_stop();
         krun_wallclock_stop = clock_gettime_monotonic();
 
         krun_iter_times[krun_iter_num] =
