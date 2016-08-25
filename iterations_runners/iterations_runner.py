@@ -13,22 +13,24 @@ import cffi, sys, imp, os
 ffi = cffi.FFI()
 
 ffi.cdef("""
+    void libkruntime_init();
+    void libkruntime_done();
     double clock_gettime_monotonic();
-    uint64_t read_ts_reg_start();
-    uint64_t read_ts_reg_stop();
+    uint64_t read_core_cycles();
 """)
 libkruntime = ffi.dlopen("libkruntime.so")
 
+libkruntime_init = libkruntime.libkruntime_init
+libkruntime_done = libkruntime.libkruntime_done
 clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
-read_ts_reg_start = libkruntime.read_ts_reg_start
-read_ts_reg_stop = libkruntime.read_ts_reg_stop
+read_core_cycles = libkruntime.read_core_cycles
 
 # main
 if __name__ == "__main__":
     if len(sys.argv) != 6:
-        print("usage: iterations_runner.py "
-              "<benchmark> <# of iterations> <benchmark param> <debug flag> "
-              "<instrument flag>\n")
+        sys.stderr.write("usage: iterations_runner.py <benchmark> "
+                         "<# of iterations> <benchmark param> <debug flag> "
+                         "<instrument flag>\n")
         sys.exit(1)
 
     benchmark, iters, param, debug, instrument = sys.argv[1:]
@@ -48,8 +50,10 @@ if __name__ == "__main__":
 
     # OK, all is well, let's run.
 
-    iter_times = [0] * iters
-    tsr_iter_times = [0] * iters
+    libkruntime_init()
+
+    wallclock_times = [0] * iters
+    cycle_counts = [0] * iters
     for i in xrange(iters):
         if instrument:
             start_snap = pypyjit.get_stats_snapshot()
@@ -57,11 +61,23 @@ if __name__ == "__main__":
             sys.stderr.write(
                 "[iterations_runner.py] iteration %d/%d\n" % (i + 1, iters))
 
-        start_time = clock_gettime_monotonic()
-        tsr_start_time = read_ts_reg_start()
+        cycles_start = read_core_cycles()
+        wallclock_start = clock_gettime_monotonic()
         bench_func(param)
-        tsr_stop_time = read_ts_reg_stop()
-        stop_time = clock_gettime_monotonic()
+        wallclock_stop = clock_gettime_monotonic()
+        cycles_stop = read_core_cycles()
+
+        if wallclock_start > wallclock_stop:
+            sys.stderr.write("wallclock start is greater than stop\n")
+            sys.stderr.write("start=%s, stop=%s\n" %
+                             (wallclock_start, wallclock_stop))
+            sys.exit(1)
+
+        if cycles_start > cycles_stop:
+            sys.stderr.write("cycles start is greater than stop\n")
+            sys.stderr.write("start=%s, stop=%s\n" %
+                             (cycles_start, cycles_stop))
+            sys.exit(1)
 
         # In instrumentation mode, write an iteration separator to stderr.
         if instrument:
@@ -74,10 +90,12 @@ if __name__ == "__main__":
             sys.stderr.write("@@@ JIT_TIME: %s\n" % jit_time)
             sys.stderr.flush()
 
-        iter_times[i] = stop_time - start_time
-        tsr_iter_times[i] = tsr_stop_time - tsr_start_time
+        wallclock_times[i] = wallclock_stop - wallclock_start
+        cycle_counts[i] = cycles_stop - cycles_start
 
-    iter_times_ls = ", ".join(str(x) for x in iter_times)
-    tsc_iter_times_ls = ", ".join(str(x) for x in tsr_iter_times)
+    libkruntime_done()
 
-    sys.stdout.write("[[%s], [%s]]\n" % (iter_times_ls, tsc_iter_times_ls))
+    wallclock_times_ls = ", ".join(str(x) for x in wallclock_times)
+    cycle_counts_ls = ", ".join(str(x) for x in cycle_counts)
+
+    sys.stdout.write("[[%s], [%s]]\n" % (wallclock_times_ls, cycle_counts_ls))

@@ -12,8 +12,8 @@
 
 # main
 if ($argc != 6) {
-    echo "usage: iterations_runner.php <benchmark> <# of iterations> " .
-         "<benchmark param> <debug flag> <instrument flag>\n";
+    fwrite(STDERR, "usage: iterations_runner.php <benchmark> <# of iterations> " .
+           "<benchmark param> <debug flag> <instrument flag>\n");
     exit(1);
 }
 
@@ -38,34 +38,50 @@ if (!function_exists("run_iter")) {
 
 /* OK, all is well, let's run. */
 
-$BM_iter_times = array_fill(0, $BM_iters, 0);
-$BM_tsr_iter_times = array_fill(0, $BM_iters, 0);
+$BM_wallclock_times = array_fill(0, $BM_iters, 0);
+$BM_cycle_counts = array_fill(0, $BM_iters, 0);
+
+libkruntime_init();
 
 for ($BM_i = 0; $BM_i < $BM_iters; $BM_i++) {
     if ($BM_debug) {
         fprintf(STDERR, "[iterations_runner.php] iteration %d/%d\n", $BM_i + 1, $BM_iters);
     }
 
-    $BM_start_time = clock_gettime_monotonic();
-    $BM_tsr_start_time = read_ts_reg_start_double();
+    $BM_cycles_start = read_core_cycles_double();
+    $BM_wallclock_start = clock_gettime_monotonic();
     run_iter($BM_param);
-    $BM_tsr_stop_time = read_ts_reg_stop_double();
-    $BM_stop_time = clock_gettime_monotonic();
+    $BM_wallclock_stop = clock_gettime_monotonic();
+    $BM_cycles_stop = read_core_cycles_double();
 
-    $BM_iter_times[$BM_i] = $BM_stop_time - $BM_start_time;
-    $BM_tsr_iter_times[$BM_i] = $BM_tsr_stop_time - $BM_tsr_start_time;
+    if ($BM_wallclock_start > $BM_wallclock_stop) {
+        fwrite(STDERR, "wallclock start greater than stop\n");
+        fwrite(STDERR, "start=${BM_wallclock_start} stop=${BM_wallclock_stop}\n");
+        exit(1);
+    }
+
+    if ($BM_cycles_start > $BM_cycles_stop) {
+        fwrite(STDERR, "cycles start greater than stop\n");
+        fwrite(STDERR, "start=${BM_cycles_start} stop=${BM_cycles_stop}\n");
+        exit(1);
+    }
+
+    $BM_wallclock_times[$BM_i] = $BM_wallclock_stop - $BM_wallclock_start;
+    $BM_cycle_counts[$BM_i] = $BM_cycles_stop - $BM_cycles_start;
 }
+
+libkruntime_done();
 
 echo "[[";
 for ($BM_i = 0; $BM_i < $BM_iters; $BM_i++) {
-    echo $BM_iter_times[$BM_i];
+    echo $BM_wallclock_times[$BM_i];
     if ($BM_i < $BM_iters - 1) {
         echo ", ";
     }
 }
 echo "], [";
 for ($BM_i = 0; $BM_i < $BM_iters; $BM_i++) {
-    echo $BM_tsr_iter_times[$BM_i];
+    echo $BM_cycle_counts[$BM_i];
     if ($BM_i < $BM_iters - 1) {
         echo ", ";
     }

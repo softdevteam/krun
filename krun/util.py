@@ -101,7 +101,7 @@ def check_and_parse_execution_results(stdout, stderr, rc):
         raise ExecutionFailed(err_s)
 
     assert len(json_data) == 2
-    return json_data  # [wall-clock times, TSR reg times]
+    return json_data  # [wall-clock times, core-cycle counts]
 
 def spawn_sanity_check(platform, entry_point, vm_def,
                        check_name, force_dir=None):

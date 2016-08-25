@@ -435,7 +435,7 @@ up correctly).
 ## Security Notes
 
 Krun is not intended to be run on a secure multi-user system, as it uses sudo
-to elevate proveleges.
+to elevate privileges.
 
 Sudo is used to:
 
@@ -447,6 +447,8 @@ Sudo is used to:
  * Set process priorities.
  * Create cgroup shields (Linux only, off by default)
  * Detect virtualised hosts.
+ * Change Linux capabilities(7) for MSR device node access.
+ * Change MSR device node filesystem permissions.
 
 Please make sure you understand the implications of this.
 

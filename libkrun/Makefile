@@ -1,6 +1,10 @@
 LIBKRUNTIME_CFLAGS =	-Wall -shared -fPIC
 COMMON_CFLAGS = -Wall -pedantic -std=gnu99
 
+ifeq ("${TRAVIS}", "true")
+	COMMON_CFLAGS += -DTRAVIS
+endif
+
 ifeq ($(shell uname -s),Linux)
 	LIBKRUNTIME_LDFLAGS =	-lrt -ldl
 else

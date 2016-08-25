@@ -82,12 +82,12 @@ class ExecutionJob(object):
 
         if not dry_run:
             try:
-                wallclock_times, tsr_times = \
+                wallclock_times, core_cycle_counts = \
                     util.check_and_parse_execution_results(stdout, stderr, rc)
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
                 wallclock_times = []
-                tsr_times = []
+                core_cycle_counts = []
 
             if vm_def.instrument:
                 instr_data = vm_def.get_instr_data()
@@ -96,7 +96,7 @@ class ExecutionJob(object):
             else:
                 instr_data = {}
         else:
-            wallclock_times, tsr_times = [], []
+            wallclock_times, core_cycle_counts = [], []
             instr_data = {}
 
         # We print the status *after* benchmarking, so that I/O cannot be
@@ -105,7 +105,7 @@ class ExecutionJob(object):
         info("Finished '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
 
-        return wallclock_times, tsr_times, instr_data
+        return wallclock_times, core_cycle_counts, instr_data
 
 
 class ExecutionScheduler(object):
@@ -320,18 +320,18 @@ class ExecutionScheduler(object):
             # crashing benchmark will give an empty list of iteration times,
             # meaning we can't use 'raw_exec_result' below for estimates.
             exec_start_time = time.time()
-            raw_wallclock_times, tsr_times, instr_data = \
+            raw_wallclock_times, core_cycle_counts, instr_data = \
                 job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
             wallclock_times = util.format_raw_exec_results(raw_wallclock_times)
-            assert len(wallclock_times) == len(tsr_times)
+            assert len(wallclock_times) == len(core_cycle_counts)
 
             if not wallclock_times and not self.dry_run:
                 self.results.error_flag = True
 
             self.results.data[job.key].append(wallclock_times)
-            self.results.tsr_data[job.key].append(tsr_times)
+            self.results.core_cycles_data[job.key].append(core_cycle_counts)
             self.results.add_instr_data(job.key, instr_data)
 
             eta_info = exec_end_time - exec_start_time

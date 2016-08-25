@@ -131,9 +131,10 @@ class IterationsRunner {
         System.loadLibrary("kruntime");
     }
 
+    public static native void JNI_libkruntime_init();
+    public static native void JNI_libkruntime_done();
     public static native double JNI_clock_gettime_monotonic();
-    public static native long JNI_read_ts_reg_start();
-    public static native long JNI_read_ts_reg_stop();
+    public static native long JNI_read_core_cycles();
 
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
@@ -168,11 +169,13 @@ class IterationsRunner {
         Object instance = constructors[0].newInstance();
         BaseKrunEntry ke = (BaseKrunEntry) instance; // evil
 
-        double[] iter_times = new double[iterations];
-        Arrays.fill(iter_times, 0);
+        IterationsRunner.JNI_libkruntime_init();
+
+        double[] wallclockTimes = new double[iterations];
+        Arrays.fill(wallclockTimes, 0);
 
         /*
-         * TSR values are unsigned 64-bit, whereas Java long is *signed*
+         * Core-cycle values are unsigned 64-bit, whereas Java long is signed
          * 64-bit. We are safe since:
          *
          *   - The only arithmetic we use is subtract, which is the same
@@ -181,20 +184,19 @@ class IterationsRunner {
          *   - We print the result using toUnsignedString, thus interpreting
          *     the number as unsigned.
          */
-        long[] tsr_iter_times = new long[iterations];
-        Arrays.fill(tsr_iter_times, 0);
+        long[] cycleCounts = new long[iterations];
+        Arrays.fill(cycleCounts, 0);
 
-        // Please, no reflection inside the timed code!
         for (int i = 0; i < iterations; i++) {
             if (debug) {
                 System.err.println("[iterations_runner.java] iteration: " + (i + 1) + "/" + iterations);
             }
 
-            double startTime = IterationsRunner.JNI_clock_gettime_monotonic();
-            long tsrStartTime = IterationsRunner.JNI_read_ts_reg_start();
+            long cyclesStart = IterationsRunner.JNI_read_core_cycles();
+            double wallclockStart = IterationsRunner.JNI_clock_gettime_monotonic();
             ke.run_iter(param);
-            long tsrStopTime = IterationsRunner.JNI_read_ts_reg_stop();
-            double stopTime = IterationsRunner.JNI_clock_gettime_monotonic();
+            double wallclockStop = IterationsRunner.JNI_clock_gettime_monotonic();
+            long cyclesStop = IterationsRunner.JNI_read_core_cycles();
 
             // Instrumentation mode emits a JSON dict onto a marker line.
             if (instrument) {
@@ -205,23 +207,37 @@ class IterationsRunner {
                 sb.setLength(0);  // clear
             }
 
-            iter_times[i] = stopTime - startTime;
-            tsr_iter_times[i] = tsrStopTime - tsrStartTime;
+            if (wallclockStart > wallclockStop) {
+                System.err.println("wallclock start is greater than stop");
+                System.err.println("start=" + wallclockStart + " stop=" + wallclockStop);
+                System.exit(1);
+            }
+
+            if (Long.compareUnsigned(cyclesStart, cyclesStop) > 0) {
+                System.err.println("cycle count start is greater than stop");
+                System.err.print("start=" + Long.toUnsignedString(cyclesStart) + " ");
+                System.err.println("stop=" + Long.toUnsignedString(cyclesStop) + " ");
+                System.exit(1);
+            }
+
+            wallclockTimes[i] = wallclockStop - wallclockStart;
+            cycleCounts[i] = cyclesStop - cyclesStart;
         }
+
+        IterationsRunner.JNI_libkruntime_done();
 
         // wall clock
         System.out.print("[[");
         for (int i = 0; i < iterations; i++) {
-            System.out.print(iter_times[i]);
+            System.out.print(wallclockTimes[i]);
 
             if (i < iterations - 1) {
                 System.out.print(", ");
             }
         }
         System.out.print("], [");
-        // TSR
         for (int i = 0; i < iterations; i++) {
-            System.out.print(Long.toUnsignedString(tsr_iter_times[i]));
+            System.out.print(Long.toUnsignedString(cycleCounts[i]));
 
             if (i < iterations - 1) {
                 System.out.print(", ");

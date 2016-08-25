@@ -442,7 +442,13 @@ class UnixLikePlatform(BasePlatform):
 
         # Create fresh user
         debug("Create krun user")
-        args = self.change_user_args("root") + ["useradd", "-m", BENCHMARK_USER]
+        args = self.change_user_args("root") + ["useradd", "-m"]
+
+        # On Linux, the krun user has to be in the root group for rmsr access
+        if isinstance(self, LinuxPlatform):
+            args += ["-g", "root"]
+        args += [BENCHMARK_USER]
+
         run_shell_cmd(" ".join(args))
 
         # This should now not raise
@@ -1132,6 +1138,23 @@ class LinuxPlatform(UnixLikePlatform):
         # Needed on Linux because the default mail spool ownership causes
         # non-zero userdel exit status.
         return ["-f"]  # force
+
+    def set_msr_dev_permissions(self, who=None):
+        """Change filesystem perimssions on Linux msr device nodes so that 'who'
+        (or if None the current user) can read and write.
+
+        Be aware that capabilities(7) also protects these device nodes."""
+
+        if who is None:
+            who = os.getuid()
+        who = str(who)
+
+        for dev in glob.glob("/dev/cpu/*/msr"):
+            args = self.change_user_args(user="root") + ["chmod", "660", dev]
+            run_shell_cmd(" ".join(args))
+
+            args = self.change_user_args(user="root") + ["chgrp", who, dev]
+            run_shell_cmd(" ".join(args))
 
 
 class DebianLinuxPlatform(LinuxPlatform):
