@@ -14,14 +14,24 @@
 extern "C" {
 #endif
 
-u_int64_t read_ts_reg_start();
-u_int64_t read_ts_reg_stop();
+void libkruntime_init(void);
+void libkruntime_done(void);
 
-double read_ts_reg_start_double();
-double read_ts_reg_stop_double();
+#ifdef __linux__
+int get_fixed_pctr1_width(void);
+int open_msr_node(int cpu, int flags);
+void config_fixed_ctr1(int cpu, int enable);
+void config_fixed_ctr1_all_cores(int enable);
 
-double read_ts_reg_start_double();
-double clock_gettime_monotonic();
+u_int64_t read_msr(int cpu, long addr);
+void write_msr(int cpu, long addr, uint64_t msr_val);
+void close_fd(int fd);
+#endif // __linux__
+
+u_int64_t read_core_cycles(void);
+double read_core_cycles_double(void);
+
+double clock_gettime_monotonic(void);
 
 double u64_to_double(u_int64_t val);
 
@@ -30,9 +40,10 @@ double u64_to_double(u_int64_t val);
 #endif
 
 #ifdef WITH_JAVA
+JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1libkruntime_1init(JNIEnv *e, jclass c);
+JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1libkruntime_1done(JNIEnv *e, jclass c);
 JNIEXPORT jdouble JNICALL Java_IterationsRunner_JNI_1clock_1gettime_1monotonic(JNIEnv *e, jclass c);
-JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1read_1ts_1reg_1start(JNIEnv *e, jclass c);
-JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1read_1ts_1reg_1stop(JNIEnv *e, jclass c);
+JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1read_1core_1cycles(JNIEnv *e, jclass c);
 #endif  // WITH_JAVA
 
 #endif  // __LIBKRUNTIME_H

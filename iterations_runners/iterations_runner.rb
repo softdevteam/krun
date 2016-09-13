@@ -1,5 +1,7 @@
-class AssertionError < RuntimeError
-end
+# The VM needs to be patched to offer up:
+#   libkruntime_init()
+#   libkruntime_done()
+#   read_core_cycles()
 
 # defined this way so we don't measure the conditional platform check.
 if /linux/ =~ RUBY_PLATFORM then
@@ -12,17 +14,12 @@ else
     end
 end
 
-def assert(cond)
-    if not cond
-        raise AssertionError
-    end
-end
-
 # main
 if __FILE__ == $0
     if ARGV.length != 5
-        puts "usage: iterations_runner.rb <benchmark> <# of iterations> "\
-             "<benchmark param> <debug flag> <instrument flag>\n"
+        STDERR.puts "usage: iterations_runner.rb <benchmark> "\
+                    "<# of iterations> <benchmark param> <debug flag> "\
+                    "<instrument flag>\n"
         Kernel.exit(1)
     end
 
@@ -31,11 +28,12 @@ if __FILE__ == $0
     param = Integer(param)
     debug = Integer(debug) > 0
 
-    assert benchmark.end_with?(".rb")
     require("#{benchmark}")
 
-    iter_times = [0] * iters
-    tsr_iter_times = [0] * iters
+    wallclock_times = [0] * iters
+    cycle_counts = [0] * iters
+
+    libkruntime_init();
 
     for iter_num in 0..iters - 1 do
         if debug then
@@ -43,26 +41,40 @@ if __FILE__ == $0
             STDERR.flush  # JRuby doesn't flush on newline.
         end
 
-        start_time = clock_gettime_monotonic()
-        tsr_start_time = read_ts_reg_start()
+        cycles_start = read_core_cycles()
+        wallclock_start = clock_gettime_monotonic()
         run_iter(param)
-        tsr_stop_time = read_ts_reg_stop()
-        stop_time = clock_gettime_monotonic()
+        wallclock_stop = clock_gettime_monotonic()
+        cycles_stop = read_core_cycles()
 
-        iter_times[iter_num] = stop_time - start_time
-        tsr_iter_times[iter_num] = tsr_stop_time - tsr_start_time
+        if wallclock_start > wallclock_stop
+            STDERR.puts "wallclock start greater than stop"
+            STDERR.puts "start=#{wallclock_start} stop=#{wallclock_stop}"
+            exit 1
+        end
+
+        if cycles_start > cycles_stop
+            STDERR.puts "cycles start greater than stop"
+            STDERR.puts "start=#{cycles_start} stop=#{cycles_stop}"
+            exit 1
+        end
+
+        wallclock_times[iter_num] = wallclock_stop - wallclock_start
+        cycle_counts[iter_num] = cycles_stop - cycles_start
     end
+
+    libkruntime_done();
 
     STDOUT.write "[["
     for iter_num in 0..iters - 1 do
-        STDOUT.write String(iter_times[iter_num])
+        STDOUT.write String(wallclock_times[iter_num])
         if iter_num < iters - 1 then
             STDOUT.write ", "
         end
     end
     STDOUT.write "], ["
     for iter_num in 0..iters - 1 do
-        STDOUT.write String(tsr_iter_times[iter_num])
+        STDOUT.write String(cycle_counts[iter_num])
         if iter_num < iters - 1 then
             STDOUT.write ", "
         end
