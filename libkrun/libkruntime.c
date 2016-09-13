@@ -139,10 +139,10 @@ open_msr_node(int core)
     return msr_node;
 }
 
-u_int64_t
+uint64_t
 read_msr(int core, long addr)
 {
-    u_int64_t msr_val;
+    uint64_t msr_val;
     int msr_node;
 
     msr_node = msr_nodes[core];
@@ -184,7 +184,7 @@ write_msr(int core, long addr, uint64_t msr_val)
 void
 config_fixed_ctr1(int core, int enable)
 {
-    u_int64_t msr_val = read_msr(core, MSR_IA32_FIXED_CTR_CTRL);
+    uint64_t msr_val = read_msr(core, MSR_IA32_FIXED_CTR_CTRL);
     if (enable) {
         msr_val |= (EN1_OS | EN1_USR | EN1_ANYTHR);
     } else {
@@ -315,7 +315,7 @@ libkruntime_done(void)
 #endif  // __linux__ && !TRAVIS
 }
 
-u_int64_t
+uint64_t
 read_core_cycles(void)
 {
 #if defined(__linux__) && !defined(TRAVIS)
@@ -365,7 +365,7 @@ read_core_cycles_double()
 /*
  * Check for double precision loss.
  *
- * Since some languages cannot represent a u_int64_t, we sometimes have to pass
+ * Since some languages cannot represent a uint64_t, we sometimes have to pass
  * around a double. This is annoying since precision could be silently lost.
  * This function makes loss of precision explicit, stopping the VM.
  *
@@ -379,10 +379,10 @@ read_core_cycles_double()
  * cost is a drop in the ocean compared to benchmark workloads.
  */
 double
-u64_to_double(u_int64_t u64_val)
+u64_to_double(uint64_t u64_val)
 {
     double d_val = (double) u64_val;
-    u_int64_t u64_val2 = (u_int64_t) d_val;
+    uint64_t u64_val2 = (uint64_t) d_val;
 
     if (u64_val != u64_val2) {
         fprintf(stderr, "Loss of precision detected!\n");

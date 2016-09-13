@@ -54,8 +54,8 @@ main(int argc, char **argv)
     int     (*krun_bench_func)(int); /* func ptr to benchmark entry */
     double    krun_wallclock_start = -1, krun_wallclock_stop = -1;
     double   *krun_wallclock_times = NULL;
-    u_int64_t krun_cycles_start = 0, krun_cycles_stop = 0;
-    u_int64_t *krun_cycle_counts = NULL;
+    uint64_t krun_cycles_start = 0, krun_cycles_stop = 0;
+    uint64_t *krun_cycle_counts = NULL;
 
     if (argc != 6) {
         printf("usage: iterations_runner_c "
@@ -90,7 +90,7 @@ main(int argc, char **argv)
         goto clean;
     }
 
-    krun_cycle_counts = calloc(krun_total_iters, sizeof(u_int64_t));
+    krun_cycle_counts = calloc(krun_total_iters, sizeof(uint64_t));
     if (krun_cycle_counts == NULL) {
         errx(EXIT_FAILURE, "%s", strerror(errno));
         goto clean;

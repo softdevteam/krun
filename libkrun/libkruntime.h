@@ -23,17 +23,17 @@ int open_msr_node(int cpu);
 void config_fixed_ctr1(int cpu, int enable);
 void config_fixed_ctr1_all_cores(int enable);
 
-u_int64_t read_msr(int cpu, long addr);
+uint64_t read_msr(int cpu, long addr);
 void write_msr(int cpu, long addr, uint64_t msr_val);
 void close_fd(int fd);
 #endif // __linux__
 
-u_int64_t read_core_cycles(void);
+uint64_t read_core_cycles(void);
 double read_core_cycles_double(void);
 
 double clock_gettime_monotonic(void);
 
-double u64_to_double(u_int64_t val);
+double u64_to_double(uint64_t val);
 
 #ifdef __cplusplus
 }
