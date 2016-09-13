@@ -35,8 +35,7 @@
  * open over multiple in-process iterations, thus minimising the amount of work
  * that needs to be done to use them
  */
-int *msr_w_nodes = NULL;
-int *msr_r_nodes = NULL;
+int *msr_nodes = NULL;
 
 int num_msr_nodes = -1;
 #define MAX_MSR_PATH 32
@@ -110,7 +109,7 @@ Java_IterationsRunner_JNI_1read_1core_1cycles(JNIEnv *e, jclass c)
 
 #if defined(__linux__) && !defined(TRAVIS)
 int
-open_msr_node(int core, int flags)
+open_msr_node(int core)
 {
     char path[MAX_MSR_PATH];
     int msr_node;
@@ -131,7 +130,7 @@ open_msr_node(int core, int flags)
         exit(EXIT_FAILURE);
     }
 
-    msr_node = open(path, flags);
+    msr_node = open(path, O_RDWR);
     if (msr_node == -1) {
         perror(path);
         exit(EXIT_FAILURE);
@@ -146,7 +145,7 @@ read_msr(int core, long addr)
     u_int64_t msr_val;
     int msr_node;
 
-    msr_node = msr_r_nodes[core];
+    msr_node = msr_nodes[core];
 
     if (lseek(msr_node, addr, SEEK_SET) == -1) {
         perror("lseek");
@@ -166,7 +165,7 @@ write_msr(int core, long addr, uint64_t msr_val)
 {
     int msr_node;
 
-    msr_node = msr_w_nodes[core];
+    msr_node = msr_nodes[core];
 
     if (lseek(msr_node, addr, SEEK_SET) == -1) {
         perror("lseek");
@@ -276,21 +275,14 @@ libkruntime_init(void)
     /* Set up MSR device node handles */
     num_msr_nodes = sysconf(_SC_NPROCESSORS_ONLN);
 
-    msr_r_nodes = calloc(num_msr_nodes, sizeof(int));
-    if (msr_r_nodes == NULL) {
-        perror("calloc");
-        exit(EXIT_FAILURE);
-    }
-
-    msr_w_nodes = calloc(num_msr_nodes, sizeof(int));
-    if (msr_w_nodes == NULL) {
+    msr_nodes = calloc(num_msr_nodes, sizeof(int));
+    if (msr_nodes == NULL) {
         perror("calloc");
         exit(EXIT_FAILURE);
     }
 
     for (core = 0; core < num_msr_nodes; core++) {
-        msr_r_nodes[core] = open_msr_node(core, O_RDONLY);
-        msr_w_nodes[core] = open_msr_node(core, O_WRONLY);
+        msr_nodes[core] = open_msr_node(core);
     }
 
     /* Configure and reset CPU_CLK_UNHALTED.CORE on all CPUs */
@@ -312,8 +304,7 @@ libkruntime_done(void)
 
     /* Close MSR device nodes */
     for (core = 0; core < num_msr_nodes; core++) {
-        close_fd(msr_r_nodes[core]);
-        close_fd(msr_w_nodes[core]);
+        close_fd(msr_nodes[core]);
     }
 #elif defined(__linux__) && defined(TRAVIS)
     // Travis has no performance counters

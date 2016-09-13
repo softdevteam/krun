@@ -19,7 +19,7 @@ void libkruntime_done(void);
 
 #ifdef __linux__
 int get_fixed_pctr1_width(void);
-int open_msr_node(int cpu, int flags);
+int open_msr_node(int cpu);
 void config_fixed_ctr1(int cpu, int enable);
 void config_fixed_ctr1_all_cores(int enable);
 
