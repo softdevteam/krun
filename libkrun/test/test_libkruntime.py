@@ -27,7 +27,7 @@ def invoke_c_prog(mode):
     return p.returncode, out.strip(), err.strip()
 
 
-def parse_keyvals(out, doubles=True):
+def parse_keyvals(out, doubles=False):
     dct = {}
     for line in out.splitlines():
         key, val = line.split("=")
@@ -91,7 +91,7 @@ class TestLibKrunTime(object):
     def test_msr_time(self):
         rv, out, _ = invoke_c_prog("msr_time")
         assert rv == 0
-        dct = parse_keyvals(out)
+        dct = parse_keyvals(out, True)
 
         # On Linux I expect reading core cycles (via the MSR device nodes) to
         # be slower than reading the monotonic clock via a system call. This
