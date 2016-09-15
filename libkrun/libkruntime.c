@@ -55,7 +55,7 @@ int num_msr_nodes = -1;
 #define EN1_ANYTHR  1 << 6
 
 /* MSR address of fixed-function performance counter 1 */
-#define PCTR_IA32_PERF_FIXED_CTR1    0x30a
+#define MSR_IA32_PERF_FIXED_CTR1    0x30a
 uint64_t pctr_val_mask = 0; // configured in initialisation
 
 #elif defined(__linux__) && defined(TRAVIS)
@@ -200,7 +200,7 @@ config_fixed_ctr1_all_cores(int enable)
 
     for (core = 0; core < num_msr_nodes; core++) {
         config_fixed_ctr1(core, enable);
-        write_msr(core, PCTR_IA32_PERF_FIXED_CTR1, 0); // reset
+        write_msr(core, MSR_IA32_PERF_FIXED_CTR1, 0); // reset
     }
 }
 
@@ -323,7 +323,7 @@ read_core_cycles(void)
     uint64_t cycles = 0, val;
 
     for (core = 0; core < num_msr_nodes; core++) {
-        val = read_msr(core, PCTR_IA32_PERF_FIXED_CTR1) & pctr_val_mask;
+        val = read_msr(core, MSR_IA32_PERF_FIXED_CTR1) & pctr_val_mask;
 
         /*
          * Note that overflow is impossible on most platforms. E.g. on an i7,
