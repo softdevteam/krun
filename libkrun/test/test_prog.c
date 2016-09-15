@@ -13,6 +13,9 @@ void test_cycles_double_prec_bad(void);
 void test_cycles_u64_double_ratio(void);
 void test_clock_gettime_monotonic(void);
 void test_msr_time(void);
+void test_aperf_mperf(void);
+void test_aperf(void);
+void test_mperf(void);
 
 void usage();
 
@@ -20,13 +23,16 @@ void
 usage()
 {
     printf("usages:\n");
-    printf("  test cycles_u64\n");
-    printf("  test cycles_double\n");
-    printf("  test cycles_double_prec_ok\n");
-    printf("  test cycles_double_prec_bad\n");
-    printf("  test cycles_u64_double_ratio\n");
-    printf("  test clock_gettime_monotonic\n");
-    printf("  test msr_time\n");
+    printf("  test_prog cycles_u64\n");
+    printf("  test_prog cycles_double\n");
+    printf("  test_prog cycles_double_prec_ok\n");
+    printf("  test_prog cycles_double_prec_bad\n");
+    printf("  test_prog cycles_u64_double_ratio\n");
+    printf("  test_prog clock_gettime_monotonic\n");
+    printf("  test_prog msr_time\n");
+    printf("  test_prog aperf_mperf\n");
+    printf("  test_prog aperf\n");
+    printf("  test_prog mperf\n");
 }
 
 int
@@ -68,6 +74,18 @@ main(int argc, char **argv)
         libkruntime_done();
     } else if (strcmp(mode, "clock_gettime_monotonic") == 0) {
         test_clock_gettime_monotonic();  // doesn't need init/done
+    } else if (strcmp(mode, "aperf_mperf") == 0) {
+        libkruntime_init();
+        test_aperf_mperf();
+        libkruntime_done();
+    } else if (strcmp(mode, "aperf") == 0) {
+        libkruntime_init();
+        test_aperf();
+        libkruntime_done();
+    } else if (strcmp(mode, "mperf") == 0) {
+        libkruntime_init();
+        test_mperf();
+        libkruntime_done();
     } else {
         usage();
         rv = EXIT_FAILURE;
@@ -177,4 +195,40 @@ test_msr_time(void)
     printf("cycles_u64_start       = %" PRIu64 "\n", c1);
     printf("cycles_u64_stop        = %" PRIu64 "\n", c2);
     printf("monotonic_delta_msrs   = %f\n", delta2);
+}
+
+void
+test_aperf_mperf(void)
+{
+    uint64_t ap, mp;
+
+    ap = read_aperf();
+    mp = read_mperf();
+
+    printf("aperf=%" PRIu64 "\n", ap);
+    printf("mperf=%" PRIu64 "\n", mp);
+}
+
+void
+test_aperf(void)
+{
+    uint64_t p1, p2;
+
+    p1 = read_aperf();
+    p2 = read_aperf();
+
+    printf("aperf_start=%" PRIu64 "\n", p1);
+    printf("aperf_stop= %" PRIu64 "\n", p2);
+}
+
+void
+test_mperf(void)
+{
+    uint64_t p1, p2;
+
+    p1 = read_mperf();
+    p2 = read_mperf();
+
+    printf("mperf_start=%" PRIu64 "\n", p1);
+    printf("mperf_stop= %" PRIu64 "\n", p2);
 }
