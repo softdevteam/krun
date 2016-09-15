@@ -35,8 +35,7 @@
  * open over multiple in-process iterations, thus minimising the amount of work
  * that needs to be done to use them
  */
-int *msr_w_nodes = NULL;
-int *msr_r_nodes = NULL;
+int *msr_nodes = NULL;
 
 int num_msr_nodes = -1;
 #define MAX_MSR_PATH 32
@@ -110,7 +109,7 @@ Java_IterationsRunner_JNI_1read_1core_1cycles(JNIEnv *e, jclass c)
 
 #if defined(__linux__) && !defined(TRAVIS)
 int
-open_msr_node(int core, int flags)
+open_msr_node(int core)
 {
     char path[MAX_MSR_PATH];
     int msr_node;
@@ -131,7 +130,7 @@ open_msr_node(int core, int flags)
         exit(EXIT_FAILURE);
     }
 
-    msr_node = open(path, flags);
+    msr_node = open(path, O_RDWR);
     if (msr_node == -1) {
         perror(path);
         exit(EXIT_FAILURE);
@@ -140,13 +139,13 @@ open_msr_node(int core, int flags)
     return msr_node;
 }
 
-u_int64_t
+uint64_t
 read_msr(int core, long addr)
 {
-    u_int64_t msr_val;
+    uint64_t msr_val;
     int msr_node;
 
-    msr_node = msr_r_nodes[core];
+    msr_node = msr_nodes[core];
 
     if (lseek(msr_node, addr, SEEK_SET) == -1) {
         perror("lseek");
@@ -166,7 +165,7 @@ write_msr(int core, long addr, uint64_t msr_val)
 {
     int msr_node;
 
-    msr_node = msr_w_nodes[core];
+    msr_node = msr_nodes[core];
 
     if (lseek(msr_node, addr, SEEK_SET) == -1) {
         perror("lseek");
@@ -185,7 +184,7 @@ write_msr(int core, long addr, uint64_t msr_val)
 void
 config_fixed_ctr1(int core, int enable)
 {
-    u_int64_t msr_val = read_msr(core, MSR_IA32_FIXED_CTR_CTRL);
+    uint64_t msr_val = read_msr(core, MSR_IA32_FIXED_CTR_CTRL);
     if (enable) {
         msr_val |= (EN1_OS | EN1_USR | EN1_ANYTHR);
     } else {
@@ -276,21 +275,14 @@ libkruntime_init(void)
     /* Set up MSR device node handles */
     num_msr_nodes = sysconf(_SC_NPROCESSORS_ONLN);
 
-    msr_r_nodes = calloc(num_msr_nodes, sizeof(int));
-    if (msr_r_nodes == NULL) {
-        perror("calloc");
-        exit(EXIT_FAILURE);
-    }
-
-    msr_w_nodes = calloc(num_msr_nodes, sizeof(int));
-    if (msr_w_nodes == NULL) {
+    msr_nodes = calloc(num_msr_nodes, sizeof(int));
+    if (msr_nodes == NULL) {
         perror("calloc");
         exit(EXIT_FAILURE);
     }
 
     for (core = 0; core < num_msr_nodes; core++) {
-        msr_r_nodes[core] = open_msr_node(core, O_RDONLY);
-        msr_w_nodes[core] = open_msr_node(core, O_WRONLY);
+        msr_nodes[core] = open_msr_node(core);
     }
 
     /* Configure and reset CPU_CLK_UNHALTED.CORE on all CPUs */
@@ -312,8 +304,7 @@ libkruntime_done(void)
 
     /* Close MSR device nodes */
     for (core = 0; core < num_msr_nodes; core++) {
-        close_fd(msr_r_nodes[core]);
-        close_fd(msr_w_nodes[core]);
+        close_fd(msr_nodes[core]);
     }
 #elif defined(__linux__) && defined(TRAVIS)
     // Travis has no performance counters
@@ -324,7 +315,7 @@ libkruntime_done(void)
 #endif  // __linux__ && !TRAVIS
 }
 
-u_int64_t
+uint64_t
 read_core_cycles(void)
 {
 #if defined(__linux__) && !defined(TRAVIS)
@@ -374,7 +365,7 @@ read_core_cycles_double()
 /*
  * Check for double precision loss.
  *
- * Since some languages cannot represent a u_int64_t, we sometimes have to pass
+ * Since some languages cannot represent a uint64_t, we sometimes have to pass
  * around a double. This is annoying since precision could be silently lost.
  * This function makes loss of precision explicit, stopping the VM.
  *
@@ -388,10 +379,10 @@ read_core_cycles_double()
  * cost is a drop in the ocean compared to benchmark workloads.
  */
 double
-u64_to_double(u_int64_t u64_val)
+u64_to_double(uint64_t u64_val)
 {
     double d_val = (double) u64_val;
-    u_int64_t u64_val2 = (u_int64_t) d_val;
+    uint64_t u64_val2 = (uint64_t) d_val;
 
     if (u64_val != u64_val2) {
         fprintf(stderr, "Loss of precision detected!\n");
