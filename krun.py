@@ -165,11 +165,7 @@ def main(parser):
             usage(parser)
         else:
             results = Results(None, None, results_file=args.filename)
-            if args.dump == "config" or "audit":
-                text = unicode(results.__getattribute__(args.dump))
-            else:
-                text = json.dumps(results.__getattribute__(args.dump),
-                                  sort_keys=True, indent=2)
+            text = results.dump(args.dump)
             # String data read in from JSON are unicode objects. This matters
             # for us as some data in the audit includes unicode characters.
             # If it does, a simple print no longer suffices if the system

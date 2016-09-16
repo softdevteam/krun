@@ -28,12 +28,12 @@ class TestResults(BaseKrunTest):
         results = Results(None, None, results_file=res_path)
         with open(conf_path) as fp:
             config = fp.read()
-            assert config == results.config.text
+            assert config == results.dump("config")
 
 
     def test_read_results_from_disk(self):
         config = Config("krun/tests/quick.krun")
-        results = Results(None, None,
+        results = Results(config, None,
                           results_file="krun/tests/quick_results.json.bz2")
         expected = {u'nbody:CPython:default-python': [[0.022256]],
                     u'dummy:CPython:default-python': [[1.005115]],

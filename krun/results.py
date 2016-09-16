@@ -41,6 +41,7 @@ class Results(object):
         if self.config is not None:
             self.filename = self.config.results_filename()
             self.init_from_config()
+            self.config_text = self.config.text
         if platform is not None:
             self.starting_temperatures = platform.starting_temperatures
             self._audit = Audit(platform.audit)
@@ -78,10 +79,12 @@ class Results(object):
         """
         with bz2.BZ2File(results_file, "rb") as f:
             results = json.loads(f.read())
+            config = results.pop("config")
             self.__dict__.update(results)
-            # Ensure that self.audir and self.config have correct types.
-            self.config = Config(None)
-            self.config.read_from_string(results["config"])
+            # Ensure that self.audit and self.config have correct types.
+            self.config_text = config
+            if self.config is not None:
+                self.config.check_config_consistency(config, results_file)
             self.audit = results["audit"]
 
     def write_to_file(self):
@@ -170,3 +173,11 @@ class Results(object):
             self.reboots = completed_execs
 
         return removed_keys
+
+    def dump(self, what):
+        if what == "config":
+            return unicode(self.config_text)
+        if what == "audit":
+            return unicode(self.audit)
+        return json.dumps(getattr(self, what),
+                          sort_keys=True, indent=2)
