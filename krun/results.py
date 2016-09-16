@@ -1,7 +1,7 @@
 from krun.audit import Audit
 from krun.config import Config
 from logging import debug, info
-from krun.util import fatal
+from krun.util import fatal, format_raw_exec_results
 
 import bz2  # decent enough compression with Python 2.7 compatibility.
 import json
@@ -19,7 +19,9 @@ class Results(object):
         # Maps key to results:
         # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
         self.data = dict()              # wall-clock times
-        self.core_cycles_data = dict()  # core cycles all cores
+        self.core_cycles_data = dict()  # core cycles, all cores
+        self.aperf_data = dict()  # aperf counts, all cores
+        self.mperf_data = dict()  # mperf counts, all cores
 
         self.reboots = 0
 
@@ -71,6 +73,8 @@ class Results(object):
                     key = ":".join((bmark, vm_name, variant))
                     self.data[key] = []
                     self.core_cycles_data[key] = []
+                    self.aperf_data[key] = []
+                    self.mperf_data[key] = []
                     self.instr_data[key] = defaultdict(list)
                     self.eta_estimates[key] = []
 
@@ -96,6 +100,8 @@ class Results(object):
             "config": self.config.text,
             "data": self.data,
             "core_cycles_data": self.core_cycles_data,
+            "aperf_data": self.aperf_data,
+            "mperf_data": self.mperf_data,
             "instr_data": self.instr_data,
             "audit": self.audit.audit,
             "reboots": self.reboots,
@@ -173,6 +179,21 @@ class Results(object):
             self.reboots = completed_execs
 
         return removed_keys
+
+    def append_exec_measurements(self, key, measurements):
+        """Unpacks a measurements dict into the Results instance"""
+
+        # Consistently format monotonic time doubles
+        wallclock_times = format_raw_exec_results(
+            measurements["wallclock_times"])
+
+        self.data[key].append(wallclock_times)
+        self.core_cycles_data[key].append(
+            measurements["core_cycle_counts"])
+        self.aperf_data[key].append(
+            measurements["aperf_counts"])
+        self.mperf_data[key].append(
+            measurements["mperf_counts"])
 
     def dump(self, what):
         if what == "config":

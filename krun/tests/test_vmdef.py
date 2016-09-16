@@ -97,7 +97,7 @@ class TestVMDef(object):
         monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
 
         def fake_run_exec_popen(args, stderr_file=None):
-            return "[[1], [2]]", "", 0  # stdout, stderr, exit_code
+            return "[[1], [2], [3], [4]]", "", 0  # stdout, stderr, exit_code
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
         util.spawn_sanity_check(platform, ep, vm_def, "test")
