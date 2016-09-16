@@ -52,23 +52,23 @@ def test_read_config_from_file():
     assert config0 == config1
 
 
-def test_read_config_from_string():
+def test_check_config_consistency():
     path = os.path.join(TEST_DIR, "example.krun")
-    config0 = Config(path)
-    config1 = Config(None)
+    config = Config(path)
     with open(path) as fp:
         config_string = fp.read()
-        config1.read_from_string(config_string)
-        assert config0 == config1
+    config.check_config_consistency(config_string, "fakefilename")
 
-
-def test_read_corrupt_config_from_string():
-    path = os.path.join(TEST_DIR, "corrupt.krun")
-    config = Config(None)
-    with pytest.raises(Exception):
-        with open(path) as fp:
-            config_string = fp.read()
-            config.read_from_string(config_string)
+def test_check_config_consistency_fails():
+    path = os.path.join(TEST_DIR, "example.krun")
+    config = Config(path)
+    with open(path) as fp:
+        config_string = fp.read()
+    with pytest.raises(Exception) as excinfo:
+        config.check_config_consistency(config_string + "\n# different config!",
+                                        "fakefilename")
+    print excinfo.value.message
+    assert "+# different config!" in excinfo.value.message
 
 @pytest.mark.skipif(JAVA is None, reason="No Java found")
 def test_config_init():

@@ -41,16 +41,16 @@ class Config(object):
             lines.append(frame)
         fatal("".join(lines))
 
-    def read_from_string(self, config_str):
-        config_dict = {}
-        try:
-            exec(config_str, config_dict)
-        except Exception as e:
-            self._fatal_exception_execing_config(sys.exc_info())
-
-        self.__dict__.update(config_dict)
-        self.filename = ""
-        self.text = config_str
+    def check_config_consistency(self, config_str, filename):
+        import difflib
+        if self.text != config_str:
+            diff = "".join(difflib.unified_diff(
+                self.text.splitlines(True), config_str.splitlines(True),
+                self.filename, "<cached in %s>" % filename))
+            fatal("The experiment is in an inconsistent state as the config"
+                  "file %s has changed since it was initially cached in %s"
+                  "\n%s" % (
+                      self.filename, filename, diff))
 
     def read_from_file(self, config_file):
         assert config_file.endswith(".krun")
