@@ -135,6 +135,8 @@ class IterationsRunner {
     public static native void JNI_libkruntime_done();
     public static native double JNI_clock_gettime_monotonic();
     public static native long JNI_read_core_cycles();
+    public static native long JNI_read_aperf();
+    public static native long JNI_read_mperf();
 
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
@@ -175,11 +177,13 @@ class IterationsRunner {
         Arrays.fill(wallclockTimes, 0);
 
         /*
-         * Core-cycle values are unsigned 64-bit, whereas Java long is signed
-         * 64-bit. We are safe since:
+         * Core-cycle/aperf/mperf values are unsigned 64-bit, whereas Java long
+         * is signed 64-bit. We are safe since:
          *
          *   - The only arithmetic we use is subtract, which is the same
          *     operation regardless of sign (due to two's compliment).
+         *
+         *   - Comaprisons use Long.compareUnsigned.
          *
          *   - We print the result using toUnsignedString, thus interpreting
          *     the number as unsigned.
@@ -187,16 +191,30 @@ class IterationsRunner {
         long[] cycleCounts = new long[iterations];
         Arrays.fill(cycleCounts, 0);
 
+        long[] aperfCounts = new long[iterations];
+        Arrays.fill(aperfCounts, 0);
+
+        long[] mperfCounts = new long[iterations];
+        Arrays.fill(mperfCounts, 0);
+
         for (int i = 0; i < iterations; i++) {
             if (debug) {
                 System.err.println("[iterations_runner.java] iteration: " + (i + 1) + "/" + iterations);
             }
 
+            // Start timed section
+            long mperfStart = IterationsRunner.JNI_read_mperf();
+            long aperfStart = IterationsRunner.JNI_read_aperf();
             long cyclesStart = IterationsRunner.JNI_read_core_cycles();
             double wallclockStart = IterationsRunner.JNI_clock_gettime_monotonic();
+
             ke.run_iter(param);
+
             double wallclockStop = IterationsRunner.JNI_clock_gettime_monotonic();
             long cyclesStop = IterationsRunner.JNI_read_core_cycles();
+            long aperfStop = IterationsRunner.JNI_read_aperf();
+            long mperfStop = IterationsRunner.JNI_read_mperf();
+            // End timed section
 
             // Instrumentation mode emits a JSON dict onto a marker line.
             if (instrument) {
@@ -207,6 +225,7 @@ class IterationsRunner {
                 sb.setLength(0);  // clear
             }
 
+            // Sanity checks
             if (wallclockStart > wallclockStop) {
                 System.err.println("wallclock start is greater than stop");
                 System.err.println("start=" + wallclockStart + " stop=" + wallclockStop);
@@ -220,13 +239,30 @@ class IterationsRunner {
                 System.exit(1);
             }
 
+            if (Long.compareUnsigned(aperfStart, aperfStop) > 0) {
+                System.err.println("aperf count start is greater than stop");
+                System.err.print("start=" + Long.toUnsignedString(aperfStart) + " ");
+                System.err.println("stop=" + Long.toUnsignedString(aperfStop) + " ");
+                System.exit(1);
+            }
+
+            if (Long.compareUnsigned(mperfStart, mperfStop) > 0) {
+                System.err.println("mperf count start is greater than stop");
+                System.err.print("start=" + Long.toUnsignedString(mperfStart) + " ");
+                System.err.println("stop=" + Long.toUnsignedString(mperfStop) + " ");
+                System.exit(1);
+            }
+
+            // Compute deltas
             wallclockTimes[i] = wallclockStop - wallclockStart;
             cycleCounts[i] = cyclesStop - cyclesStart;
+            aperfCounts[i] = aperfStop - aperfStart;
+            mperfCounts[i] = mperfStop - mperfStart;
         }
 
         IterationsRunner.JNI_libkruntime_done();
 
-        // wall clock
+        // Emit measurements
         System.out.print("[[");
         for (int i = 0; i < iterations; i++) {
             System.out.print(wallclockTimes[i]);
@@ -238,6 +274,22 @@ class IterationsRunner {
         System.out.print("], [");
         for (int i = 0; i < iterations; i++) {
             System.out.print(Long.toUnsignedString(cycleCounts[i]));
+
+            if (i < iterations - 1) {
+                System.out.print(", ");
+            }
+        }
+        System.out.print("], [");
+        for (int i = 0; i < iterations; i++) {
+            System.out.print(Long.toUnsignedString(aperfCounts[i]));
+
+            if (i < iterations - 1) {
+                System.out.print(", ");
+            }
+        }
+        System.out.print("], [");
+        for (int i = 0; i < iterations; i++) {
+            System.out.print(Long.toUnsignedString(mperfCounts[i]));
 
             if (i < iterations - 1) {
                 System.out.print(", ");
