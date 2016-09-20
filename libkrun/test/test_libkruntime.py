@@ -18,6 +18,9 @@ platform = detect_platform(None, None)
 CORECYCLES_SUPPORT = sys.platform.startswith("linux") and \
     not (os.environ.get("TRAVIS", None) == "true")
 
+APERF_MPERF_SUPPORT = sys.platform.startswith("linux") and \
+    not (os.environ.get("TRAVIS", None) == "true")
+
 def invoke_c_prog(mode):
     assert os.path.exists(TEST_PROG_PATH)
 
@@ -97,3 +100,37 @@ class TestLibKrunTime(object):
         # be slower than reading the monotonic clock via a system call. This
         # is why the readings are ordered as they are in the iterations runner.
         assert dct["monotonic_delta_msrs"] > dct["monotonic_delta_nothing"]
+
+    def test_aperf_mperf(self):
+        rv, out, _ = invoke_c_prog("aperf_mperf")
+        assert rv == 0
+        dct = parse_keyvals(out, doubles=False)
+        if APERF_MPERF_SUPPORT:
+            assert dct["aperf"] > 0
+            assert dct["mperf"] > 0
+
+            # aperf is ticking for a subset of the time mperf is
+            assert dct["aperf"] <= dct["mperf"]
+        else:
+            assert dct["aperf"] == 0
+            assert dct["mperf"] == 0
+
+    def test_aperf(self):
+        rv, out, _ = invoke_c_prog("aperf")
+        assert rv == 0
+        dct = parse_keyvals(out)
+        if APERF_MPERF_SUPPORT:
+            assert dct["aperf_start"] < dct["aperf_stop"]
+        else:
+            assert dct["aperf_start"] == 0
+            assert dct["aperf_stop"] == 0
+
+    def test_mperf(self):
+        rv, out, _ = invoke_c_prog("mperf")
+        assert rv == 0
+        dct = parse_keyvals(out)
+        if APERF_MPERF_SUPPORT:
+            assert dct["mperf_start"] < dct["mperf_stop"]
+        else:
+            assert dct["mperf_start"] == 0
+            assert dct["mperf_stop"] == 0

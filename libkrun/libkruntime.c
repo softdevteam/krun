@@ -54,8 +54,15 @@ int num_msr_nodes = -1;
 // Enable counting for all core threads (if any)
 #define EN1_ANYTHR  1 << 6
 
-/* MSR address of fixed-function performance counter 1 */
+/* MSR addresses */
 #define MSR_IA32_PERF_FIXED_CTR1    0x30a
+#define IA32_MPERF                  0xe7
+#define IA32_APERF                  0xe8
+
+/* {A,M}PERF counters are 64-bit */
+#define IA32_MPERF_MASK 0xffffffffffffffff
+#define IA32_APERF_MASK 0xffffffffffffffff
+
 uint64_t pctr_val_mask = 0; // configured in initialisation
 
 #elif defined(__linux__) && defined(TRAVIS)
@@ -104,6 +111,18 @@ JNIEXPORT jlong JNICALL
 Java_IterationsRunner_JNI_1read_1core_1cycles(JNIEnv *e, jclass c)
 {
     return read_core_cycles();
+}
+
+JNIEXPORT jlong JNICALL
+Java_IterationsRunner_JNI_1read_1aperf(JNIEnv *e, jclass c)
+{
+    return read_aperf();
+}
+
+JNIEXPORT jlong JNICALL
+Java_IterationsRunner_JNI_1read_1mperf(JNIEnv *e, jclass c)
+{
+    return read_mperf();
 }
 #endif
 
@@ -287,6 +306,13 @@ libkruntime_init(void)
 
     /* Configure and reset CPU_CLK_UNHALTED.CORE on all CPUs */
     config_fixed_ctr1_all_cores(1);
+
+    /* Reset aperf and mperf on all cores */
+    for (core = 0; core < num_msr_nodes; core++) {
+        write_msr(core, IA32_MPERF, 0);
+        write_msr(core, IA32_APERF, 0);
+    }
+
 #elif defined(__linux__) && defined(TRAVIS)
     // Travis has no performance counters
 #elif defined(__OpenBSD__)
@@ -319,39 +345,74 @@ uint64_t
 read_core_cycles(void)
 {
 #if defined(__linux__) && !defined(TRAVIS)
-    int core;
-    uint64_t cycles = 0, val;
-
-    for (core = 0; core < num_msr_nodes; core++) {
-        val = read_msr(core, MSR_IA32_PERF_FIXED_CTR1) & pctr_val_mask;
-
-        /*
-         * Note that overflow is impossible on most platforms. E.g. on an i7,
-         * the pctr values are 42-bit, and we sum into a 64-bit unsigned. In
-         * such a configuration you would need a huge number of cores in order
-         * to expose the possibility of an overflow.
-         *
-         * Nevertheless, we check.
-         */
-        if (cycles > UINT64_MAX - val) {
-            fprintf(stderr, "Core cycle count overflow!: "
-                    "%" PRIu64 " + %" PRIu64 "\n", cycles, val);
-            exit(EXIT_FAILURE);
-        }
-        cycles += val;
-    }
-
-    return cycles;
+    return sum_msr_all_cores(MSR_IA32_PERF_FIXED_CTR1, pctr_val_mask);
 #elif defined(__linux__) && defined(TRAVIS)
-    // Travis has no performance counters
-    return 0;
-#elif defined(__OpenBSD__)
-    // We do not yet support performance counters on OpenBSD
     return 0;
 #else
 #error "Unsupported platform"
-#endif // __linux__ && !TRAVIS
+#endif
 }
+
+uint64_t
+read_aperf(void)
+{
+#if defined(__linux__) && !defined(TRAVIS)
+    return sum_msr_all_cores(IA32_APERF, IA32_APERF_MASK);
+#elif defined(__linux__) && defined(TRAVIS)
+    return 0;
+#else
+#error "Unsupported platform"
+#endif
+}
+
+uint64_t
+read_mperf(void)
+{
+#if defined(__linux__) && !defined(TRAVIS)
+    return sum_msr_all_cores(IA32_MPERF, IA32_MPERF_MASK);
+#elif defined(__linux__) && defined(TRAVIS)
+    return 0;
+#else
+#error "Unsupported platform"
+#endif
+}
+
+#if defined(__linux__) && !defined(TRAVIS)
+/*
+ * Sum the values of an MSR across all cores.
+ *
+ * Arguments:
+ *   msr_addr: address of the MSR to measure.
+ *   mask: value to AND each core's MSR value with prior to summation.
+ *
+ * In the future, a 'shift' argument may be necessary, should we ever read a
+ * value from an MSR which doesn't sit flush with bit 0.
+ */
+uint64_t
+sum_msr_all_cores(long msr_addr, uint64_t mask)
+{
+    int core;
+    uint64_t sum = 0, val;
+
+    for (core = 0; core < num_msr_nodes; core++) {
+        val = read_msr(core, msr_addr) & mask;
+
+        // Check for overflow
+        if (sum > UINT64_MAX - val) {
+            fprintf(stderr, "Sum overflow!: "
+                    "%" PRIu64 " + %" PRIu64 "\n", sum, val);
+            exit(EXIT_FAILURE);
+        }
+        sum += val;
+    }
+
+    return sum;
+}
+#elif defined(__linux__) && defined(TRAVIS)
+// function not used on non-linux or travis
+#else
+#error "Unsupported platform"
+#endif // __linux__ && && !TRAVIS
 
 /*
  * For languages like Lua, where there is suitible integer type
@@ -360,6 +421,18 @@ double
 read_core_cycles_double()
 {
     return u64_to_double(read_core_cycles());
+}
+
+double
+read_aperf_double(void)
+{
+    return u64_to_double(read_aperf());
+}
+
+double
+read_mperf_double(void)
+{
+    return u64_to_double(read_mperf());
 }
 
 /*

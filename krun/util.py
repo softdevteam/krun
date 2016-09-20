@@ -100,8 +100,9 @@ def check_and_parse_execution_results(stdout, stderr, rc):
         err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
         raise ExecutionFailed(err_s)
 
-    assert len(json_data) == 2
-    return json_data  # [wall-clock times, core-cycle counts]
+    # [wall-clock times, core-cycle counts, aperf_counts, mperf_counts]
+    assert len(json_data) == 4
+    return json_data
 
 def spawn_sanity_check(platform, entry_point, vm_def,
                        check_name, force_dir=None):

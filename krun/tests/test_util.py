@@ -58,7 +58,8 @@ def test_run_shell_cmd_fatal():
 
 
 def test_check_and_parse_execution_results():
-    stdout = "[[0.000403], [123]]"  # [wallclock, tsr]
+    # [wallclock, cycles, aperf, mperf]
+    stdout = "[[0.000403], [123], [555], [666]]"
     stderr = "[iterations_runner.py] iteration 1/1"
     assert check_and_parse_execution_results(stdout, stderr, 0) == json.loads(stdout)
     # Non-zero return code.
@@ -67,7 +68,7 @@ def test_check_and_parse_execution_results():
     expected = """Benchmark returned non-zero or didn't emit JSON list. return code: 1
 stdout:
 --------------------------------------------------
-[[0.000403], [123]]
+[[0.000403], [123], [555], [666]]
 --------------------------------------------------
 
 stderr:
