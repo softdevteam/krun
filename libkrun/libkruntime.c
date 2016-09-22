@@ -29,15 +29,80 @@
 #define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC
 #endif
 
+/*
+ * Structure containing the readings.
+ */
+struct krun_data {
+    double wallclock;
+    /* Arrays, one value per core, allocated in krun_init() */
+    uint64_t *core_cycles;
+    uint64_t *aperf;
+    uint64_t *mperf;
+};
+
+/* Start and stop measurements */
+static struct krun_data krun_mdata[2];
+
+/* Number of per-core performance counter measurements */
+static int krun_num_cores = 0;
+
+// Private prototypes
+#ifdef __linux__
+static void     krun_core_bounds_check(int core);
+static void     krun_mdata_bounds_check(int mdata_idx);
+#ifndef TRAVIS
+static int      krun_get_fixed_pctr1_width(void);
+static int      krun_open_msr_node(int cpu);
+static void     krun_config_fixed_ctr1(int cpu, int enable);
+static uint64_t krun_read_msr(int core, long addr);
+static void     krun_write_msr(int cpu, long addr, uint64_t msr_val);
+static void     krun_close_fd(int fd);
+static uint64_t krun_read_aperf(int core);
+static uint64_t krun_read_mperf(int core);
+#endif // TRAVIS
+#endif // __linux__
+void            krun_check_mdata(void);
+
+/* Helper functions */
+void *
+krun_xcalloc(size_t nmemb, size_t size)
+{
+    void *p;
+
+    p = calloc(nmemb, size);
+    if (p == NULL) {
+        perror("calloc");
+        exit(EXIT_FAILURE);
+    }
+    return p;
+}
+
+static void
+krun_core_bounds_check(int core)
+{
+    if ((core < 0) || (core >= krun_num_cores)) {
+        fprintf(stderr, "%s: core out of range\n", __func__);
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void
+krun_mdata_bounds_check(int mdata_idx)
+{
+    if ((mdata_idx != 0) && (mdata_idx != 1)) {
+        fprintf(stderr, "%s: krun_mdata index out of range\n", __func__);
+        exit(EXIT_FAILURE);
+    }
+}
+
 #if defined(__linux__) && !defined(TRAVIS)
 /*
  * Rather than open and close the MSR device nodes all the time, we hold them
  * open over multiple in-process iterations, thus minimising the amount of work
  * that needs to be done to use them
  */
-int *msr_nodes = NULL;
+int *krun_msr_nodes = NULL;
 
-int num_msr_nodes = -1;
 #define MAX_MSR_PATH 32
 
 // Fixed-funtion counter control register
@@ -63,7 +128,7 @@ int num_msr_nodes = -1;
 #define IA32_MPERF_MASK 0xffffffffffffffff
 #define IA32_APERF_MASK 0xffffffffffffffff
 
-uint64_t pctr_val_mask = 0; // configured in initialisation
+static uint64_t krun_pctr_val_mask = 0; // configured in initialisation
 
 #elif defined(__linux__) && defined(TRAVIS)
 // Travis has no performance counters.
@@ -74,7 +139,7 @@ uint64_t pctr_val_mask = 0; // configured in initialisation
 #endif // __linux__ && !TRAVIS
 
 double
-clock_gettime_monotonic()
+krun_clock_gettime_monotonic()
 {
     struct timespec         ts;
     double                  result;
@@ -88,47 +153,68 @@ clock_gettime_monotonic()
     return (result);
 }
 
+int
+krun_get_num_cores(void)
+{
+    return krun_num_cores;
+}
+
 /*
  * JNI wrappers -- Optionally compiled in
  */
 #ifdef WITH_JAVA
 JNIEXPORT void JNICALL
-Java_IterationsRunner_JNI_1libkruntime_1init(JNIEnv *e, jclass c) {
-    libkruntime_init();
+Java_IterationsRunner_JNI_1krun_1init(JNIEnv *e, jclass c) {
+    krun_init();
 }
 
 JNIEXPORT void JNICALL
-Java_IterationsRunner_JNI_1libkruntime_1done(JNIEnv *e, jclass c) {
-    libkruntime_done();
+Java_IterationsRunner_JNI_1krun_1done(JNIEnv *e, jclass c) {
+    krun_done();
+}
+
+JNIEXPORT void JNICALL
+Java_IterationsRunner_JNI_1krun_1measure(JNIEnv *e, jclass c, jint mdata_idx) {
+    krun_measure(mdata_idx);
 }
 
 JNIEXPORT jdouble JNICALL
-Java_IterationsRunner_JNI_1clock_1gettime_1monotonic(JNIEnv *e, jclass c) {
-    return (jdouble) clock_gettime_monotonic();
+Java_IterationsRunner_JNI_1krun_1get_1wallclock(JNIEnv *e, jclass c,
+        jint mdata_idx) {
+    return krun_get_wallclock(mdata_idx);
 }
 
 JNIEXPORT jlong JNICALL
-Java_IterationsRunner_JNI_1read_1core_1cycles(JNIEnv *e, jclass c)
+Java_IterationsRunner_JNI_1krun_1get_1core_1cycles(JNIEnv *e, jclass c,
+        int mdata_idx, jint core)
 {
-    return read_core_cycles();
+    return krun_get_core_cycles(mdata_idx, core);
 }
 
 JNIEXPORT jlong JNICALL
-Java_IterationsRunner_JNI_1read_1aperf(JNIEnv *e, jclass c)
+Java_IterationsRunner_JNI_1krun_1get_1aperf(JNIEnv *e, jclass c, jint mdata_idx,
+        jint core)
 {
-    return read_aperf();
+    return krun_get_aperf(mdata_idx, core);
 }
 
 JNIEXPORT jlong JNICALL
-Java_IterationsRunner_JNI_1read_1mperf(JNIEnv *e, jclass c)
+Java_IterationsRunner_JNI_1krun_1get_1mperf(JNIEnv *e, jclass c, jint mdata_idx,
+        jint core)
 {
-    return read_mperf();
+    return krun_get_mperf(mdata_idx, core);
+}
+
+JNIEXPORT jint JNICALL
+Java_IterationsRunner_JNI_1krun_1get_1num_1cores(JNIEnv *e, jclass c)
+{
+    return krun_get_num_cores();
 }
 #endif
 
 #if defined(__linux__) && !defined(TRAVIS)
-int
-open_msr_node(int core)
+static int
+krun_open_msr_node(int core)
 {
     char path[MAX_MSR_PATH];
     int msr_node;
@@ -158,13 +244,13 @@ open_msr_node(int core)
     return msr_node;
 }
 
-uint64_t
-read_msr(int core, long addr)
+static uint64_t
+krun_read_msr(int core, long addr)
 {
     uint64_t msr_val;
     int msr_node;
 
-    msr_node = msr_nodes[core];
+    msr_node = krun_msr_nodes[core];
 
     if (lseek(msr_node, addr, SEEK_SET) == -1) {
         perror("lseek");
@@ -179,12 +265,12 @@ read_msr(int core, long addr)
     return msr_val;
 }
 
-void
-write_msr(int core, long addr, uint64_t msr_val)
+static void
+krun_write_msr(int core, long addr, uint64_t msr_val)
 {
     int msr_node;
 
-    msr_node = msr_nodes[core];
+    msr_node = krun_msr_nodes[core];
 
     if (lseek(msr_node, addr, SEEK_SET) == -1) {
         perror("lseek");
@@ -200,31 +286,20 @@ write_msr(int core, long addr, uint64_t msr_val)
 /*
  * Configure fixed-function counter 1 to count all rings and threads
  */
-void
-config_fixed_ctr1(int core, int enable)
+static void
+krun_config_fixed_ctr1(int core, int enable)
 {
-    uint64_t msr_val = read_msr(core, MSR_IA32_FIXED_CTR_CTRL);
+    uint64_t msr_val = krun_read_msr(core, MSR_IA32_FIXED_CTR_CTRL);
     if (enable) {
         msr_val |= (EN1_OS | EN1_USR | EN1_ANYTHR);
     } else {
         msr_val &= ~(EN1_OS | EN1_USR | EN1_ANYTHR);
     }
-    write_msr(core, MSR_IA32_FIXED_CTR_CTRL, msr_val);
+    krun_write_msr(core, MSR_IA32_FIXED_CTR_CTRL, msr_val);
 }
 
-void
-config_fixed_ctr1_all_cores(int enable)
-{
-    int core;
-
-    for (core = 0; core < num_msr_nodes; core++) {
-        config_fixed_ctr1(core, enable);
-        write_msr(core, MSR_IA32_PERF_FIXED_CTR1, 0); // reset
-    }
-}
-
-void
-close_fd(int fd)
+static void
+krun_close_fd(int fd)
 {
     int ok = close(fd);
     if (ok == -1) {
@@ -233,8 +308,8 @@ close_fd(int fd)
     }
 }
 
-int
-get_fixed_pctr1_width()
+static int
+krun_get_fixed_pctr1_width()
 {
     uint32_t eax, edx;
     int fixed_ctr_width, arch_ctr_vers, num_fixed_ctrs;
@@ -283,34 +358,38 @@ get_fixed_pctr1_width()
 #endif // linux && !TRAVIS
 
 void
-libkruntime_init(void)
+krun_init(void)
 {
 #if defined(__linux__) && !defined(TRAVIS)
-    int core;
+    int core, i;
 
     /* See how wide the counter values are and make an appropriate mask */
-    pctr_val_mask = ((uint64_t) 1 << get_fixed_pctr1_width()) - 1;
+    krun_pctr_val_mask = ((uint64_t) 1 << krun_get_fixed_pctr1_width()) - 1;
 
-    /* Set up MSR device node handles */
-    num_msr_nodes = sysconf(_SC_NPROCESSORS_ONLN);
-
-    msr_nodes = calloc(num_msr_nodes, sizeof(int));
-    if (msr_nodes == NULL) {
-        perror("calloc");
-        exit(EXIT_FAILURE);
+    /* Initialise (both) measurements structs */
+    krun_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    for (i = 0; i < 2; i++) {
+        krun_mdata[i].core_cycles = krun_xcalloc(krun_num_cores, sizeof(uint64_t));
+        krun_mdata[i].aperf = krun_xcalloc(krun_num_cores, sizeof(uint64_t));
+        krun_mdata[i].mperf = krun_xcalloc(krun_num_cores, sizeof(uint64_t));
     }
 
-    for (core = 0; core < num_msr_nodes; core++) {
-        msr_nodes[core] = open_msr_node(core);
+    /* Open rmsr device nodes */
+    krun_msr_nodes = krun_xcalloc(krun_num_cores, sizeof(int));
+    for (core = 0; core < krun_num_cores; core++) {
+        krun_msr_nodes[core] = krun_open_msr_node(core);
     }
 
     /* Configure and reset CPU_CLK_UNHALTED.CORE on all CPUs */
-    config_fixed_ctr1_all_cores(1);
+    for (core = 0; core < krun_num_cores; core++) {
+        krun_config_fixed_ctr1(core, 1);
+        krun_write_msr(core, MSR_IA32_PERF_FIXED_CTR1, 0); // reset
+    }
 
     /* Reset aperf and mperf on all cores */
-    for (core = 0; core < num_msr_nodes; core++) {
-        write_msr(core, IA32_MPERF, 0);
-        write_msr(core, IA32_APERF, 0);
+    for (core = 0; core < krun_num_cores; core++) {
+        krun_write_msr(core, IA32_MPERF, 0);
+        krun_write_msr(core, IA32_APERF, 0);
     }
 
 #elif defined(__linux__) && defined(TRAVIS)
@@ -323,14 +402,22 @@ libkruntime_init(void)
 }
 
 void
-libkruntime_done(void)
+krun_done(void)
 {
 #if defined(__linux__) && !defined(TRAVIS)
-    int core;
+    int core, i;
 
     /* Close MSR device nodes */
-    for (core = 0; core < num_msr_nodes; core++) {
-        close_fd(msr_nodes[core]);
+    for (core = 0; core < krun_num_cores; core++) {
+        krun_close_fd(krun_msr_nodes[core]);
+    }
+    free(krun_msr_nodes);
+
+    /* Free per-core arrays */
+    for (i = 0; i < 2; i++) {
+        free(krun_mdata[i].core_cycles);
+        free(krun_mdata[i].aperf);
+        free(krun_mdata[i].mperf);
     }
 #elif defined(__linux__) && defined(TRAVIS)
     // Travis has no performance counters
@@ -341,118 +428,46 @@ libkruntime_done(void)
 #endif  // __linux__ && !TRAVIS
 }
 
+/* Not static as this is exposed for testing */
 uint64_t
-read_core_cycles(void)
+krun_read_core_cycles(int core)
 {
 #if defined(__linux__) && !defined(TRAVIS)
-    return sum_msr_all_cores(MSR_IA32_PERF_FIXED_CTR1, pctr_val_mask);
+    return krun_read_msr(core, MSR_IA32_PERF_FIXED_CTR1) & krun_pctr_val_mask;
 #elif defined(__linux__) && defined(TRAVIS)
-    return 0;
-#else
-#error "Unsupported platform"
-#endif
-}
-
-uint64_t
-read_aperf(void)
-{
-#if defined(__linux__) && !defined(TRAVIS)
-    return sum_msr_all_cores(IA32_APERF, IA32_APERF_MASK);
-#elif defined(__linux__) && defined(TRAVIS)
-    return 0;
-#else
-#error "Unsupported platform"
-#endif
-}
-
-uint64_t
-read_mperf(void)
-{
-#if defined(__linux__) && !defined(TRAVIS)
-    return sum_msr_all_cores(IA32_MPERF, IA32_MPERF_MASK);
-#elif defined(__linux__) && defined(TRAVIS)
-    return 0;
+    // Ideally this function would not be exposed at all, but a test uses it.
+    fprintf(stderr, "%s should not be used on Travis\n", __func__);
+    exit(EXIT_FAILURE);
+#elif defined(__OpenBSD__)
+    fprintf(stderr, "%s should not be used on OpenBSD\n", __func__);
+    exit(EXIT_FAILURE);
 #else
 #error "Unsupported platform"
 #endif
 }
 
 #if defined(__linux__) && !defined(TRAVIS)
-/*
- * Sum the values of an MSR across all cores.
- *
- * Arguments:
- *   msr_addr: address of the MSR to measure.
- *   mask: value to AND each core's MSR value with prior to summation.
- *
- * In the future, a 'shift' argument may be necessary, should we ever read a
- * value from an MSR which doesn't sit flush with bit 0.
- */
-uint64_t
-sum_msr_all_cores(long msr_addr, uint64_t mask)
+static uint64_t
+krun_read_aperf(int core)
 {
-    int core;
-    uint64_t sum = 0, val;
-
-    for (core = 0; core < num_msr_nodes; core++) {
-        val = read_msr(core, msr_addr) & mask;
-
-        // Check for overflow
-        if (sum > UINT64_MAX - val) {
-            fprintf(stderr, "Sum overflow!: "
-                    "%" PRIu64 " + %" PRIu64 "\n", sum, val);
-            exit(EXIT_FAILURE);
-        }
-        sum += val;
-    }
-
-    return sum;
+    return krun_read_msr(core, IA32_APERF) & IA32_APERF_MASK;
 }
-#elif defined(__linux__) && defined(TRAVIS)
-// function not used on non-linux or travis
-#else
-#error "Unsupported platform"
-#endif // __linux__ && && !TRAVIS
+
+static uint64_t
+krun_read_mperf(int core)
+{
+    return krun_read_msr(core, IA32_MPERF) & IA32_MPERF_MASK;
+}
+#endif // __linux__ && !TRAVIS
 
 /*
- * For languages like Lua, where there is suitible integer type
- */
-double
-read_core_cycles_double()
-{
-    return u64_to_double(read_core_cycles());
-}
-
-double
-read_aperf_double(void)
-{
-    return u64_to_double(read_aperf());
-}
-
-double
-read_mperf_double(void)
-{
-    return u64_to_double(read_mperf());
-}
-
-/*
- * Check for double precision loss.
- *
  * Since some languages cannot represent a uint64_t, we sometimes have to pass
- * around a double. This is annoying since precision could be silently lost.
- * This function makes loss of precision explicit, stopping the VM.
- *
- * We don't expect to actually see a crash since the TSR is zeroed at reboot,
- * and our benchmarks are not long enough running to generate a large enough
- * TSR value to cause precision loss (you would need a integer that would not
- * fit in a 52-bit unsigned int before precision starts being lost in
- * lower-order bits). Nevertheless, we check it.
- *
- * This routine comes at a small cost (a handful of asm instrs). Note that this
- * cost is a drop in the ocean compared to benchmark workloads.
+ * around a double. Since the integer part of a double is only 52-bit, loss of
+ * precision is theoretically possible should a benchmark run long enough. This
+ * function makes loss of precision explicit via an exit(3).
  */
 double
-u64_to_double(uint64_t u64_val)
+krun_u64_to_double(uint64_t u64_val)
 {
     double d_val = (double) u64_val;
     uint64_t u64_val2 = (uint64_t) d_val;
@@ -464,4 +479,149 @@ u64_to_double(uint64_t u64_val)
     }
     // (otherwise all is well)
     return d_val;
+}
+
+/*
+ * Load up the results struct.
+ */
+void
+krun_measure(int mdata_idx)
+{
+    struct krun_data *data = &(krun_mdata[mdata_idx]);
+
+    krun_mdata_bounds_check(mdata_idx);
+
+#if defined(__linux__) && !defined(TRAVIS)
+    // We support per-core readings
+
+    /*
+     * A note on measurement ordering.
+     *
+     * Wallclock time is innermost, as it is the most important reading (with
+     * the least latency also).
+     *
+     * Although APERF/MPERF are separate measurements, they are used together
+     * later to make a ratio, so they are taken in the same order before/after
+     * benchmarking.
+     */
+    if (mdata_idx == 0) {
+        // start readings
+        for (int core = 0; core < krun_num_cores; core++) {
+            data->aperf[core] = krun_read_aperf(core);
+            data->mperf[core] = krun_read_mperf(core);
+            data->core_cycles[core] = krun_read_core_cycles(core);
+        }
+        data->wallclock = krun_clock_gettime_monotonic();
+    } else {
+        // stop readings
+        data->wallclock = krun_clock_gettime_monotonic();
+        for (int core = 0; core < krun_num_cores; core++) {
+            data->core_cycles[core] = krun_read_core_cycles(core);
+            data->aperf[core] = krun_read_aperf(core);
+            data->mperf[core] = krun_read_mperf(core);
+        }
+    }
+#elif defined(__linux__) && defined(TRAVIS)
+    data->wallclock = krun_clock_gettime_monotonic();
+#elif defined(__OpenBSD__)
+    data->wallclock = krun_clock_gettime_monotonic();
+#else
+#error "Unsupported platform"
+#endif
+    if (mdata_idx == 1) {
+        krun_check_mdata();
+    }
+}
+
+/*
+ * Check all of the measurements for issues.
+ */
+void
+krun_check_mdata(void)
+{
+    int core;
+
+    if (krun_mdata[0].wallclock > krun_mdata[1].wallclock) {
+        fprintf(stderr, "wallclock error: start=%f, stop=%f\n",
+                krun_mdata[0].wallclock, krun_mdata[1].wallclock);
+        exit(EXIT_FAILURE);
+    }
+
+    for (core = 0; core < krun_num_cores; core++) {
+        if (krun_mdata[0].core_cycles[core] >
+                krun_mdata[1].core_cycles[core]) {
+            fprintf(stderr, "core_cycles error: "
+                    "start=%" PRIu64 ", stop=%" PRIu64 "\n",
+                    krun_mdata[0].core_cycles[core],
+                    krun_mdata[1].core_cycles[core]);
+            exit(EXIT_FAILURE);
+        }
+
+        if (krun_mdata[0].aperf[core] >
+                krun_mdata[1].aperf[core]) {
+            fprintf(stderr, "aperf error: "
+                    "start=%" PRIu64 ", stop=%" PRIu64 "\n",
+                    krun_mdata[0].aperf[core], krun_mdata[1].aperf[core]);
+            exit(EXIT_FAILURE);
+        }
+
+        if (krun_mdata[0].mperf[core] > krun_mdata[1].mperf[core]) {
+            fprintf(stderr, "mperf error: "
+                    "start=%" PRIu64 ", stop=%" PRIu64 "\n",
+                    krun_mdata[0].mperf[core], krun_mdata[1].mperf[core]);
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+double
+krun_get_wallclock(int mdata_idx)
+{
+    krun_mdata_bounds_check(mdata_idx);
+    return krun_mdata[mdata_idx].wallclock;
+}
+
+uint64_t
+krun_get_core_cycles(int mdata_idx, int core)
+{
+    krun_mdata_bounds_check(mdata_idx);
+    krun_core_bounds_check(core);
+    return krun_mdata[mdata_idx].core_cycles[core];
+}
+
+uint64_t
+krun_get_aperf(int mdata_idx, int core)
+{
+    krun_mdata_bounds_check(mdata_idx);
+    krun_core_bounds_check(core);
+    return krun_mdata[mdata_idx].aperf[core];
+}
+
+uint64_t
+krun_get_mperf(int mdata_idx, int core)
+{
+    krun_mdata_bounds_check(mdata_idx);
+    krun_core_bounds_check(core);
+    return krun_mdata[mdata_idx].mperf[core];
+}
+
+/*
+ * For languages like Lua, where there is no suitible integer type
+ */
+double
+krun_get_core_cycles_double(int mdata_idx, int core)
+{
+    return krun_u64_to_double(krun_get_core_cycles(mdata_idx, core));
+}
+
+double
+krun_get_aperf_double(int mdata_idx, int core)
+{
+    return krun_u64_to_double(krun_get_aperf(mdata_idx, core));
+}
+
+double
+krun_get_mperf_double(int mdata_idx, int core)
+{
+    return krun_u64_to_double(krun_get_mperf(mdata_idx, core));
 }
