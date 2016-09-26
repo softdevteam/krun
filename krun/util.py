@@ -27,6 +27,10 @@ SANITY_CHECK_STACK_KB = 8192
 PLATFORM_SANITY_CHECK_DIR = os.path.join(DIR, "..", "platform_sanity_checks")
 VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
 
+# Keys we expect in each iteration runner's output
+EXPECT_JSON_KEYS = set(["wallclock_times", "core_cycle_counts",
+                        "aperf_counts", "mperf_counts"])
+
 class ExecutionFailed(Exception):
     pass
 
@@ -200,7 +204,7 @@ def check_and_parse_execution_results(stdout, stderr, rc):
     if json_exn or rc != 0:
         # Something went wrong
         rule = 50 * "-"
-        err_s = ("Benchmark returned non-zero or didn't emit JSON list. ")
+        err_s = ("Benchmark returned non-zero or emitted invalid JSON.\n")
         if json_exn:
             err_s += "Exception string: %s\n" % str(e)
         err_s += "return code: %d\n" % rc
@@ -208,8 +212,23 @@ def check_and_parse_execution_results(stdout, stderr, rc):
         err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
         raise ExecutionFailed(err_s)
 
-    # [wall-clock times, core-cycle counts, aperf_counts, mperf_counts]
-    assert len(json_data) == 4
+    # Check we have the right keys
+    key_set = set(json_data.keys())
+    if key_set != EXPECT_JSON_KEYS:
+        err_s = "Benchmark emitted unexpected JSON keys\n"
+        err_s += "Expected: %s, got: %s" % (EXPECT_JSON_KEYS, key_set)
+        raise ExecutionFailed(err_s)
+
+    # Check lengths
+    expect_len = len(json_data["wallclock_times"])
+    remain_keys = EXPECT_JSON_KEYS - set(["wallclock_times"])
+    for key in remain_keys:
+        for core_data in json_data[key]:
+            if len(core_data) != expect_len:
+                err_s = ("Benchmark emitted wrong length '%s' list (%s)" %
+                         (key, len(core_data)))
+                raise ExecutionFailed(err_s)
+
     return json_data
 
 def spawn_sanity_check(platform, entry_point, vm_def,

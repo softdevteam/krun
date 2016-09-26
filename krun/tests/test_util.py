@@ -88,30 +88,50 @@ def test_run_shell_cmd_bench_fatal():
     assert cmd in err
     assert out == ""
 
-def test_check_and_parse_execution_results():
-    # [wallclock, cycles, aperf, mperf]
-    stdout = "[[0.000403], [123], [555], [666]]"
+def test_check_and_parse_execution_results0001():
+    stdout = json.dumps({
+        "wallclock_times": [123.4],
+        "core_cycle_counts": [[1], [2], [3], [4]],
+        "aperf_counts": [[5], [6], [7], [8]],
+        "mperf_counts": [[9], [10], [11], [12]],
+    })
     stderr = "[iterations_runner.py] iteration 1/1"
     assert check_and_parse_execution_results(stdout, stderr, 0) == json.loads(stdout)
+
+
+def test_check_and_parse_execution_results0002():
+    stdout = json.dumps({
+        "wallclock_times": [123.4],
+        "core_cycle_counts": [[1], [2], [3], [4]],
+        "aperf_counts": [[5], [6], [7], [8]],
+        "mperf_counts": [[9], [10], [11], [12]],
+    })
+    stderr = "[iterations_runner.py] iteration 1/1"
     # Non-zero return code.
     with pytest.raises(ExecutionFailed) as excinfo:
         check_and_parse_execution_results(stdout, stderr, 1)
-    expected = """Benchmark returned non-zero or didn't emit JSON list. return code: 1
+    expected = """Benchmark returned non-zero or emitted invalid JSON.
+return code: 1
 stdout:
 --------------------------------------------------
-[[0.000403], [123], [555], [666]]
+%s
 --------------------------------------------------
 
 stderr:
 --------------------------------------------------
 [iterations_runner.py] iteration 1/1
 --------------------------------------------------
-"""
+""" % stdout
     assert excinfo.value.message == expected
+
+
+def test_check_and_parse_execution_results0003():
+    stderr = "[iterations_runner.py] iteration 1/1"
+    stdout = "[0.000403["
     # Corrupt Json in STDOUT.
     with pytest.raises(ExecutionFailed) as excinfo:
-        check_and_parse_execution_results("[0.000403[", stderr, 0)
-    expected = """Benchmark returned non-zero or didn't emit JSON list. Exception string: Expecting , delimiter: line 1 column 10 (char 9)
+        check_and_parse_execution_results(stdout, stderr, 0)
+    expected = """Benchmark returned non-zero or emitted invalid JSON.\nException string: Expecting , delimiter: line 1 column 10 (char 9)
 return code: 0
 stdout:
 --------------------------------------------------

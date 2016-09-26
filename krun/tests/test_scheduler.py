@@ -106,7 +106,7 @@ class TestScheduler(BaseKrunTest):
         results = Results(Config(os.path.join(TEST_DIR, "example.krun")),
                           mock_platform, results_file=json_file)
 
-        for k, execs in results.data.iteritems():
+        for k, execs in results.wallclock_times.iteritems():
             assert type(execs) is list
             for one_exec in execs:
                 assert type(one_exec) is list

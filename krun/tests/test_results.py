@@ -42,7 +42,7 @@ class TestResults(BaseKrunTest):
         assert results.config == config
         assert results.audit[u'uname'] == u'Linux'
         assert results.audit[u'debian_version'] == u'jessie/sid'
-        assert results.data == expected
+        assert results.wallclock_times == expected
         assert results.starting_temperatures == {"x": 3333, "y": 4444}
         assert results.eta_estimates == \
             {
@@ -59,7 +59,7 @@ class TestResults(BaseKrunTest):
         results0 = Results(config, mock_platform)
         results0.audit = dict()
         results0.starting_temperatures = [4355, 9879]
-        results0.data = {u"dummy:Java:default-java": [[1.000726]]}
+        results0.wallclock_times = {u"dummy:Java:default-java": [[1.000726]]}
         results0.eta_estimates = {u"dummy:Java:default-java": [1.1]}
         results0.reboots = 5
         results0.error_flag = False
