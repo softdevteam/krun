@@ -8,7 +8,8 @@ from abc import ABCMeta, abstractmethod
 
 from logging import info, debug, warn
 from krun import EntryPoint
-from krun.util import fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR
+from krun.util import (fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR,
+        read_popen_output_carefully)
 from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
 from distutils.spawn import find_executable
 
@@ -17,17 +18,6 @@ ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runn
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
 BENCHMARK_USER = "krun"  # user is expected to have made this
 INST_STDERR_FILE = "/tmp/krun.stderr"
-
-# Pipe buffer sizes vary. I've seen reports on the Internet ranging from a
-# page size (Linux pre-2.6.11) to 64K (Linux in 2015). Ideally we would
-# query the pipe for its capacity using F_GETPIPE_SZ, but this is a) not
-# portable between UNIXs even, and b) not exposed by Python's fcntl(). For
-# now, we use a "reasonable" buffer size. If it is larger than the pipe
-# capacity, then no harm done; if it is smaller, then we may do more reads
-# than are strictly necessary. In either case we are safe and correct.
-PIPE_BUF_SZ = 1024 * 16
-
-SELECT_TIMEOUT = 1.0
 
 WRAPPER_SCRIPT = os.sep + os.path.join("tmp", "krun_wrapper.dash")
 DASH = find_executable("dash")
@@ -39,26 +29,6 @@ if DASH is None:
 # Don't mutate any lists passed down from the user's config file!
 # !!!
 
-
-def print_stderr_linewise(info):
-    stderr_partial_line = []
-    while True:
-        d = yield
-        # Take what we just read, and any partial line we had from
-        # a previous read, and see if we can make full lines.
-        # If so, we can print them, otherwise we keep them for
-        # the next time around.
-        startindex = 0
-        while True:
-            try:
-                nl = d.index("\n", startindex)
-            except ValueError:
-                stderr_partial_line.append(d[startindex:])
-                break  # no newlines
-            emit = d[startindex:nl]
-            info("stderr: " + "".join(stderr_partial_line) + emit)
-            stderr_partial_line = []
-            startindex = nl + 1
 
 
 class BaseVMDef(object):
@@ -256,57 +226,7 @@ class BaseVMDef(object):
         # occurred.
         child_pipe = subprocess.Popen(args, stdout=subprocess.PIPE,
                                       stderr=stderr_file, env={})
-
-        # Get raw OS-level file descriptors and ensure they are unbuffered
-        stdout_fd = child_pipe.stdout.fileno()
-        self.platform.unbuffer_fd(stdout_fd)
-        open_fds = [stdout_fd]
-
-        if child_pipe.stderr is None:
-            # stderr was redirected to file, forget it
-            stderr_fd = None
-        else:
-            # Krun is consuming stderr
-            stderr_fd = child_pipe.stderr.fileno()
-            open_fds.append(stderr_fd)
-            self.platform.unbuffer_fd(stderr_fd)
-
-        stderr_data, stdout_data = [], []
-        stderr_consumer = print_stderr_linewise(info)
-        stderr_consumer.next() # start the generator
-
-        while open_fds:
-            ready = select.select(open_fds, [], [], SELECT_TIMEOUT)
-
-            if stdout_fd in ready[0]:
-                d = os.read(stdout_fd, PIPE_BUF_SZ)
-                if d == "":  # EOF
-                    open_fds.remove(stdout_fd)
-                else:
-                    stdout_data.append(d)
-
-            if stderr_fd in ready[0]:
-                d = os.read(stderr_fd, PIPE_BUF_SZ)
-                if d == "":  # EOF
-                    open_fds.remove(stderr_fd)
-                else:
-                    stderr_data.append(d)
-                    stderr_consumer.send(d)
-
-        # We know stderr and stdout are closed.
-        # Now we are just waiting for the process to exit, which may have
-        # already happened of course.
-        try:
-            child_pipe.wait()
-        except Exception as e:
-            fatal("wait() failed on child pipe: %s" % str(e))
-
-        assert child_pipe.returncode is not None
-
-        stderr = "".join(stderr_data)
-        stdout = "".join(stdout_data)
-
-        return stdout, stderr, child_pipe.returncode
+        return read_popen_output_carefully(child_pipe, platform=self.platform)
 
     def sanity_checks(self):
         pass
