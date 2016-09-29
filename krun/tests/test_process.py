@@ -1,4 +1,4 @@
-from krun.vm_defs import print_stderr_linewise
+from krun.util import print_stderr_linewise
 
 def test_quadratic():
     l = []
