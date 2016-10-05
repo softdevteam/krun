@@ -558,13 +558,15 @@ class PyPyVMDef(PythonVMDef):
                 current_node = parent_stack.pop()
                 continue
 
-        # When we are done, we should be at nesting level 0 and we should see a
-        # lonely jit-summary event.
-        assert current_node[0] == "root" and len(parent_stack) == 0 and \
-            len(current_node[3]) == 1 and current_node[3][0][0] == "jit-summary"
+        # When we are done, we should be at nesting level 0 with a root node
+        assert current_node[0] == "root" and len(parent_stack) == 0
 
-        return {"raw_vm_events": trees,
-                "jit_times": jit_times}
+        # One of the children will be the JIT summary node.
+        # Note that other children can appear, e.g. when a GC occurs as the
+        # iterations runner is exiting.
+        assert any([node[0] == "jit-summary" for node in current_node[3]])
+
+        return {"raw_vm_events": trees, "jit_times": jit_times}
 
 
 class LuaVMDef(GenericScriptingVMDef):
