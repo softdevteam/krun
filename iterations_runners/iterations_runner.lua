@@ -1,13 +1,44 @@
 local ffi = require("ffi")
+
+function emit_per_core_measurements(name, num_cores, tbl, tbl_len)
+    io.stdout:write(string.format('"%s": [', name))
+
+    for BM_core = 1, num_cores, 1 do
+        io.stdout:write("[")
+        for BM_i = 1, tbl_len, 1 do
+            io.stdout:write(tbl[BM_core][BM_i])
+            if BM_i < tbl_len then
+                io.stdout:write(", ")
+            end
+        end
+        io.stdout:write("]")
+        if BM_core < num_cores then
+            io.stdout:write(", ")
+        end
+    end
+    io.stdout:write("]")
+end
+
 ffi.cdef[[
-    double libkruntime_init(void);
-    double libkruntime_done(void);
-    double clock_gettime_monotonic(void);
-    double read_core_cycles_double(void);
-    double read_aperf_double(void);
-    double read_mperf_double(void);
+    void krun_init(void);
+    void krun_done(void);
+    void krun_measure(int);
+    int krun_get_num_cores(void);
+    double krun_get_wallclock(int);
+    double krun_get_core_cycles_double(int, int);
+    double krun_get_aperf_double(int, int);
+    double krun_get_mperf_double(int, int);
 ]]
-local kruntime = ffi.load("kruntime")
+local libkruntime = ffi.load("kruntime")
+
+local krun_init = libkruntime.krun_init
+local krun_done = libkruntime.krun_done
+local krun_measure = libkruntime.krun_measure
+local krun_get_num_cores = libkruntime.krun_get_num_cores
+local krun_get_wallclock = libkruntime.krun_get_wallclock
+local krun_get_core_cycles_double = libkruntime.krun_get_core_cycles_double
+local krun_get_aperf_double = libkruntime.krun_get_aperf_double
+local krun_get_mperf_double = libkruntime.krun_get_mperf_double
 
 local BM_benchmark = arg[1]
 local BM_iters = tonumber(arg[2])
@@ -22,6 +53,9 @@ end
 
 dofile(BM_benchmark)
 
+krun_init()
+local BM_num_cores = krun_get_num_cores()
+
 -- Pre-allocate and fill results tables
 local BM_wallclock_times = {}
 for BM_i = 1, BM_iters, 1 do
@@ -29,21 +63,28 @@ for BM_i = 1, BM_iters, 1 do
 end
 
 local BM_cycle_counts = {}
-for BM_i = 1, BM_iters, 1 do
-    BM_cycle_counts[BM_i] = 0
+for BM_core = 1, BM_num_cores, 1 do
+    BM_cycle_counts[BM_core] = {}
+    for BM_i = 1, BM_iters, 1 do
+        BM_cycle_counts[BM_core][BM_i] = 0
+    end
 end
 
 local BM_aperf_counts = {}
-for BM_i = 1, BM_iters, 1 do
-    BM_aperf_counts[BM_i] = 0
+for BM_core = 1, BM_num_cores, 1 do
+    BM_aperf_counts[BM_core] = {}
+    for BM_i = 1, BM_iters, 1 do
+        BM_aperf_counts[BM_core][BM_i] = 0
+    end
 end
 
 local BM_mperf_counts = {}
-for BM_i = 1, BM_iters, 1 do
-    BM_mperf_counts[BM_i] = 0
+for BM_core = 1, BM_num_cores, 1 do
+    BM_mperf_counts[BM_core] = {}
+    for BM_i = 1, BM_iters, 1 do
+        BM_mperf_counts[BM_core][BM_i] = 0
+    end
 end
-
-kruntime.libkruntime_init()
 
 -- Main loop
 for BM_i = 1, BM_iters, 1 do
@@ -52,78 +93,44 @@ for BM_i = 1, BM_iters, 1 do
     end
 
     -- Start timed section
-    local BM_mperf_start = kruntime.read_mperf_double();
-    local BM_aperf_start = kruntime.read_aperf_double();
-    local BM_cycles_start = kruntime.read_core_cycles_double();
-    local BM_wallclock_start = kruntime.clock_gettime_monotonic()
-
-    run_iter(BM_param) -- run one iteration of benchmark
-
-    local BM_wallclock_stop = kruntime.clock_gettime_monotonic()
-    local BM_cycles_stop = kruntime.read_core_cycles_double()
-    local BM_aperf_stop = kruntime.read_aperf_double();
-    local BM_mperf_stop = kruntime.read_mperf_double();
-
-    -- Sanity checks
-    if BM_wallclock_start > BM_wallclock_stop then
-        io.stderr:write("wallclock start is greater than stop\n")
-        io.stderr:write(String.format("start=%d stop=%d\n", BM_wallclock_start, BM_wallclock_stop))
-        os.exit(1)
-    end
-
-    if BM_cycles_start > BM_cycles_stop then
-        io.stderr:write("cycles start is greater than stop\n")
-        io.stderr:write(String.format("start=%d stop=%d\n", BM_cycles_start, BM_cycles_stop))
-        os.exit(1)
-    end
-
-    if BM_aperf_start > BM_aperf_stop then
-        io.stderr:write("aperf start is greater than stop\n")
-        io.stderr:write(String.format("start=%d stop=%d\n", BM_aperf_start, BM_aperf_stop))
-        os.exit(1)
-    end
-
-    if BM_mperf_start > BM_mperf_stop then
-        io.stderr:write("mperf start is greater than stop\n")
-        io.stderr:write(String.format("start=%d stop=%d\n", BM_mperf_start, BM_mperf_stop))
-        os.exit(1)
-    end
+    krun_measure(0);
+    run_iter(BM_param)
+    krun_measure(1);
+    -- End timed section
 
     -- Compute deltas
-    BM_wallclock_times[BM_i] = BM_wallclock_stop - BM_wallclock_start
-    BM_cycle_counts[BM_i] = BM_cycles_stop - BM_cycles_start
-    BM_aperf_counts[BM_i] = BM_aperf_stop - BM_aperf_start
-    BM_mperf_counts[BM_i] = BM_mperf_stop - BM_mperf_start
+    BM_wallclock_times[BM_i] = krun_get_wallclock(1) - krun_get_wallclock(0);
+
+    for BM_core = 1, BM_num_cores, 1 do
+        BM_cycle_counts[BM_core][BM_i] =
+            krun_get_core_cycles_double(1, BM_core - 1) -
+            krun_get_core_cycles_double(0, BM_core - 1)
+        BM_aperf_counts[BM_core][BM_i] =
+             krun_get_aperf_double(1, BM_core - 1) -
+             krun_get_aperf_double(0, BM_core - 1)
+        BM_mperf_counts[BM_core][BM_i] =
+            krun_get_mperf_double(1, BM_core - 1) -
+            krun_get_mperf_double(0, BM_core - 1)
+    end
 end
 
-kruntime.libkruntime_done()
+krun_done()
 
-io.stdout:write("[[")
+io.stdout:write("{")
+
+io.stdout:write('"wallclock_times": [')
 for BM_i = 1, BM_iters, 1 do
     io.stdout:write(BM_wallclock_times[BM_i])
     if BM_i < BM_iters then
         io.stdout:write(", ")
     end
 end
-io.stdout:write("], [")
-for BM_i = 1, BM_iters, 1 do
-    io.stdout:write(BM_cycle_counts[BM_i])
-    if BM_i < BM_iters then
-        io.stdout:write(", ")
-    end
-end
-io.stdout:write("], [")
-for BM_i = 1, BM_iters, 1 do
-    io.stdout:write(BM_aperf_counts[BM_i])
-    if BM_i < BM_iters then
-        io.stdout:write(", ")
-    end
-end
-io.stdout:write("], [")
-for BM_i = 1, BM_iters, 1 do
-    io.stdout:write(BM_mperf_counts[BM_i])
-    if BM_i < BM_iters then
-        io.stdout:write(", ")
-    end
-end
-io.stdout:write("]]\n")
+io.stdout:write("], ")
+
+emit_per_core_measurements("core_cycle_counts", BM_num_cores, BM_cycle_counts, BM_iters)
+io.stdout:write(", ")
+emit_per_core_measurements("aperf_counts", BM_num_cores, BM_aperf_counts, BM_iters)
+io.stdout:write(", ")
+emit_per_core_measurements("mperf_counts", BM_num_cores, BM_mperf_counts, BM_iters)
+
+io.stdout:write("}\n")

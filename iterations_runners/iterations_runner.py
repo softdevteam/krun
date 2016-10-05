@@ -13,21 +13,25 @@ import cffi, sys, imp, os
 ffi = cffi.FFI()
 
 ffi.cdef("""
-    void libkruntime_init();
-    void libkruntime_done();
-    double clock_gettime_monotonic();
-    uint64_t read_core_cycles();
-    uint64_t read_aperf();
-    uint64_t read_mperf();
+    void krun_init(void);
+    void krun_done(void);
+    double krun_measure(int);
+    uint64_t krun_get_num_cores(void);
+    double krun_get_wallclock(int);
+    uint64_t krun_get_core_cycles(int, int);
+    uint64_t krun_get_aperf(int, int);
+    uint64_t krun_get_mperf(int, int);
 """)
 libkruntime = ffi.dlopen("libkruntime.so")
 
-libkruntime_init = libkruntime.libkruntime_init
-libkruntime_done = libkruntime.libkruntime_done
-clock_gettime_monotonic = libkruntime.clock_gettime_monotonic
-read_core_cycles = libkruntime.read_core_cycles
-read_aperf = libkruntime.read_aperf
-read_mperf = libkruntime.read_mperf
+krun_init = libkruntime.krun_init
+krun_done = libkruntime.krun_done
+krun_measure = libkruntime.krun_measure
+krun_get_num_cores = libkruntime.krun_get_num_cores
+krun_get_wallclock = libkruntime.krun_get_wallclock
+krun_get_core_cycles = libkruntime.krun_get_core_cycles
+krun_get_aperf = libkruntime.krun_get_aperf
+krun_get_mperf = libkruntime.krun_get_mperf
 
 # main
 if __name__ == "__main__":
@@ -54,13 +58,18 @@ if __name__ == "__main__":
 
     # OK, all is well, let's run.
 
-    libkruntime_init()
+    krun_init()
+    num_cores = krun_get_num_cores()
 
     # Pre-allocate result lists
     wallclock_times = [0] * iters
-    cycle_counts = [0] * iters
-    aperf_counts = [0] * iters
-    mperf_counts = [0] * iters
+    cycle_counts = [None] * num_cores
+    aperf_counts = [None] * num_cores
+    mperf_counts = [None] * num_cores
+    for core in xrange(num_cores):
+        cycle_counts[core] = [0] * iters
+        aperf_counts[core] = [0] * iters
+        mperf_counts[core] = [0] * iters
 
     # Main loop
     for i in xrange(iters):
@@ -71,43 +80,25 @@ if __name__ == "__main__":
                 "[iterations_runner.py] iteration %d/%d\n" % (i + 1, iters))
 
         # Start timed section
-        mperf_start = read_mperf()
-        aperf_start = read_aperf()
-        cycles_start = read_core_cycles()
-        wallclock_start = clock_gettime_monotonic()
-
+        krun_measure(0)
         bench_func(param)
-
-        wallclock_stop = clock_gettime_monotonic()
-        cycles_stop = read_core_cycles()
-        aperf_stop = read_aperf()
-        mperf_stop = read_mperf()
+        krun_measure(1)
         # End timed section
 
-        # Sanity checks
-        if wallclock_start > wallclock_stop:
-            sys.stderr.write("wallclock start is greater than stop\n")
-            sys.stderr.write("start=%s, stop=%s\n" %
-                             (wallclock_start, wallclock_stop))
-            sys.exit(1)
+        # Extract/check/store wallclock time
+        wallclock_times[i] = krun_get_wallclock(1) - krun_get_wallclock(0)
 
-        if cycles_start > cycles_stop:
-            sys.stderr.write("cycles start is greater than stop\n")
-            sys.stderr.write("start=%s, stop=%s\n" %
-                             (cycles_start, cycles_stop))
-            sys.exit(1)
-
-        if aperf_start > aperf_stop:
-            sys.stderr.write("aperf start is greater than stop\n")
-            sys.stderr.write("start=%s, stop=%s\n" %
-                             (aperf_start, aperf_stop))
-            sys.exit(1)
-
-        if mperf_start > mperf_stop:
-            sys.stderr.write("mperf start is greater than stop\n")
-            sys.stderr.write("start=%s, stop=%s\n" %
-                             (mperf_start, mperf_stop))
-            sys.exit(1)
+        # Extract/check/store per-core data
+        for core in xrange(num_cores):
+            cycle_counts[core][i] = (
+                krun_get_core_cycles(1, core) -
+                krun_get_core_cycles(0, core))
+            aperf_counts[core][i] = (
+                krun_get_aperf(1, core) -
+                krun_get_aperf(0, core))
+            mperf_counts[core][i] = (
+                krun_get_mperf(1, core) -
+                krun_get_mperf(0, core))
 
         # In instrumentation mode, write an iteration separator to stderr.
         if instrument:
@@ -120,18 +111,14 @@ if __name__ == "__main__":
             sys.stderr.write("@@@ JIT_TIME: %s\n" % jit_time)
             sys.stderr.flush()
 
-        wallclock_times[i] = wallclock_stop - wallclock_start
-        cycle_counts[i] = cycles_stop - cycles_start
-        aperf_counts[i] = aperf_stop - aperf_start
-        mperf_counts[i] = mperf_stop - mperf_start
+    krun_done()
 
-    libkruntime_done()
+    import json
+    js = {
+        "wallclock_times": wallclock_times,
+        "core_cycle_counts": cycle_counts,
+        "aperf_counts": aperf_counts,
+        "mperf_counts": mperf_counts
+    }
 
-    wallclock_times_ls = ", ".join(str(x) for x in wallclock_times)
-    cycle_counts_ls = ", ".join(str(x) for x in cycle_counts)
-    aperf_counts_ls = ", ".join(str(x) for x in aperf_counts)
-    mperf_counts_ls = ", ".join(str(x) for x in mperf_counts)
-
-    sys.stdout.write("[[%s], [%s], [%s], [%s]]\n" % \
-                     (wallclock_times_ls, cycle_counts_ls, aperf_counts_ls,
-                      mperf_counts_ls))
+    sys.stdout.write("%s\n" % json.dumps(js))

@@ -2,6 +2,7 @@ import sys
 import os
 import tempfile
 import pytest
+import json
 from StringIO import StringIO
 from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef, JavaVMDef
 from krun.config import Config
@@ -86,6 +87,13 @@ class TestVMDef(object):
         """We throw away the results from sanity checks, so there's no need to
         sync disks (and wait)."""
 
+        stdout = json.dumps({
+            "wallclock_times": [123.4],
+            "core_cycle_counts": [[1], [2], [3], [4]],
+            "aperf_counts": [[5], [6], [7], [8]],
+            "mperf_counts": [[9], [10], [11], [12]],
+        })
+
         config = Config()
         platform = MockPlatform(None, config)
         ep = EntryPoint("test")
@@ -97,7 +105,8 @@ class TestVMDef(object):
         monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
 
         def fake_run_exec_popen(args, stderr_file=None):
-            return "[[1], [2], [3], [4]]", "", 0  # stdout, stderr, exit_code
+            return stdout, "", 0  # stdout, stderr, exit_code
+
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
         util.spawn_sanity_check(platform, ep, vm_def, "test")

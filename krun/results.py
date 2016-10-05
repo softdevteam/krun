@@ -16,16 +16,18 @@ class Results(object):
     def __init__(self, config, platform, results_file=None):
         self.config = config
 
-        # Maps key to results:
         # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
-        self.data = dict()              # wall-clock times
-        self.core_cycles_data = dict()  # core cycles, all cores
-        self.aperf_data = dict()  # aperf counts, all cores
-        self.mperf_data = dict()  # mperf counts, all cores
+        self.wallclock_times = dict()  # wall-clock times
+
+        # Secondary, per-core measurements
+        # Structure as above, but lifted for N processor cores.
+        # i.e. aperf_counts[core#][proc_exec#][in_proc_iter#]
+        self.core_cycle_counts = dict()
+        self.aperf_counts = dict()
+        self.mperf_counts = dict()
 
         self.reboots = 0
 
-        # Instrumentation counters
         # "bmark:vm:variant" ->
         #     (instrumentation name -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...])
         self.instr_data = {}
@@ -71,10 +73,10 @@ class Results(object):
             for bmark, _ in self.config.BENCHMARKS.items():
                 for variant in vm_info["variants"]:
                     key = ":".join((bmark, vm_name, variant))
-                    self.data[key] = []
-                    self.core_cycles_data[key] = []
-                    self.aperf_data[key] = []
-                    self.mperf_data[key] = []
+                    self.wallclock_times[key] = []
+                    self.core_cycle_counts[key] = []
+                    self.aperf_counts[key] = []
+                    self.mperf_counts[key] = []
                     self.instr_data[key] = defaultdict(list)
                     self.eta_estimates[key] = []
 
@@ -98,10 +100,10 @@ class Results(object):
 
         to_write = {
             "config": self.config.text,
-            "data": self.data,
-            "core_cycles_data": self.core_cycles_data,
-            "aperf_data": self.aperf_data,
-            "mperf_data": self.mperf_data,
+            "wallclock_times": self.wallclock_times,
+            "core_cycle_counts": self.core_cycle_counts,
+            "aperf_counts": self.aperf_counts,
+            "mperf_counts": self.mperf_counts,
             "instr_data": self.instr_data,
             "audit": self.audit.audit,
             "reboots": self.reboots,
@@ -123,13 +125,16 @@ class Results(object):
         """Return number of executions for which we have data for a given
         benchmark / vm / variant triplet.
         """
-        return len(self.data[key])
+        return len(self.wallclock_times[key])
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
             return False
         return (self.config == other.config and
-                self.data == other.data and
+                self.wallclock_times == other.wallclock_times and
+                self.core_cycle_counts == other.core_cycle_counts and
+                self.aperf_counts == other.aperf_counts and
+                self.mperf_counts == other.mperf_counts and
                 self.audit == other.audit and
                 self.reboots == other.reboots and
                 self.starting_temperatures == other.starting_temperatures and
@@ -143,7 +148,7 @@ class Results(object):
         if len(spec_elems) != 3:
             fatal("malformed key spec: %s" % key_spec)
 
-        new_data = self.data.copy()
+        new_wallclock_times = self.wallclock_times.copy()
         removed_keys = 0
         removed_execs = 0
 
@@ -155,7 +160,7 @@ class Results(object):
         # executions is the only safe way.
         completed_execs = 0
 
-        for key in self.data.iterkeys():
+        for key in self.wallclock_times.iterkeys():
             key_elems = key.split(":")
             # deal with wildcards
             for i in xrange(3):
@@ -165,14 +170,17 @@ class Results(object):
             # decide whether to remove
             if key_elems == spec_elems:
                 removed_keys += 1
-                removed_execs += len(new_data[key])
-                new_data[key] = []
+                removed_execs += len(new_wallclock_times[key])
+                new_wallclock_times[key] = []
                 self.eta_estimates[key] = []
+                self.core_cycle_counts[key] = []
+                self.aperf_counts[key] = []
+                self.mperf_counts[key] = []
                 info("Removed results for: %s" % key)
             else:
-                completed_execs += len(new_data[key])
+                completed_execs += len(new_wallclock_times[key])
 
-        self.data = new_data
+        self.wallclock_times = new_wallclock_times
 
         # If the results were collected with reboot mode, update reboots count
         if self.reboots != 0:
@@ -187,13 +195,10 @@ class Results(object):
         wallclock_times = format_raw_exec_results(
             measurements["wallclock_times"])
 
-        self.data[key].append(wallclock_times)
-        self.core_cycles_data[key].append(
-            measurements["core_cycle_counts"])
-        self.aperf_data[key].append(
-            measurements["aperf_counts"])
-        self.mperf_data[key].append(
-            measurements["mperf_counts"])
+        self.wallclock_times[key].append(wallclock_times)
+        self.core_cycle_counts[key].append(measurements["core_cycle_counts"])
+        self.aperf_counts[key].append(measurements["aperf_counts"])
+        self.mperf_counts[key].append(measurements["mperf_counts"])
 
     def dump(self, what):
         if what == "config":

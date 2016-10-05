@@ -21,6 +21,34 @@
 
 #define BENCH_FUNC_NAME "run_iter"
 
+// Private protos
+int convert_str_to_int(char *s);
+void emit_per_core_data(char *name, int num_cores, int num_iters, uint64_t **data);
+
+void
+emit_per_core_data(char *name, int num_cores, int num_iters, uint64_t **data)
+{
+    int core, iter_num;
+
+    fprintf(stdout, "\"%s\": [", name);
+    for (core = 0; core < num_cores; core++) {
+        fprintf(stdout, "[");
+
+        for (iter_num = 0; iter_num < num_iters; iter_num++) {
+            fprintf(stdout, "%" PRIu64, data[core][iter_num]);
+
+            if (iter_num < num_iters - 1) {
+                fprintf(stdout, ", ");
+            }
+        }
+
+        fprintf(stdout, "]");
+        if (core < num_cores - 1) {
+            fprintf(stdout, ", ");
+        }
+    }
+    fprintf(stdout, "]");
+}
 
 int
 convert_str_to_int(char *s)
@@ -49,21 +77,12 @@ main(int argc, char **argv)
 {
     char     *krun_benchmark = 0;
     int       krun_total_iters = 0, krun_param = 0, krun_iter_num = 0;
-    int       krun_debug = 0;
+    int       krun_debug = 0, krun_num_cores = 0, krun_core;
     void     *krun_dl_handle = 0;
     int     (*krun_bench_func)(int); /* func ptr to benchmark entry */
-
-    double    krun_wallclock_start = -1, krun_wallclock_stop = -1;
     double   *krun_wallclock_times = NULL;
-
-    uint64_t krun_cycles_start = 0, krun_cycles_stop = 0;
-    uint64_t *krun_cycle_counts = NULL;
-
-    uint64_t krun_aperf_start, krun_aperf_stop;
-    uint64_t *krun_aperf_counts;
-
-    uint64_t krun_mperf_start, krun_mperf_stop;
-    uint64_t *krun_mperf_counts;
+    uint64_t **krun_cycle_counts = NULL, **krun_aperf_counts = NULL;
+    uint64_t **krun_mperf_counts = NULL;
 
     if (argc != 6) {
         printf("usage: iterations_runner_c "
@@ -77,7 +96,8 @@ main(int argc, char **argv)
     krun_param = convert_str_to_int(argv[3]);
     krun_debug = convert_str_to_int(argv[4]);
 
-    libkruntime_init();
+    krun_init();
+    krun_num_cores = krun_get_num_cores();
 
     krun_dl_handle = dlopen(krun_benchmark, RTLD_NOW | RTLD_LOCAL);
     if (krun_dl_handle == NULL) {
@@ -93,37 +113,28 @@ main(int argc, char **argv)
     }
 
     /* Allocate arrays */
-    krun_wallclock_times = calloc(krun_total_iters, sizeof(double));
-    if (krun_wallclock_times == NULL) {
-        errx(EXIT_FAILURE, "%s", strerror(errno));
-        goto clean;
-    }
-
-    krun_cycle_counts = calloc(krun_total_iters, sizeof(uint64_t));
-    if (krun_cycle_counts == NULL) {
-        errx(EXIT_FAILURE, "%s", strerror(errno));
-        goto clean;
-    }
-
-    krun_aperf_counts = calloc(krun_total_iters, sizeof(uint64_t));
-    if (krun_aperf_counts == NULL) {
-        errx(EXIT_FAILURE, "%s", strerror(errno));
-        goto clean;
-    }
-
-    krun_mperf_counts = calloc(krun_total_iters, sizeof(uint64_t));
-    if (krun_mperf_counts == NULL) {
-        errx(EXIT_FAILURE, "%s", strerror(errno));
-        goto clean;
+    krun_wallclock_times = krun_xcalloc(krun_total_iters, sizeof(double));
+    krun_cycle_counts = krun_xcalloc(krun_num_cores, sizeof(uint64_t *));
+    krun_aperf_counts = krun_xcalloc(krun_num_cores, sizeof(uint64_t *));
+    krun_mperf_counts = krun_xcalloc(krun_num_cores, sizeof(uint64_t *));
+    for (krun_core = 0; krun_core < krun_num_cores; krun_core++) {
+        krun_cycle_counts[krun_core] =
+            krun_xcalloc(krun_total_iters, sizeof(uint64_t));
+        krun_aperf_counts[krun_core] =
+            krun_xcalloc(krun_total_iters, sizeof(uint64_t));
+        krun_mperf_counts[krun_core] =
+            krun_xcalloc(krun_total_iters, sizeof(uint64_t));
     }
 
     /* Set default values */
     for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
-        krun_iter_num++) {
+            krun_iter_num++) {
+        for (krun_core = 0; krun_core < krun_num_cores; krun_core++) {
+            krun_cycle_counts[krun_core][krun_iter_num] = 0;
+            krun_aperf_counts[krun_core][krun_iter_num] = 0;
+            krun_mperf_counts[krun_core][krun_iter_num] = 0;
+        }
         krun_wallclock_times[krun_iter_num] = 0;
-        krun_cycle_counts[krun_iter_num] = 0;
-        krun_aperf_counts[krun_iter_num] = 0;
-        krun_mperf_counts[krun_iter_num] = 0;
     }
 
     /* Main loop */
@@ -136,61 +147,29 @@ main(int argc, char **argv)
         }
 
         /* Start timed section */
-        krun_mperf_start = read_mperf();
-        krun_aperf_start = read_aperf();
-        krun_cycles_start = read_core_cycles();
-        krun_wallclock_start = clock_gettime_monotonic();
-
+        krun_measure(0);
         (void) (*krun_bench_func)(krun_param);
-
-        krun_wallclock_stop = clock_gettime_monotonic();
-        krun_cycles_stop = read_core_cycles();
-        krun_aperf_stop = read_aperf();
-        krun_mperf_stop = read_mperf();
+        krun_measure(1);
         /* End timed section */
 
-        /* Sanity checks */
-        if (krun_cycles_start > krun_cycles_stop) {
-            fprintf(stderr, "cycle count start greater than stop\n");
-            fprintf(stderr, "start=%" PRIu64 ", stop=%" PRIu64 "\n",
-                krun_cycles_start, krun_cycles_stop);
-            exit(EXIT_FAILURE);
-        }
-
-        if (krun_wallclock_start > krun_wallclock_stop) {
-            fprintf(stderr, "wallclock time start greater than stop\n");
-            fprintf(stderr, "start=%f, stop=%f\n",
-                krun_wallclock_start, krun_wallclock_stop);
-            exit(EXIT_FAILURE);
-        }
-
-        if (krun_aperf_start > krun_aperf_stop) {
-            fprintf(stderr, "aperf start greater than stop\n");
-            fprintf(stderr, "start=%" PRIu64 ", stop=%" PRIu64 "\n",
-                krun_aperf_start, krun_aperf_stop);
-            exit(EXIT_FAILURE);
-        }
-
-        if (krun_mperf_start > krun_mperf_stop) {
-            fprintf(stderr, "mperf start greater than stop\n");
-            fprintf(stderr, "start=%" PRIu64 ", stop=%" PRIu64 "\n",
-                krun_mperf_start, krun_mperf_stop);
-            exit(EXIT_FAILURE);
-        }
-
-        /* Compute deltas */
+        /* Extract and store wallclock data from libkruntime */
         krun_wallclock_times[krun_iter_num] =
-            krun_wallclock_stop - krun_wallclock_start;
-        krun_cycle_counts[krun_iter_num] =
-            krun_cycles_stop - krun_cycles_start;
-        krun_aperf_counts[krun_iter_num] =
-            krun_aperf_stop - krun_aperf_start;
-        krun_mperf_counts[krun_iter_num] =
-            krun_mperf_stop - krun_mperf_start;
+            krun_get_wallclock(1) - krun_get_wallclock(0);
+
+        /* Same for per-core measurements */
+        for (krun_core = 0; krun_core < krun_num_cores; krun_core++ ) {
+            krun_cycle_counts[krun_core][krun_iter_num] =
+                krun_get_core_cycles(1, krun_core) -
+                krun_get_core_cycles(0, krun_core);
+            krun_aperf_counts[krun_core][krun_iter_num] =
+                krun_get_aperf(1, krun_core) - krun_get_aperf(0, krun_core);
+            krun_mperf_counts[krun_core][krun_iter_num] =
+                krun_get_mperf(1, krun_core) - krun_get_mperf(0, krun_core);
+        }
     }
 
     /* Emit results */
-    fprintf(stdout, "[[");
+    fprintf(stdout, "{ \"wallclock_times\": [");
     for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
         krun_iter_num++) {
         fprintf(stdout, "%f", krun_wallclock_times[krun_iter_num]);
@@ -199,43 +178,38 @@ main(int argc, char **argv)
             fprintf(stdout, ", ");
         }
     }
-    fprintf(stdout, "], [");
-    for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
-        krun_iter_num++) {
-        fprintf(stdout, "%" PRIu64, krun_cycle_counts[krun_iter_num]);
+    fprintf(stdout, "], ");
 
-        if (krun_iter_num < krun_total_iters - 1) {
-            fprintf(stdout, ", ");
-        }
-    }
-    fprintf(stdout, "], [");
-    for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
-        krun_iter_num++) {
-        fprintf(stdout, "%" PRIu64, krun_aperf_counts[krun_iter_num]);
+    emit_per_core_data("core_cycle_counts", krun_num_cores, krun_total_iters,
+            krun_cycle_counts);
+    fprintf(stdout, ", ");
 
-        if (krun_iter_num < krun_total_iters - 1) {
-            fprintf(stdout, ", ");
-        }
-    }
-    fprintf(stdout, "], [");
-    for (krun_iter_num = 0; krun_iter_num < krun_total_iters;
-        krun_iter_num++) {
-        fprintf(stdout, "%" PRIu64, krun_mperf_counts[krun_iter_num]);
+    emit_per_core_data("aperf_counts", krun_num_cores, krun_total_iters,
+            krun_aperf_counts);
+    fprintf(stdout, ", ");
 
-        if (krun_iter_num < krun_total_iters - 1) {
-            fprintf(stdout, ", ");
-        }
-    }
-    fprintf(stdout, "]]\n");
+    emit_per_core_data("mperf_counts", krun_num_cores, krun_total_iters,
+            krun_mperf_counts);
+
+    fprintf(stdout, "}\n");
 
 clean:
+    /* Free up allocations */
+    for (krun_core = 0; krun_core < krun_num_cores; krun_core++) {
+        free(krun_cycle_counts[krun_core]);
+        free(krun_aperf_counts[krun_core]);
+        free(krun_mperf_counts[krun_core]);
+    }
     free(krun_wallclock_times);
+    free(krun_cycle_counts);
+    free(krun_aperf_counts);
+    free(krun_mperf_counts);
 
     if (krun_dl_handle != NULL) {
         dlclose(krun_dl_handle);
     }
 
-    libkruntime_done();
+    krun_done();
 
     return (EXIT_SUCCESS);
 }

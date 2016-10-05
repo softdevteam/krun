@@ -13,7 +13,7 @@ TEST_PROG_PATH = os.path.join(DIR, "test_prog")
 
 sys.path.append(os.path.join(DIR, "..", ".."))
 from krun.platform import detect_platform
-platform = detect_platform(None, None)
+PLATFORM = detect_platform(None, None)
 
 CORECYCLES_SUPPORT = sys.platform.startswith("linux") and \
     not (os.environ.get("TRAVIS", None) == "true")
@@ -42,28 +42,22 @@ def parse_keyvals(out, doubles=False):
 
 
 class TestLibKrunTime(object):
+    @pytest.mark.skipif(not CORECYCLES_SUPPORT,
+                        reason="no performance counters")
     def test_cycles_u64(self):
         rv, out, _ = invoke_c_prog("cycles_u64")
         assert rv == 0
         dct = parse_keyvals(out)
 
-        if CORECYCLES_SUPPORT:
-            assert 0 <= dct["cycles_u64_delta"] <= NOT_MANY_CYCLES
-        else:
-            assert dct["cycles_u64_start"] == 0
-            assert dct["cycles_u64_stop"] == 0
-            assert dct["cycles_u64_delta"] == 0
+        assert 0 <= dct["cycles_u64_delta"] <= NOT_MANY_CYCLES
 
+    @pytest.mark.skipif(not CORECYCLES_SUPPORT,
+                        reason="no performance counters")
     def test_cycles_double(self):
         rv, out, _ = invoke_c_prog("cycles_double")
         assert rv == 0
         dct = parse_keyvals(out, True)
-        if CORECYCLES_SUPPORT:
-            assert 0 <= dct["cycles_double_delta"] <= NOT_MANY_CYCLES
-        else:
-            assert dct["cycles_double_start"] == 0.0
-            assert dct["cycles_double_stop"] == 0.0
-            assert dct["cycles_double_delta"] == 0.0
+        assert 0 <= dct["cycles_double_delta"] <= NOT_MANY_CYCLES
 
     def test_cycles_double_prec_ok(self):
         rv, out, _ = invoke_c_prog("cycles_double_prec_ok")
@@ -101,36 +95,60 @@ class TestLibKrunTime(object):
         # is why the readings are ordered as they are in the iterations runner.
         assert dct["monotonic_delta_msrs"] > dct["monotonic_delta_nothing"]
 
+    @pytest.mark.skipif(not APERF_MPERF_SUPPORT,
+                        reason="no performance counters")
     def test_aperf_mperf(self):
         rv, out, _ = invoke_c_prog("aperf_mperf")
         assert rv == 0
         dct = parse_keyvals(out, doubles=False)
-        if APERF_MPERF_SUPPORT:
-            assert dct["aperf"] > 0
-            assert dct["mperf"] > 0
 
-            # aperf is ticking for a subset of the time mperf is
-            assert dct["aperf"] <= dct["mperf"]
-        else:
-            assert dct["aperf"] == 0
-            assert dct["mperf"] == 0
+        assert dct["aperf"] > 0
+        assert dct["mperf"] > 0
 
+        # aperf is ticking for a subset of the time mperf is
+        assert dct["aperf"] <= dct["mperf"]
+
+    @pytest.mark.skipif(not APERF_MPERF_SUPPORT,
+                        reason="no performance counters")
     def test_aperf(self):
         rv, out, _ = invoke_c_prog("aperf")
         assert rv == 0
         dct = parse_keyvals(out)
-        if APERF_MPERF_SUPPORT:
-            assert dct["aperf_start"] < dct["aperf_stop"]
-        else:
-            assert dct["aperf_start"] == 0
-            assert dct["aperf_stop"] == 0
+        assert dct["aperf_start"] < dct["aperf_stop"]
 
+    @pytest.mark.skipif(not APERF_MPERF_SUPPORT,
+                        reason="no performance counters")
     def test_mperf(self):
         rv, out, _ = invoke_c_prog("mperf")
         assert rv == 0
         dct = parse_keyvals(out)
+        assert dct["mperf_start"] < dct["mperf_stop"]
+
+    def test_core_bounds_check(self):
+        rv, _, err = invoke_c_prog("core_bounds_check")
+        assert rv != 0
+        assert "core out of range" in err
+
+    def test_mdata_index_bounds_check(self):
+        rv, _, err = invoke_c_prog("mdata_index_bounds_check")
+        assert rv != 0
+        assert "mdata index out of range" in err
+
+    def test_read_everything_all_cores(self):
+        rv, out, err = invoke_c_prog("read_everything_all_cores")
+        assert rv == 0
+        lines = out.splitlines()
+        dct = parse_keyvals(out, doubles=True)
+
+        # Two wallclock measurements
+        expect = 2
+
+        # Two more for measurements for each core
+        if CORECYCLES_SUPPORT:
+            expect += PLATFORM.num_cpus * 2
+
+        # Two more for measurements for each aperf and mperf on each core
         if APERF_MPERF_SUPPORT:
-            assert dct["mperf_start"] < dct["mperf_stop"]
-        else:
-            assert dct["mperf_start"] == 0
-            assert dct["mperf_stop"] == 0
+            expect += 2 * PLATFORM.num_cpus * 2
+
+        assert len(dct) == expect

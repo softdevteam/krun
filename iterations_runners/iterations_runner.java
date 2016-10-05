@@ -131,12 +131,35 @@ class IterationsRunner {
         System.loadLibrary("kruntime");
     }
 
-    public static native void JNI_libkruntime_init();
-    public static native void JNI_libkruntime_done();
-    public static native double JNI_clock_gettime_monotonic();
-    public static native long JNI_read_core_cycles();
-    public static native long JNI_read_aperf();
-    public static native long JNI_read_mperf();
+    public static native void JNI_krun_init();
+    public static native void JNI_krun_done();
+    public static native void JNI_krun_measure(int mindex);
+    public static native double JNI_krun_get_wallclock(int mindex);
+    public static native long JNI_krun_get_core_cycles(int mindex, int core);
+    public static native long JNI_krun_get_aperf(int mindex, int core);
+    public static native long JNI_krun_get_mperf(int mindex, int core);
+    public static native int JNI_krun_get_num_cores();
+
+    /* Prints signed longs for the per-core measurements */
+    private static void emitPerCoreResults(String name, int numCores, long[][] array) {
+        System.out.print("\"" + name + "\": [");
+
+        for (int core = 0; core < numCores; core++) {
+            System.out.print("[");
+            for (int i = 0; i < array[core].length; i++) {
+                System.out.print(Long.toUnsignedString(array[core][i]));
+
+                if (i < array[core].length - 1) {
+                    System.out.print(", ");
+                }
+            }
+            System.out.print("]");
+            if (core < numCores - 1) {
+                System.out.print(", ");
+            }
+        }
+        System.out.print("]");
+    }
 
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
@@ -171,7 +194,8 @@ class IterationsRunner {
         Object instance = constructors[0].newInstance();
         BaseKrunEntry ke = (BaseKrunEntry) instance; // evil
 
-        IterationsRunner.JNI_libkruntime_init();
+        IterationsRunner.JNI_krun_init();
+        int numCores = IterationsRunner.JNI_krun_get_num_cores();
 
         double[] wallclockTimes = new double[iterations];
         Arrays.fill(wallclockTimes, 0);
@@ -188,14 +212,16 @@ class IterationsRunner {
          *   - We print the result using toUnsignedString, thus interpreting
          *     the number as unsigned.
          */
-        long[] cycleCounts = new long[iterations];
-        Arrays.fill(cycleCounts, 0);
+        long[][] cycleCounts = new long[numCores][iterations];
+        long[][] aperfCounts = new long[numCores][iterations];
+        long[][] mperfCounts = new long[numCores][iterations];
 
-        long[] aperfCounts = new long[iterations];
-        Arrays.fill(aperfCounts, 0);
-
-        long[] mperfCounts = new long[iterations];
-        Arrays.fill(mperfCounts, 0);
+        /* longs default to zero, but we explicitely zero to force allocation */
+        for (int core = 0; core < numCores; core++) {
+            Arrays.fill(cycleCounts[core], 0);
+            Arrays.fill(aperfCounts[core], 0);
+            Arrays.fill(mperfCounts[core], 0);
+        }
 
         for (int i = 0; i < iterations; i++) {
             if (debug) {
@@ -203,17 +229,9 @@ class IterationsRunner {
             }
 
             // Start timed section
-            long mperfStart = IterationsRunner.JNI_read_mperf();
-            long aperfStart = IterationsRunner.JNI_read_aperf();
-            long cyclesStart = IterationsRunner.JNI_read_core_cycles();
-            double wallclockStart = IterationsRunner.JNI_clock_gettime_monotonic();
-
+            IterationsRunner.JNI_krun_measure(0);
             ke.run_iter(param);
-
-            double wallclockStop = IterationsRunner.JNI_clock_gettime_monotonic();
-            long cyclesStop = IterationsRunner.JNI_read_core_cycles();
-            long aperfStop = IterationsRunner.JNI_read_aperf();
-            long mperfStop = IterationsRunner.JNI_read_mperf();
+            IterationsRunner.JNI_krun_measure(1);
             // End timed section
 
             // Instrumentation mode emits a JSON dict onto a marker line.
@@ -225,76 +243,44 @@ class IterationsRunner {
                 sb.setLength(0);  // clear
             }
 
-            // Sanity checks
-            if (wallclockStart > wallclockStop) {
-                System.err.println("wallclock start is greater than stop");
-                System.err.println("start=" + wallclockStart + " stop=" + wallclockStop);
-                System.exit(1);
-            }
+            // Extract measurements
+            wallclockTimes[i] = IterationsRunner.JNI_krun_get_wallclock(1) -
+                IterationsRunner.JNI_krun_get_wallclock(0);
 
-            if (Long.compareUnsigned(cyclesStart, cyclesStop) > 0) {
-                System.err.println("cycle count start is greater than stop");
-                System.err.print("start=" + Long.toUnsignedString(cyclesStart) + " ");
-                System.err.println("stop=" + Long.toUnsignedString(cyclesStop) + " ");
-                System.exit(1);
+            for (int core = 0; core < numCores; core++) {
+                cycleCounts[core][i] =
+                    IterationsRunner.JNI_krun_get_core_cycles(1, core) -
+                    IterationsRunner.JNI_krun_get_core_cycles(0, core);
+                aperfCounts[core][i] =
+                    IterationsRunner.JNI_krun_get_aperf(1, core) -
+                    IterationsRunner.JNI_krun_get_aperf(0, core);
+                mperfCounts[core][i] =
+                    IterationsRunner.JNI_krun_get_mperf(1, core) -
+                    IterationsRunner.JNI_krun_get_mperf(0, core);
             }
-
-            if (Long.compareUnsigned(aperfStart, aperfStop) > 0) {
-                System.err.println("aperf count start is greater than stop");
-                System.err.print("start=" + Long.toUnsignedString(aperfStart) + " ");
-                System.err.println("stop=" + Long.toUnsignedString(aperfStop) + " ");
-                System.exit(1);
-            }
-
-            if (Long.compareUnsigned(mperfStart, mperfStop) > 0) {
-                System.err.println("mperf count start is greater than stop");
-                System.err.print("start=" + Long.toUnsignedString(mperfStart) + " ");
-                System.err.println("stop=" + Long.toUnsignedString(mperfStop) + " ");
-                System.exit(1);
-            }
-
-            // Compute deltas
-            wallclockTimes[i] = wallclockStop - wallclockStart;
-            cycleCounts[i] = cyclesStop - cyclesStart;
-            aperfCounts[i] = aperfStop - aperfStart;
-            mperfCounts[i] = mperfStop - mperfStart;
         }
 
-        IterationsRunner.JNI_libkruntime_done();
+        IterationsRunner.JNI_krun_done();
 
         // Emit measurements
-        System.out.print("[[");
+        System.out.print("{");
+
+        System.out.print("\"wallclock_times\": [");
         for (int i = 0; i < iterations; i++) {
             System.out.print(wallclockTimes[i]);
-
             if (i < iterations - 1) {
                 System.out.print(", ");
             }
         }
-        System.out.print("], [");
-        for (int i = 0; i < iterations; i++) {
-            System.out.print(Long.toUnsignedString(cycleCounts[i]));
+        System.out.print("], ");
 
-            if (i < iterations - 1) {
-                System.out.print(", ");
-            }
-        }
-        System.out.print("], [");
-        for (int i = 0; i < iterations; i++) {
-            System.out.print(Long.toUnsignedString(aperfCounts[i]));
+        // per-core measurements
+        IterationsRunner.emitPerCoreResults("core_cycle_counts", numCores, cycleCounts);
+        System.out.print(", ");
+        IterationsRunner.emitPerCoreResults("aperf_counts", numCores, aperfCounts);
+        System.out.print(", ");
+        IterationsRunner.emitPerCoreResults("mperf_counts", numCores, mperfCounts);
 
-            if (i < iterations - 1) {
-                System.out.print(", ");
-            }
-        }
-        System.out.print("], [");
-        for (int i = 0; i < iterations; i++) {
-            System.out.print(Long.toUnsignedString(mperfCounts[i]));
-
-            if (i < iterations - 1) {
-                System.out.print(", ");
-            }
-        }
-        System.out.print("]]");
+        System.out.print("}\n");
     }
 }

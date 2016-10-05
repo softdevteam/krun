@@ -14,43 +14,38 @@
 extern "C" {
 #endif
 
-void libkruntime_init(void);
-void libkruntime_done(void);
+// Public API
+void krun_init(void);
+void krun_done(void);
+void krun_measure(int mdata_idx);
+double krun_get_wallclock(int mdata_idx);
+uint64_t krun_get_core_cycles(int mdata_idx, int core);
+uint64_t krun_get_aperf(int mdata_idx, int core);
+uint64_t krun_get_mperf(int mdata_idx, int core);
+double krun_get_core_cycles_double(int mdata_idx, int core);
+double krun_get_aperf_double(int mdata_idx, int core);
+double krun_get_mperf_double(int mdata_idx, int core);
+int krun_get_num_cores(void);
+void *krun_xcalloc(size_t nmemb, size_t size);
 
-#ifdef __linux__
-int get_fixed_pctr1_width(void);
-int open_msr_node(int cpu);
-void config_fixed_ctr1(int cpu, int enable);
-void config_fixed_ctr1_all_cores(int enable);
-
-uint64_t read_msr(int cpu, long addr);
-uint64_t sum_msr_all_cores(long msr_addr, uint64_t mask);
-void write_msr(int cpu, long addr, uint64_t msr_val);
-void close_fd(int fd);
-#endif // __linux__
-
-uint64_t read_core_cycles(void);
-uint64_t read_aperf(void);
-uint64_t read_mperf(void);
-double read_core_cycles_double(void);
-double read_aperf_double(void);
-double read_mperf_double(void);
-
-double clock_gettime_monotonic(void);
-
-double u64_to_double(uint64_t val);
+// The are not intended for general public use, but exposed for tests.
+double krun_u64_to_double(uint64_t val);
+double krun_clock_gettime_monotonic(void);
+uint64_t krun_read_core_cycles(int core);
 
 #ifdef __cplusplus
 }
 #endif
 
 #ifdef WITH_JAVA
-JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1libkruntime_1init(JNIEnv *e, jclass c);
-JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1libkruntime_1done(JNIEnv *e, jclass c);
-JNIEXPORT jdouble JNICALL Java_IterationsRunner_JNI_1clock_1gettime_1monotonic(JNIEnv *e, jclass c);
-JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1read_1core_1cycles(JNIEnv *e, jclass c);
-JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1read_1aperf(JNIEnv *e, jclass c);
-JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1read_1mperf(JNIEnv *e, jclass c);
+JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1krun_1init(JNIEnv *e, jclass c);
+JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1krun_1done(JNIEnv *e, jclass c);
+JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1krun_1measure(JNIEnv *e, jclass c, jint mindex);
+JNIEXPORT jdouble JNICALLJava_IterationsRunner_JNI_1krun_1get_1wallclock(JNIEnv *e, jclass c, jint mindex);
+JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1krun_1get_1core_1cycles(JNIEnv *e, jclass c, jint mindex, jint core);
+JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1krun_1get_1aperf(JNIEnv *e, jclass c, jint mindex, jint core);
+JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1krun_1get_1mperf(JNIEnv *e, jclass c, jint mindex, jint core);
+JNIEXPORT jint JNICALL Java_IterationsRunner_JNI_1krun_1get_1num_1cores(JNIEnv *e, jclass c);
 #endif  // WITH_JAVA
 
 #endif  // __LIBKRUNTIME_H

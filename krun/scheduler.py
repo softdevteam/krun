@@ -88,16 +88,8 @@ class ExecutionJob(object):
 
         if not dry_run:
             try:
-                raw_measurements = util.check_and_parse_execution_results(
+                measurements = util.check_and_parse_execution_results(
                     stdout, stderr, rc)
-                assert len(raw_measurements) == 4
-
-                measurements = {
-                    "wallclock_times": raw_measurements[0],
-                    "core_cycle_counts": raw_measurements[1],
-                    "aperf_counts": raw_measurements[2],
-                    "mperf_counts": raw_measurements[3],
-                }
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
                 measurements = EMPTY_MEASUREMENTS
@@ -235,7 +227,7 @@ class ExecutionScheduler(object):
         if self.resume:
             self._remove_previous_execs_from_schedule()
             # Sanity check ETA estimates
-            for key, exec_data in self.results.data.iteritems():
+            for key, exec_data in self.results.wallclock_times.iteritems():
                 got_len = len(self.results.eta_estimates[key])
                 expect_len = len(exec_data)
                 if expect_len != got_len:
@@ -251,7 +243,7 @@ class ExecutionScheduler(object):
         return non_skipped_keys, skipped_keys
 
     def _remove_previous_execs_from_schedule(self):
-        for key in self.results.data:
+        for key in self.results.wallclock_times:
             num_completed_jobs = self.results.jobs_completed(key)
             if num_completed_jobs > 0:
                 try:
@@ -335,13 +327,6 @@ class ExecutionScheduler(object):
             exec_start_time = time.time()
             measurements, instr_data = job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
-            assert len(measurements) == 4
-
-            # All measurement lists should be the same length
-            itr = measurements.itervalues()
-            expect_len = len(itr.next())
-            for ls in itr:
-                assert len(ls) == expect_len
 
             if not measurements["wallclock_times"] and not self.dry_run:
                 self.results.error_flag = True
