@@ -27,6 +27,7 @@ SANITY_CHECK_STACK_KB = 8192
 PLATFORM_SANITY_CHECK_DIR = os.path.join(DIR, "..", "platform_sanity_checks")
 VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
 
+
 # Keys we expect in each iteration runner's output
 EXPECT_JSON_KEYS = set(["wallclock_times", "core_cycle_counts",
                         "aperf_counts", "mperf_counts"])

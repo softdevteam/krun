@@ -2,7 +2,6 @@ from krun.time_estimate import TimeEstimateFormatter, now_str
 from krun.results import Results
 from krun import util
 
-from collections import deque
 from logging import warn, info, error, debug
 
 import os, subprocess, sys, time
@@ -37,6 +36,132 @@ class ScheduleEmpty(Exception):
     pass
 
 
+class ManifestManager(object):
+    """Data structure for working with the manifest file"""
+
+    PATH = "krun.manifest"
+
+    def __init__(self):
+        """Constructor reads an existing manifest file"""
+
+        self._parse()
+
+    def _reset(self):
+        # All populated in _parse()
+        self.next_exec_key = None
+        self.next_exec_idx = -1
+        self.next_exec_flag_offset = None
+        self.num_execs_left = 0
+        self.total_num_execs = 0
+        self.eta_avail_idx = 0
+        self.outstanding_exec_counts = {}
+
+    def _open(self):
+        path = os.path.abspath(ManifestManager.PATH)
+        debug("Reading status cookie from %s" % path)
+        return open(path, "r+")
+
+    def _parse(self):
+        self._reset()
+        fh = self._open()
+        offset = 0
+
+        # Parse manifest header
+        for line in fh:
+            offset += len(line)
+            line = line.strip()
+            if line == "keys":
+                break
+            else:
+                key, val = line.split("=")
+                if key == "eta_avail_idx":
+                    self.eta_avail_idx = int(val)
+                else:
+                    assert False
+        else:
+            assert False
+
+        # Get info from the rest of the file
+        exec_idx = 0
+        for line in fh:
+            flag, key = line.strip().split(" ")
+            if key not in self.outstanding_exec_counts:
+                self.outstanding_exec_counts[key] = 0
+
+            if flag in ["S", "E", "C"]:  # skip, error, completed
+                pass
+            elif flag == "O":  # outstanding
+                self.outstanding_exec_counts[key] += 1
+                if self.num_execs_left == 0:  # first outstanding exec
+                    self.next_exec_key = key
+                    self.next_exec_flag_offset = offset
+                    self.next_exec_idx = exec_idx
+                self.num_execs_left += 1
+            else:
+                assert False  # bogus flag
+
+            exec_idx += 1
+            offset += len(line)
+        fh.close()
+        self.total_num_execs = exec_idx
+
+    def update(self, flag):
+        """Updates the manifest flag for the just-ran execution
+
+        This should only be called once per instance, as krun is expected to
+        reboot (or fake reboot) between executions."""
+
+        debug("Update manifest flag: %s" % flag)
+        fh = self._open()
+        fh.seek(self.next_exec_flag_offset)
+        fh.write(flag)
+        fh.close()
+
+        self._reset()
+        self._parse()  # update stats
+
+    @classmethod
+    def from_config(cls, config):
+        """Makes the inital manifest file from the config
+
+        Returns two sets: non_skipped_keys, skipped_keys"""
+
+        skipped_keys, non_skipped_keys = set(), set()
+        manifest = []
+
+        one_exec_scheduled = False
+        eta_avail_idx = -1
+        for exec_n in xrange(config.N_EXECUTIONS):
+            for vm_name, vm_info in config.VMS.items():
+                for bmark, param in config.BENCHMARKS.items():
+                    for variant in vm_info["variants"]:
+                        key = "%s:%s:%s" % (bmark, vm_name, variant)
+                        if not config.should_skip(key):
+                            non_skipped_keys |= set([key])
+                            manifest.append("O " + key)
+                            if one_exec_scheduled and eta_avail_idx == -1:
+                                # first job of second executions eta becomes known.
+                                eta_avail_idx = len(manifest) - 1
+                        else:
+                            skipped_keys |= set([key])
+                            manifest.append("S " + key)
+                            if not one_exec_scheduled:
+                                debug("%s is in skip list. Not scheduling." %
+                                      key)
+            one_exec_scheduled = True
+
+        path = os.path.abspath(ManifestManager.PATH)
+        debug("Writing manifest to %s" % path)
+
+        with open(path, "w") as fh:
+            fh.write("eta_avail_idx=%s\n" % eta_avail_idx)
+            fh.write("keys\n")
+            for item in manifest:
+                fh.write("%s\n" % item)
+
+        return cls()
+
+
 class ExecutionJob(object):
     """Represents a single executions level benchmark run"""
 
@@ -49,12 +174,6 @@ class ExecutionJob(object):
 
         # Used in results JSON and ETA dict
         self.key = "%s:%s:%s" % (self.benchmark, self.vm_name, self.variant)
-
-    def get_estimated_exec_duration(self):
-        return self.sched.get_estimated_exec_duration(self.key)
-
-    def get_exec_estimate_time_formatter(self):
-        return self.sched.get_exec_estimate_time_formatter(self.key)
 
     def __str__(self):
         return self.key
@@ -73,6 +192,8 @@ class ExecutionJob(object):
     def run(self, mailer, dry_run=False):
         """Runs this job (execution)"""
 
+        flag = None
+
         entry_point = self.sched.config.VARIANTS[self.variant]
         vm_def = self.vm_info["vm_def"]
         vm_def.dry_run = dry_run
@@ -90,9 +211,11 @@ class ExecutionJob(object):
             try:
                 measurements = util.check_and_parse_execution_results(
                     stdout, stderr, rc)
+                flag = "C"
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
                 measurements = EMPTY_MEASUREMENTS
+                flag = "E"
 
             if vm_def.instrument:
                 instr_data = vm_def.get_instr_data()
@@ -103,6 +226,7 @@ class ExecutionJob(object):
         else:
             measurements = EMPTY_MEASUREMENTS
             instr_data = {}
+            flag = "C"
 
         # We print the status *after* benchmarking, so that I/O cannot be
         # committed during benchmarking. In production, we will be rebooting
@@ -110,7 +234,8 @@ class ExecutionJob(object):
         info("Finished '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
 
-        return measurements, instr_data
+        assert flag is not None
+        return measurements, instr_data, flag
 
 
 class ExecutionScheduler(object):
@@ -122,54 +247,22 @@ class ExecutionScheduler(object):
         self.mailer = mailer
 
         self.config = config
-        self.work_deque = deque()
         self.eta_avail = 0
-        self.jobs_done = 0
         self.platform = platform
         self.resume = resume
         self.reboot = reboot
         self.dry_run = dry_run
         self.started_by_init = started_by_init
 
-        if resume:
-            self.results = Results(self.config, platform,
-                                   results_file=self.config.results_filename())
-        else:
-            self.results = Results(self.config, platform)
-
         self.log_path = self.config.log_filename(self.resume)
 
-    def set_eta_avail(self):
-        """call after adding job before eta should become available"""
-        self.eta_avail = len(self)
-
-    def jobs_until_eta_known(self):
-        return self.eta_avail - self.jobs_done
-
-    def add_job(self, job):
-        self.work_deque.append(job)
-
-    def remove_job_by_key(self, key):
-        for job in self.work_deque:
-            if job.key == key:
-                job_to_remove = job
-                break
+        if not self.resume:
+            self.manifest = ManifestManager.from_config(config)
+            self.results = Results(self.config, self.platform)
+            self.results.write_to_file()  # scaffold results file
         else:
-            raise JobMissingError(key)
-        debug("Removed %s from schedule" % key)
-        self.work_deque.remove(job_to_remove)
-
-    def next_job(self, peek=False):
-        try:
-            job = self.work_deque.popleft()
-            if peek:
-                self.work_deque.appendleft(job)
-            return job
-        except IndexError:
-            raise ScheduleEmpty() # we are done
-
-    def __len__(self):
-        return len(self.work_deque)
+            self.manifest = ManifestManager()
+            self.results = None
 
     def get_estimated_exec_duration(self, key):
         previous_exec_times = self.results.eta_estimates.get(key)
@@ -179,10 +272,14 @@ class ExecutionScheduler(object):
             return None # we don't know
 
     def get_estimated_overall_duration(self):
-        etas = [j.get_estimated_exec_duration() for j in self.work_deque]
-        if None in etas:
-            return None # we don't know
-        return sum(etas)
+        secs = 0
+        for key, num_execs in self.manifest.outstanding_exec_counts.iteritems():
+            per_exec = self.get_estimated_exec_duration(key)
+            if per_exec is not None:
+                secs += self.get_estimated_exec_duration(key) * num_execs
+            else:
+                return None  # unknown time
+        return secs
 
     def get_exec_estimate_time_formatter(self, key):
         return TimeEstimateFormatter(self.get_estimated_exec_duration(key))
@@ -193,80 +290,14 @@ class ExecutionScheduler(object):
     def add_eta_info(self, key, exec_time):
         self.results.eta_estimates[key].append(exec_time)
 
-    def build_schedule(self):
-        """Builds a queue of process execution jobs.
-
-        Returns two sets: non_skipped_keys, skipped_keys"""
-
-        skipped_keys, non_skipped_keys = set(), set()
-
-        one_exec_scheduled = False
-        eta_avail_job = None
-        for exec_n in xrange(self.config.N_EXECUTIONS):
-            for vm_name, vm_info in self.config.VMS.items():
-                for bmark, param in self.config.BENCHMARKS.items():
-                    for variant in vm_info["variants"]:
-                        job = ExecutionJob(self, vm_name, vm_info, bmark, variant, param)
-                        if not self.config.should_skip(job.key):
-                            non_skipped_keys |= set([job.key])
-                            if one_exec_scheduled and not eta_avail_job:
-                                # first job of second executions eta becomes known.
-                                eta_avail_job = job
-                                self.set_eta_avail()
-                            self.add_job(job)
-                        else:
-                            skipped_keys |= set([job.key])
-                            if not one_exec_scheduled:
-                                debug("%s is in skip list. Not scheduling." %
-                                      job.key)
-            one_exec_scheduled = True
-        self.expected_reboots = len(self)
-        # Resume mode: if previous results are available, remove the
-        # jobs from the schedule which have already been executed, and
-        # add the results to this object, ready to be saved to a Json file.
-        if self.resume:
-            self._remove_previous_execs_from_schedule()
-            # Sanity check ETA estimates
-            for key, exec_data in self.results.wallclock_times.iteritems():
-                got_len = len(self.results.eta_estimates[key])
-                expect_len = len(exec_data)
-                if expect_len != got_len:
-                    msg = "ETA estimates didn't tally with results: "
-                    msg += "key=%s, expect_len=%d, got_len=%d " % \
-                        (key, expect_len, got_len)
-                    msg += "data[%s]=%s; " % (key, str(self.results.data[key]))
-                    msg += "eta[%s]=%s" % \
-                        (key, str(self.results.eta_estimates[key]))
-                    util.log_and_mail(self.mailer, error,
-                                      "Fatal Krun Error",
-                                      msg, bypass_limiter=True, exit=True)
-        return non_skipped_keys, skipped_keys
-
-    def _remove_previous_execs_from_schedule(self):
-        for key in self.results.wallclock_times:
-            num_completed_jobs = self.results.jobs_completed(key)
-            if num_completed_jobs > 0:
-                try:
-                    debug("%s has already been run %d times." %
-                          (key, num_completed_jobs))
-                    for _ in range(num_completed_jobs):
-                        self.remove_job_by_key(key)
-                        self.jobs_done += 1
-                except JobMissingError as excn:
-                    tup = (excn.key, self.config.filename,
-                           self.config.results_filename())
-                    msg = ("Failed to resume benchmarking session\n." +
-                           "The execution %s appears in results " +
-                           "file: %s, but not in config file: %s." % tup)
-                    util.fatal(msg)
-
     def _make_pre_post_cmd_env(self):
         """Prepare an environment dict for pre/post execution hooks"""
 
-        jobs_until_eta_known = self.jobs_until_eta_known()
+        jobs_until_eta_known = self.manifest.eta_avail_idx - \
+            self.manifest.next_exec_idx
         if jobs_until_eta_known > 0:
             eta_val = "Unknown. Known in %d process executions." % \
-                self.jobs_until_eta_known()
+                jobs_until_eta_known
         else:
             eta_val = self.get_overall_time_estimate_formatter().finish_str
 
@@ -279,9 +310,6 @@ class ExecutionScheduler(object):
 
     def run(self):
         """Benchmark execution starts here"""
-        jobs_left = len(self)
-        if jobs_left == 0:
-            debug("Krun started with an empty queue of jobs")
 
         if not self.started_by_init:
             util.log_and_mail(self.mailer, debug,
@@ -290,16 +318,6 @@ class ExecutionScheduler(object):
                               self.log_path,
                               bypass_limiter=True)
 
-        if self.reboot and not self.started_by_init:
-            # Reboot before first benchmark (dumps results file).
-            info("Reboot prior to first execution")
-            self._reboot()
-
-        if self.reboot and self.started_by_init and jobs_left > 0:
-            debug("Waiting %s seconds for the system to come up." %
-                 str(STARTUP_WAIT_SECONDS))
-            self.platform.sleep(STARTUP_WAIT_SECONDS)
-
         # Important that the dmesg is collected after the above startup wait.
         # Otherwise we get spurious dmesg changes.
         self.platform.collect_starting_dmesg()
@@ -307,17 +325,26 @@ class ExecutionScheduler(object):
         while True:
             self.platform.wait_for_temperature_sensors()
 
-            jobs_left = len(self)
-            if jobs_left == 0:
-                break
+            if self.reboot and not self.resume:
+                info("Reboot prior to first execution")
+                self._reboot(self.manifest.total_num_execs)
 
-            # Run the user's pre-process-execution commands
+            # If we get here, this is a real run, with a benchmark about to
+            # run. Results should never be in memory at this point (as they
+            # grow over time, and can get very large, thus potentially
+            # influencing the benchmark)
+            assert self.results is None
+
+            bench, vm, variant = self.manifest.next_exec_key.split(":")
+            job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
+                               self.config.BENCHMARKS[bench])
+
+            # Run the user's pre-process-execution commands We can't put an ETA
+            # estimate in the evironment for the pre-commands as we have not
+            # (and should not) load the results file into memory yet.
             util.run_shell_cmd_list(
                 self.config.PRE_EXECUTION_CMDS,
-                extra_env=self._make_pre_post_cmd_env()
             )
-
-            job = self.next_job()
 
             # We collect rough execution times separate from real results. The
             # reason for this is that, even if a benchmark crashes it takes
@@ -325,30 +352,29 @@ class ExecutionScheduler(object):
             # crashing benchmark will give an empty list of iteration times,
             # meaning we can't use 'raw_exec_result' below for estimates.
             exec_start_time = time.time()
-            measurements, instr_data = job.run(self.mailer, self.dry_run)
+            measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
-            if not measurements["wallclock_times"] and not self.dry_run:
+            if flag == "E":
                 self.results.error_flag = True
 
             # Store results
+            self.results = Results(self.config, self.platform,
+                                   results_file=self.config.results_filename())
             self.results.append_exec_measurements(job.key, measurements)
             self.results.add_instr_data(job.key, instr_data)
 
             eta_info = exec_end_time - exec_start_time
-            if self.reboot:
+            if self.reboot and not self.platform.fake_reboots:
                 # Add time taken to wait for system to come up if we are in
                 # reboot mode.
                 eta_info += STARTUP_WAIT_SECONDS
             self.add_eta_info(job.key, eta_info)
 
-            info("%d executions left in scheduler queue" % (jobs_left - 1))
-
-            # We dump the json after each experiment so we can monitor the
-            # json file mid-run. It is overwritten each time.
+            # We dump the json after each process exec so we can monitor the
+            # JSON file mid-run. It is overwritten each time.
             self.results.write_to_file()
-
-            self.jobs_done += 1
+            self.manifest.update(flag)
 
             # Run the user's post-process-execution commands with updated
             # ETA estimates. Important that this happens *after* dumping
@@ -361,7 +387,7 @@ class ExecutionScheduler(object):
 
             tfmt = self.get_overall_time_estimate_formatter()
 
-            if self.eta_avail == self.jobs_done:
+            if self.manifest.eta_avail_idx == self.manifest.next_exec_idx:
                 # We just found out roughly how long the session has left, mail out.
                 msg = "ETA for current session now known: %s" % tfmt.finish_str
                 util.log_and_mail(self.mailer, debug,
@@ -369,32 +395,40 @@ class ExecutionScheduler(object):
                              msg, bypass_limiter=True)
 
             info("{:<25s}: {} ({} from now)".format(
-                "Estimated completion", tfmt.finish_str, tfmt.delta_str))
+                "Estimated completion (whole session)", tfmt.finish_str,
+                tfmt.delta_str))
 
-            try:
-                job = self.next_job(peek=True)
-            except ScheduleEmpty:
-                pass  # no next job
-            else:
+            info("%d executions left in scheduler queue" % self.manifest.num_execs_left)
+
+            if self.manifest.num_execs_left > 0 and \
+                    self.manifest.eta_avail_idx > self.manifest.next_exec_idx:
+                info("Executions until ETA known: %s" %
+                     (self.manifest.eta_avail_idx -
+                      self.manifest.next_exec_idx))
+
+            if self.platform.check_dmesg_for_changes():
+                self.results.error_flag = True
+
+            if self.manifest.num_execs_left > 0:
                 # print info about the next job
+                benchmark, vm_name, variant = \
+                    self.manifest.next_exec_key.split(":")
                 info("Next execution is '%s(%d)' (%s variant) under '%s'" %
-                     (job.benchmark, job.parameter, job.variant, job.vm_name))
+                     (benchmark, self.config.BENCHMARKS[benchmark], variant, vm_name))
 
                 tfmt = self.get_exec_estimate_time_formatter(job.key)
                 info("{:<35s}: {} ({} from now)".format(
                     "Estimated completion (next execution)",
                     tfmt.finish_str,
                     tfmt.delta_str))
+            elif self.manifest.num_execs_left == 0:
+                break  # done
+            else:
+                assert False
 
-            if (self.eta_avail is not None) and (self.jobs_done < self.eta_avail):
-                info("Executions until ETA known: %s" % self.jobs_until_eta_known())
-
-            if self.platform.check_dmesg_for_changes():
-                self.results.error_flag = True
-
-            if self.reboot and len(self) > 0:
+            if self.reboot and self.manifest.num_execs_left > 0:
                 info("Reboot in preparation for next execution")
-                self._reboot()
+                self._reboot(self.manifest.total_num_execs)
 
         self.platform.save_power()
 
@@ -414,15 +448,17 @@ class ExecutionScheduler(object):
         util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
                           bypass_limiter=True)
 
-    def _reboot(self):
+    def _reboot(self, expected_reboots):
         self.results.reboots += 1
         debug("About to execute reboot: %g, expecting %g in total." %
-              (self.results.reboots, self.expected_reboots))
+              (self.results.reboots, expected_reboots))
         # Dump the results file. This may already have been done, but we
         # have changed self.nreboots, which needs to be written out.
+        # XXX can we prevent writing the results file twice? It is slow for big data.
         self.results.write_to_file()
 
-        if self.results.reboots > self.expected_reboots:
+        if self.results.reboots > expected_reboots:
+            assert False # XXX unbreak
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
                         "INVARIANT num_reboots <= num_jobs violated. " +
                         "Krun was about to execute reboot number: %g. " +

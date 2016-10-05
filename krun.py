@@ -302,7 +302,6 @@ def inner_main(mailer, config, args):
                                reboot=args.reboot,
                                dry_run=args.dry_run,
                                started_by_init=args.started_by_init)
-    sched.build_schedule()
     sched.run()
 
 
