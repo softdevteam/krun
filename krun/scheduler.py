@@ -55,11 +55,23 @@ class ManifestManager(object):
         self.total_num_execs = 0
         self.eta_avail_idx = 0
         self.outstanding_exec_counts = {}
+        self.skipped_keys = set()
+        self.non_skipped_keys = set()
 
     def _open(self):
         path = os.path.abspath(ManifestManager.PATH)
         debug("Reading status cookie from %s" % path)
         return open(path, "r+")
+
+    # In its own method, as it needs a config instance
+    def get_total_in_proc_iters(self, config):
+        num = 0
+        for key, exec_count in self.outstanding_exec_counts.iteritems():
+            _, vm, _ = key.split(":")
+            vm_num_iters = config.VMS[vm]["n_iterations"]
+            num += vm_num_iters * exec_count
+
+        return num
 
     def _parse(self):
         self._reset()
@@ -100,6 +112,11 @@ class ManifestManager(object):
             else:
                 assert False  # bogus flag
 
+            if flag != "S":
+                self.non_skipped_keys |= set([key])
+            else:
+                self.skipped_keys |= set([key])
+
             exec_idx += 1
             offset += len(line)
         fh.close()
@@ -122,11 +139,8 @@ class ManifestManager(object):
 
     @classmethod
     def from_config(cls, config):
-        """Makes the inital manifest file from the config
+        """Makes the inital manifest file from the config"""
 
-        Returns two sets: non_skipped_keys, skipped_keys"""
-
-        skipped_keys, non_skipped_keys = set(), set()
         manifest = []
 
         one_exec_scheduled = False
@@ -137,13 +151,11 @@ class ManifestManager(object):
                     for variant in vm_info["variants"]:
                         key = "%s:%s:%s" % (bmark, vm_name, variant)
                         if not config.should_skip(key):
-                            non_skipped_keys |= set([key])
                             manifest.append("O " + key)
                             if one_exec_scheduled and eta_avail_idx == -1:
                                 # first job of second executions eta becomes known.
                                 eta_avail_idx = len(manifest) - 1
                         else:
-                            skipped_keys |= set([key])
                             manifest.append("S " + key)
                             if not one_exec_scheduled:
                                 debug("%s is in skip list. Not scheduling." %

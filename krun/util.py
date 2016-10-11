@@ -260,32 +260,18 @@ def assign_platform(config, platform):
 def get_session_info(config):
     """Gets information about the session (for --info)
 
+    Overwrites any existing manifest file.
+
     Separated from print_session_info for ease of testing"""
 
-    from krun.scheduler import ScheduleEmpty, ExecutionScheduler
-    from krun.platform import detect_platform
-
-    platform = detect_platform(None, config)
-    sched = ExecutionScheduler(config, None, platform)
-    non_skipped_keys, skipped_keys = sched.build_schedule()
-
-    n_proc_execs = 0
-    n_in_proc_iters = 0
-
-    while True:
-        try:
-            job = sched.next_job()
-        except ScheduleEmpty:
-            break
-
-        n_proc_execs += 1
-        n_in_proc_iters += job.vm_info["n_iterations"]
+    from krun.scheduler import ManifestManager
+    manifest = ManifestManager.from_config(config)
 
     return {
-        "n_proc_execs": n_proc_execs,
-        "n_in_proc_iters": n_in_proc_iters,
-        "skipped_keys": skipped_keys,
-        "non_skipped_keys": non_skipped_keys,
+        "n_proc_execs": manifest.total_num_execs,
+        "n_in_proc_iters": manifest.get_total_in_proc_iters(config),
+        "skipped_keys": manifest.skipped_keys,
+        "non_skipped_keys": manifest.non_skipped_keys,
     }
 
 
@@ -346,16 +332,3 @@ def get_git_version():
         run_shell_cmd("sh -c 'cd %s && git rev-parse --verify HEAD'" % DIR)
 
     return out.strip()  # returns the hash
-
-
-def strip_results(config, key_spec):
-    from krun.platform import detect_platform
-    from krun.results import Results
-
-    platform = detect_platform(None)
-    results = Results(config, platform,
-                      results_file=config.results_filename())
-    n_removed = results.strip_results(key_spec)
-    if n_removed > 0:
-        results.write_to_file()
-    info("Removed %d result keys" % n_removed)
