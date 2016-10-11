@@ -3,6 +3,7 @@ from krun.results import Results
 from krun.tests import BaseKrunTest
 
 import os
+import pytest
 
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -61,6 +62,9 @@ class TestResults(BaseKrunTest):
         results0.starting_temperatures = [4355, 9879]
         results0.wallclock_times = {u"dummy:Java:default-java": [[1.000726]]}
         results0.eta_estimates = {u"dummy:Java:default-java": [1.1]}
+        results0.core_cycle_counts = {u"dummy:Java:default-java": [[[2], [3], [4], [5]]]}
+        results0.aperf_counts = {u"dummy:Java:default-java": [[[3], [4], [5], [6]]]}
+        results0.mperf_counts = {u"dummy:Java:default-java": [[[4], [5], [6], [7]]]}
         results0.reboots = 5
         results0.error_flag = False
         results0.write_to_file()
@@ -68,3 +72,14 @@ class TestResults(BaseKrunTest):
         assert results0 == results1
         # Clean-up generated file.
         os.unlink(out_file)
+
+    def test_integrity_check_results0001(self, mock_platform):
+        """ETAs don't exist for all jobs for which there is iterations data"""
+
+        config = Config(os.path.join(TEST_DIR, "broken_etas.krun"))
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
+
+        from krun.util import FatalKrunError
+        with pytest.raises(FatalKrunError):
+            results.integrity_check()

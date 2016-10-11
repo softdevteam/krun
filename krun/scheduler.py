@@ -114,13 +114,13 @@ class ManifestManager(object):
 
             if flag != "S":
                 self.non_skipped_keys |= set([key])
+                self.total_num_execs += 1
             else:
                 self.skipped_keys |= set([key])
 
             exec_idx += 1
             offset += len(line)
         fh.close()
-        self.total_num_execs = exec_idx
 
     def update(self, flag):
         """Updates the manifest flag for the just-ran execution
@@ -137,9 +137,20 @@ class ManifestManager(object):
         self._reset()
         self._parse()  # update stats
 
+    def __eq__(self, other):
+        return (self.next_exec_key == other.next_exec_key and
+                self.next_exec_idx == other.next_exec_idx and
+                self.next_exec_flag_offset == other.next_exec_flag_offset and
+                self.num_execs_left == other.num_execs_left and
+                self.total_num_execs == other.total_num_execs and
+                self.eta_avail_idx == other.eta_avail_idx and
+                self.outstanding_exec_counts == other.outstanding_exec_counts and
+                self.skipped_keys == other.skipped_keys and
+                self.non_skipped_keys == other.non_skipped_keys)
+
     @classmethod
     def from_config(cls, config):
-        """Makes the inital manifest file from the config"""
+        """Makes the initial manifest file from the config"""
 
         manifest = []
 
@@ -334,18 +345,17 @@ class ExecutionScheduler(object):
         # Otherwise we get spurious dmesg changes.
         self.platform.collect_starting_dmesg()
 
+        # No executions, or all skipped
+        if self.manifest.total_num_execs == 0:
+            info("Empty schedule!")
+            return
+
         while True:
             self.platform.wait_for_temperature_sensors()
 
             if self.reboot and not self.resume:
                 info("Reboot prior to first execution")
                 self._reboot(self.manifest.total_num_execs)
-
-            # If we get here, this is a real run, with a benchmark about to
-            # run. Results should never be in memory at this point (as they
-            # grow over time, and can get very large, thus potentially
-            # influencing the benchmark)
-            assert self.results is None
 
             bench, vm, variant = self.manifest.next_exec_key.split(":")
             job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
@@ -358,6 +368,12 @@ class ExecutionScheduler(object):
                 self.config.PRE_EXECUTION_CMDS,
             )
 
+            # Results should never be in memory while a benchmark runs because
+            # their size (which gets large) increases over the course of the
+            # benchmark session. If results were loaded, then each benchmark
+            # would be subject to a different memory layout, which is not fair.
+            assert self.results is None
+
             # We collect rough execution times separate from real results. The
             # reason for this is that, even if a benchmark crashes it takes
             # time and we need to account for this when making estimates. A
@@ -367,14 +383,14 @@ class ExecutionScheduler(object):
             measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
-            if flag == "E":
-                self.results.error_flag = True
-
             # Store results
             self.results = Results(self.config, self.platform,
                                    results_file=self.config.results_filename())
             self.results.append_exec_measurements(job.key, measurements)
             self.results.add_instr_data(job.key, instr_data)
+
+            if flag == "E":
+                self.results.error_flag = True
 
             eta_info = exec_end_time - exec_start_time
             if self.reboot and not self.platform.fake_reboots:
@@ -467,6 +483,7 @@ class ExecutionScheduler(object):
         # Dump the results file. This may already have been done, but we
         # have changed self.nreboots, which needs to be written out.
         # XXX can we prevent writing the results file twice? It is slow for big data.
+        assert self.results is not None
         self.results.write_to_file()
 
         if self.results.reboots > expected_reboots:

@@ -27,7 +27,7 @@ VARIANTS = {
     "default-python": EntryPoint("bench.py", subdir="python"),
 }
 
-ITERATIONS_ALL_VMS = 3  # Small number for testing.
+ITERATIONS_ALL_VMS = 5  # Small number for testing.
 
 VMS = {
     'C': {
@@ -45,7 +45,7 @@ VMS = {
 
 BENCHMARKS = {
     'dummy': 1000,
-    #'nbody': 1000,
+    'nbody': 1000,
 }
 
 # list of "bench:vm:variant"

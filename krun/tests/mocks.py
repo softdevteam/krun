@@ -62,7 +62,7 @@ class MockPlatform(BasePlatform):
         return []
 
     def get_reboot_cmd(self):
-        return ""
+        assert False  # tests should never try to reboot
 
     def _change_user_args(self):
         return []

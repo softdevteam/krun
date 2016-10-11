@@ -93,10 +93,41 @@ class Results(object):
                 self.config.check_config_consistency(config, results_file)
             self.audit = results["audit"]
 
+    def integrity_check(self):
+        """Check the results make sense"""
+
+        for key, execs in self.wallclock_times.iteritems():
+            if len(self.eta_estimates[key]) != len(execs):
+               fatal("inconsistent results: eta_estimates length")
+
+            # Check the length of the in-process interations in results
+            # XXX Check all core counts are the same
+            # XXX Check all exec counts are the same
+            expect_len = None
+            for exec_idx in xrange(len(execs)):
+                one_exec = execs[exec_idx]
+                if expect_len is None:
+                    expect_len = len(one_exec)
+
+                #if not all([len(x) == expect_len for x in self.core_cycle_counts[key][exec_idx]]):
+                for core in self.core_cycle_counts[key][exec_idx]:
+                    if len(core) != expect_len:
+                        fatal("inconsistent results: core_cycle_counts length")
+
+
+                for core in self.aperf_counts[key][exec_idx]:
+                    if len(core) != expect_len:
+                        fatal("inconsistent results: aperf_counts length")
+
+                for core in self.mperf_counts[key][exec_idx]:
+                    if len(core) != expect_len:
+                        fatal("inconsistent results: mperf_counts length")
+
     def write_to_file(self):
         """Serialise object on disk."""
 
         debug("Writing results out to: %s" % self.filename)
+        self.integrity_check()
 
         to_write = {
             "config": self.config.text,

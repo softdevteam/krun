@@ -1,0 +1,44 @@
+import os
+from krun.vm_defs import (PythonVMDef, JavaVMDef)
+from krun import EntryPoint
+
+DIR = os.getcwd()
+JKRUNTIME_DIR = os.path.join(DIR, "krun", "libkruntime", "")
+
+HEAP_LIMIT = 2097152
+STACK_LIMIT = 8192
+
+VARIANTS = {
+    "default-java": EntryPoint("KrunEntry", subdir="java"),
+    "default-python": EntryPoint("bench.py", subdir="python"),
+}
+
+ITERATIONS_ALL_VMS = 5
+
+VMS = {
+    'Java': {
+        'vm_def': JavaVMDef('/usr/bin/java'),
+        'variants': ['default-java'],
+        'n_iterations': ITERATIONS_ALL_VMS,
+    },
+    'CPython': {
+        'vm_def': PythonVMDef('/usr/bin/python2'),
+        'variants': ['default-python'],
+        'n_iterations': ITERATIONS_ALL_VMS,
+    }
+}
+
+
+BENCHMARKS = {
+    'dummy': 1000,
+    'nbody': 1000,
+}
+
+SKIP= [
+    "*:CPython:*",
+    "*:Java:*",
+]
+
+N_EXECUTIONS = 2
+
+TEMP_READ_PAUSE = 1

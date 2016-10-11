@@ -8,6 +8,7 @@ from krun.util import (format_raw_exec_results,
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
+from krun.scheduler import ManifestManager
 
 import json
 import logging
@@ -162,6 +163,7 @@ def test_get_session_info0001():
         "nbody:CPython:default-python",
     ])
     assert info["non_skipped_keys"] == expect_non_skipped_keys
+    os.unlink(ManifestManager.PATH)
 
 
 def test_get_session_info0002():
@@ -241,6 +243,8 @@ def test_get_session_info0002():
 
     # There should be no overlap in the used and skipped keys
     assert info["skipped_keys"].intersection(info["non_skipped_keys"]) == set()
+
+    os.unlink(ManifestManager.PATH)
 
 
 def test_run_shell_cmd_list0001():
