@@ -654,8 +654,16 @@ class LinuxPlatform(UnixLikePlatform):
         self.temp_sensor_map = None
         UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
+        self.num_per_core_measurements = self._get_num_per_core_measurements()
+
         self.virt_what_cmd = None  # set later
 
+    def _get_num_per_core_measurements(self):
+        # For all systems apart from travis we expect per-core measurements
+        if os.environ.get("TRAVIS") == "true":
+            return 0
+        else:
+            return self.num_cpus
 
     def _fatal_kernel_arg(self, arg, prefix, suffix):
         """Bail out and inform user how to add a kernel argument"""

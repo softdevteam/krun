@@ -22,20 +22,6 @@ def mean(seq):
     return sum(seq) / float(len(seq))
 
 
-class JobMissingError(Exception):
-    """This is exception is called by the scheduler, in resume mode.
-    This exception should be raised when  the user has asked to
-    resume an interrupted benchmark, and the json results contain
-    an execution that does not appear in the config file.
-    """
-    def __init__(self, key):
-        self.key = key
-
-
-class ScheduleEmpty(Exception):
-    pass
-
-
 class ManifestManager(object):
     """Data structure for working with the manifest file"""
 
@@ -86,10 +72,8 @@ class ManifestManager(object):
                 break
             else:
                 key, val = line.split("=")
-                if key == "eta_avail_idx":
-                    self.eta_avail_idx = int(val)
-                else:
-                    assert False
+                assert key == "eta_avail_idx"
+                self.eta_avail_idx = int(val)
         else:
             assert False
 
@@ -278,7 +262,6 @@ class ExecutionScheduler(object):
         if on_first_invokation:
             self.manifest = ManifestManager.from_config(config)
             self.results = Results(self.config, self.platform)
-            self.results.write_to_file()  # scaffold results file
         else:
             self.manifest = ManifestManager()
             self.results = None
@@ -342,7 +325,7 @@ class ExecutionScheduler(object):
         self.platform.collect_starting_dmesg()
 
         # No executions, or all skipped
-        if self.manifest.total_num_execs == 0:
+        if self.manifest.num_execs_left == 0:
             info("Empty schedule!")
             return
 
@@ -350,7 +333,7 @@ class ExecutionScheduler(object):
 
         if self.on_first_invokation:
             info("Reboot prior to first execution")
-            self._reboot(self.manifest.total_num_execs)
+            self._reboot()
 
         # If we get here, this is a real run, with a benchmark about to
         # run. Results should never be in memory at this point (as they
@@ -402,7 +385,6 @@ class ExecutionScheduler(object):
 
         # We dump the json after each process exec so we can monitor the
         # JSON file mid-run. It is overwritten each time.
-        self.results.write_to_file()
         self.manifest.update(flag)
 
         # Run the user's post-process-execution commands with updated
@@ -420,8 +402,8 @@ class ExecutionScheduler(object):
             # We just found out roughly how long the session has left, mail out.
             msg = "ETA for current session now known: %s" % tfmt.finish_str
             util.log_and_mail(self.mailer, debug,
-                         "ETA for Current Session Available",
-                         msg, bypass_limiter=True)
+                              "ETA for Current Session Available",
+                              msg, bypass_limiter=True)
 
         info("{:<25s}: {} ({} from now)".format(
             "Estimated completion (whole session)", tfmt.finish_str,
@@ -438,6 +420,7 @@ class ExecutionScheduler(object):
         if self.platform.check_dmesg_for_changes():
             self.results.error_flag = True
 
+        assert self.manifest.num_execs_left >= 0
         if self.manifest.num_execs_left > 0:
             # print info about the next job
             benchmark, vm_name, variant = \
@@ -452,12 +435,9 @@ class ExecutionScheduler(object):
                 tfmt.delta_str))
 
             info("Reboot in preparation for next execution")
-            self._reboot(self.manifest.total_num_execs)
-
-        elif self.manifest.num_execs_left < 0:
-            assert False
-
-        elif self.manifest.num_execs_left ==  0:
+            self._reboot()
+        elif self.manifest.num_execs_left == 0:
+            self.results.write_to_file()
             self.platform.save_power()
 
             info("Done: Results dumped to %s" % self.config.results_filename())
@@ -475,26 +455,34 @@ class ExecutionScheduler(object):
             util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
                               bypass_limiter=True)
 
-    def _reboot(self, expected_reboots):
+    def _reboot(self):
+        """Dump results to disk and reboot"""
+
+        expected_reboots = self.manifest.total_num_execs
         self.results.reboots += 1
         debug("About to execute reboot: %g, expecting %g in total." %
               (self.results.reboots, expected_reboots))
-        # Dump the results file. This may already have been done, but we
-        # have changed self.nreboots, which needs to be written out.
-        # XXX can we prevent writing the results file twice? It is slow for big data.
+
+        # Dump the results file.
         assert self.results is not None
         self.results.write_to_file()
 
+        # Check for a boot loop
         if self.results.reboots > expected_reboots:
-            assert False # XXX unbreak
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
                         "INVARIANT num_reboots <= num_jobs violated. " +
                         "Krun was about to execute reboot number: %g. " +
                         "%g jobs have been completed, %g are left to go.") %
-                       (self.results.reboots, self.jobs_done, len(self)))
+                       (self.results.reboots, self.manifest.next_exec_idx,
+                        self.manifest.num_execs_left))
+        self._do_reboot()
+
+    def _do_reboot(self):
+        """Really do the reboot, separate for testing"""
+
         if not self.platform.hardware_reboots:
             warn("SIMULATED: reboot (--hardware-reboots is OFF)")
-            args =  sys.argv
+            args = sys.argv
             debug("Simulated reboot with args: " + " ".join(args))
             os.execv(args[0], args)  # replace myself
             assert False  # unreachable

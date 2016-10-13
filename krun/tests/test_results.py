@@ -1,11 +1,28 @@
 from krun.config import Config
 from krun.results import Results
 from krun.tests import BaseKrunTest
+from krun.util import FatalKrunError
 
 import os
 import pytest
 
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
+
+@pytest.fixture
+def fake_results(mock_platform):
+    results = Results(None, mock_platform)
+    mock_platform.num_cpus = 2
+    mock_platform.num_per_core_measurements = 2
+
+    results.eta_estimates = {"bench:vm:variant": [1., 1.]}
+    results.wallclock_times = {"bench:vm:variant": [[2., 2.], [2., 2.]]}
+    results.core_cycle_counts = {"bench:vm:variant":
+                                 [[[3., 3.], [3., 3.,]], [[3., 3.], [3., 3.]]]}
+    results.aperf_counts = {"bench:vm:variant":
+                            [[[4., 4.], [4., 4.,]], [[4., 4.], [4., 4.]]]}
+    results.mperf_counts = {"bench:vm:variant":
+                            [[[5., 5.], [5., 5.,]], [[5., 5.], [5., 5.]]]}
+    return results
 
 
 class TestResults(BaseKrunTest):
@@ -56,6 +73,8 @@ class TestResults(BaseKrunTest):
 
     def test_write_results_to_disk(self, mock_platform):
         config = Config("krun/tests/example.krun")
+        mock_platform.num_cpus = 4
+        mock_platform.num_per_core_measurements = mock_platform.num_cpus
         out_file = "krun/tests/example_results.json.bz2"
         results0 = Results(config, mock_platform)
         results0.audit = dict()
@@ -73,13 +92,43 @@ class TestResults(BaseKrunTest):
         # Clean-up generated file.
         os.unlink(out_file)
 
-    def test_integrity_check_results0001(self, mock_platform):
+    def test_integrity_check_results0001(self, fake_results):
         """ETAs don't exist for all jobs for which there is iterations data"""
 
-        config = Config(os.path.join(TEST_DIR, "broken_etas.krun"))
-        results = Results(config, mock_platform,
-                          results_file=config.results_filename())
+        fake_results.integrity_check()
 
-        from krun.util import FatalKrunError
+    def test_integrity_check_results0002(self, fake_results, caplog):
+        # remove some eta info
+        fake_results.eta_estimates["bench:vm:variant"].pop()
         with pytest.raises(FatalKrunError):
-            results.integrity_check()
+            fake_results.integrity_check()
+
+        expect = "inconsistent etas length: bench:vm:variant: 1 vs 2"
+        assert expect in caplog.text()
+
+    def test_integrity_check_results0003(self, fake_results, caplog):
+        # remove a per-core measurement
+        fake_results.core_cycle_counts["bench:vm:variant"].pop()
+        with pytest.raises(FatalKrunError):
+            fake_results.integrity_check()
+
+        expect = "inconsistent cycles length: bench:vm:variant: 1 vs 2"
+        assert expect in caplog.text()
+
+    def test_integrity_check_results0004(self, fake_results, caplog):
+        # remove a core from a per-core measurement
+        fake_results.core_cycle_counts["bench:vm:variant"][0].pop()
+        with pytest.raises(FatalKrunError):
+            fake_results.integrity_check()
+
+        expect = "wrong #cores in core_cycle_counts: bench:vm:variant[0]: 2 vs 1"
+        assert expect in caplog.text()
+
+    def test_integrity_check_results0005(self, fake_results, caplog):
+        # remove an in-proc iteration from a per-core measurement
+        fake_results.core_cycle_counts["bench:vm:variant"][0][0].pop()
+        with pytest.raises(FatalKrunError):
+            fake_results.integrity_check()
+
+        expect = "inconsistent #iters in core_cycle_counts: bench:vm:variant[0][0]. 1 vs 2"
+        assert expect in caplog.text()

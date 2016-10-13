@@ -252,8 +252,8 @@ def inner_main(mailer, on_first_invokation, config, args):
         platform.starting_temperatures = current.starting_temperatures
     else:
         # Touch the config file to update its mtime. This is required
-        # by when resuming a partially complete benchmark, in which case Krun
-        # uses the mtime to determine the name of the log file.
+        # by when resuming a partially complete benchmark session, in which
+        # case Krun uses the mtime to determine the name of the log file.
         _, _, rc = util.run_shell_cmd("touch " + args.filename)
         if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)

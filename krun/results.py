@@ -15,6 +15,7 @@ class Results(object):
 
     def __init__(self, config, platform, results_file=None):
         self.config = config
+        self.platform = platform
 
         # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
         self.wallclock_times = dict()  # wall-clock times
@@ -96,32 +97,63 @@ class Results(object):
     def integrity_check(self):
         """Check the results make sense"""
 
-        for key, execs in self.wallclock_times.iteritems():
-            if len(self.eta_estimates[key]) != len(execs):
-               fatal("inconsistent results: eta_estimates length")
+        num_cores = self.platform.num_per_core_measurements
+        for key in self.wallclock_times.iterkeys():
+            wct_len = len(self.wallclock_times[key])
+            eta_len = len(self.eta_estimates[key])
+            cycles_len = len(self.core_cycle_counts[key])
+            aperf_len = len(self.aperf_counts[key])
+            mperf_len = len(self.mperf_counts[key])
 
-            # Check the length of the in-process interations in results
-            # XXX Check all core counts are the same
-            # XXX Check all exec counts are the same
-            expect_len = None
-            for exec_idx in xrange(len(execs)):
-                one_exec = execs[exec_idx]
-                if expect_len is None:
-                    expect_len = len(one_exec)
+            if eta_len != wct_len:
+                fatal("inconsistent etas length: %s: %d vs %d" % (key, eta_len, wct_len))
 
-                #if not all([len(x) == expect_len for x in self.core_cycle_counts[key][exec_idx]]):
-                for core in self.core_cycle_counts[key][exec_idx]:
-                    if len(core) != expect_len:
-                        fatal("inconsistent results: core_cycle_counts length")
+            if cycles_len != wct_len:
+                fatal("inconsistent cycles length: %s: %d vs %d" % (key, cycles_len, wct_len))
 
+            if aperf_len != wct_len:
+                fatal("inconsistent aperf length: %s: %d vs %d" % (key, aperf_len, wct_len))
 
-                for core in self.aperf_counts[key][exec_idx]:
-                    if len(core) != expect_len:
-                        fatal("inconsistent results: aperf_counts length")
+            if mperf_len != wct_len:
+                fatal("inconsistent mperf length: %s: %d vs %d" % (key, mperf_len, wct_len))
 
-                for core in self.mperf_counts[key][exec_idx]:
-                    if len(core) != expect_len:
-                        fatal("inconsistent results: mperf_counts length")
+            # Check the length of the different measurements match and that the
+            # number of per-core measurements is consistent.
+            for exec_idx in xrange(len(self.wallclock_times[key])):
+                expect_num_iters = len(self.wallclock_times[key][exec_idx])
+
+                cycles_num_cores = len(self.core_cycle_counts[key][exec_idx])
+                if cycles_num_cores != num_cores:
+                    fatal("wrong #cores in core_cycle_counts: %s[%d]: %d vs %d" %
+                          (key, exec_idx, num_cores, cycles_num_cores))
+                for core_idx, core in enumerate(self.core_cycle_counts[key][exec_idx]):
+                    core_len = len(core)
+                    if core_len != expect_num_iters:
+                        fatal("inconsistent #iters in core_cycle_counts: "
+                              "%s[%d][%d]. %d vs %d" %
+                              (key, exec_idx, core_idx, core_len, expect_num_iters))
+
+                aperf_num_cores = len(self.aperf_counts[key][exec_idx])
+                if aperf_num_cores != num_cores:
+                    fatal("wrong #cores in aperf_counts: %s[%d]: %d vs %d" %
+                          (key, exec_idx, num_cores, aperf_num_cores))
+                for core_idx, core in enumerate(self.aperf_counts[key][exec_idx]):
+                    core_len = len(core)
+                    if core_len != expect_num_iters:
+                        fatal("inconsistent #iters in aperf_counts: "
+                              "%s[%d][%d]. %d vs %d" %
+                              (key, exec_idx, core_idx, core_len, expect_num_iters))
+
+                mperf_num_cores = len(self.mperf_counts[key][exec_idx])
+                if mperf_num_cores != num_cores:
+                    fatal("wrong #cores in mperf_counts: %s[%d]: %d vs %d" %
+                          (key, exec_idx, num_cores, mperf_num_cores))
+                for core_idx, core in enumerate(self.mperf_counts[key][exec_idx]):
+                    core_len = len(core)
+                    if core_len != expect_num_iters:
+                        fatal("inconsistent #iters in mperf_counts: "
+                              "%s[%d][%d]. %d vs %d" %
+                              (key, exec_idx, core_idx, core_len, expect_num_iters))
 
     def write_to_file(self):
         """Serialise object on disk."""

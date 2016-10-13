@@ -21,6 +21,7 @@ class MockPlatform(BasePlatform):
         self.mailer = mailer
         self.audit = dict()
         self.num_cpus = 0
+        self.num_per_core_measurements = 0
 
     def pin_process_args(self):
         return []

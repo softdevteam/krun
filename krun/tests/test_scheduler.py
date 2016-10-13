@@ -30,17 +30,21 @@ def type_check_results(results):
     assert type(results.error_flag) is bool
 
 
+def make_reboot_raise(monkeypatch):
+    def dummy_do_reboot(self):
+        from logging import info
+        info("SIMULATED: reboot via exception")
+        raise TestReboot()
+    monkeypatch.setattr(ExecutionScheduler, '_do_reboot', dummy_do_reboot)
+
+
 def run_with_captured_reboots(config, platform, monkeypatch):
     """Runs a session to completion using exceptions to capture reboots
 
     Returns the number of reboots and the last scheduler"""
 
-    def dummy_reboot(self, _):
-        from logging import info
-        info("SIMULATED: reboot via exception")
-        raise TestReboot()
-    monkeypatch.setattr(ExecutionScheduler, '_reboot', dummy_reboot)
-
+    make_reboot_raise(monkeypatch)
+    krun.util.assign_platform(config, platform)
     reboots = 0
     while True:
         on_first_invokation = True
@@ -60,26 +64,6 @@ def run_with_captured_reboots(config, platform, monkeypatch):
     return reboots, sched
 
 
-def make_scheduler_skipping_first_reboot(config, platform, monkeypatch):
-    """ Sets up a scheduler with just one exec job in, artificially skipping
-    the initial reboot"""
-
-    # make sure a reboot can not happen
-    def dummy_reboot(self, _):
-        assert False
-    monkeypatch.setattr(ExecutionScheduler, '_reboot', dummy_reboot)
-
-    # Run with on_first_invokation set to True, to emulate Krun running the
-    # first time in a session. Doing so will create a manifest file on disk.
-    ExecutionScheduler(config, platform.mailer, platform,
-                       dry_run=True, on_first_invokation=True)
-
-    # Emulate Krun coming up from reboot
-    sched = ExecutionScheduler(config, platform.mailer, platform,
-                               dry_run=True, on_first_invokation=False)
-    return sched
-
-
 class TestScheduler(BaseKrunTest):
     """Test the job scheduler."""
 
@@ -95,15 +79,11 @@ class TestScheduler(BaseKrunTest):
 
     def test_run_schedule0001(self, monkeypatch, mock_platform):
         config = Config(os.path.join(TEST_DIR, "one_exec.krun"))
-
-        sched = make_scheduler_skipping_first_reboot(config, mock_platform, monkeypatch)
-        krun.util.assign_platform(config, mock_platform)
-
-        assert sched.manifest.total_num_execs == 1
-        assert sched.manifest.num_execs_left == 1
-        sched.run()
+        n_reboots, sched = run_with_captured_reboots(config, mock_platform,
+                                                     monkeypatch)
         assert sched.manifest.total_num_execs == 1
         assert sched.manifest.num_execs_left == 0
+        assert n_reboots == 1
 
         results = sched.results
         type_check_results(results)
@@ -119,8 +99,6 @@ class TestScheduler(BaseKrunTest):
 
     def test_run_schedule0002(self, mock_platform, monkeypatch):
         config = Config(os.path.join(TEST_DIR, "example.krun"))
-
-        krun.util.assign_platform(config, mock_platform)
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
         assert n_reboots == 8  # 2 benchmarks, 2 vms, 2 execs
@@ -139,18 +117,13 @@ class TestScheduler(BaseKrunTest):
 
     def test_run_schedule0003(self, mock_platform, monkeypatch):
         config = Config(os.path.join(TEST_DIR, "example_all_skip.krun"))
-
-        krun.util.assign_platform(config, mock_platform)
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
         assert n_reboots == 0 # all skipped!
-        os.unlink(config.results_filename())
         os.unlink(ManifestManager.PATH)
 
     def test_run_schedule0004(self, mock_platform, monkeypatch):
         config = Config(os.path.join(TEST_DIR, "example_skip_1vm.krun"))
-
-        krun.util.assign_platform(config, mock_platform)
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
         assert n_reboots == 4  # 2 benchmarks, 2 vms, 2 execs, one VM skipped
@@ -178,8 +151,6 @@ class TestScheduler(BaseKrunTest):
         monkeypatch.setattr(ExecutionJob, 'run', dummy_execjob_run)
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
-
-        krun.util.assign_platform(config, mock_platform)
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
         assert n_reboots == 8  # 2 benchmarks, 2 vms, 2 execs
@@ -208,14 +179,13 @@ class TestScheduler(BaseKrunTest):
         config = Config(os.path.join(TEST_DIR, "one_exec.krun"))
         config.PRE_EXECUTION_CMDS = ["cmd1", "cmd2"]
         config.POST_EXECUTION_CMDS = ["cmd3", "cmd4"]
-        krun.util.assign_platform(config, mock_platform)
 
-        sched = make_scheduler_skipping_first_reboot(config, mock_platform,
+        n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
-        sched.run()
         os.unlink(config.results_filename())
         os.unlink(ManifestManager.PATH)
 
+        assert n_reboots == 1
         expect = ["cmd1", "cmd2", "cmd3", "cmd4"]
         assert cap_cmds == expect
 
@@ -224,10 +194,10 @@ class TestScheduler(BaseKrunTest):
         path = os.path.join(TEST_DIR, "shell-out")
         cmd = "echo ${KRUN_RESULTS_FILE}:${KRUN_LOG_FILE} > %s" % path
         config.POST_EXECUTION_CMDS = [cmd]
+
         krun.util.assign_platform(config, mock_platform)
-        sched = make_scheduler_skipping_first_reboot(config, mock_platform,
+        n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
-        sched.run()
         os.unlink(config.results_filename())
 
         with open(path) as fh:
@@ -236,6 +206,7 @@ class TestScheduler(BaseKrunTest):
         os.unlink(path)
         os.unlink(ManifestManager.PATH)
 
+        assert n_reboots == 1
         elems = got.split(":")
         assert elems[0].endswith(".json.bz2")
         assert elems[1].endswith(".log")
@@ -249,10 +220,10 @@ class TestScheduler(BaseKrunTest):
         # commands use shell syntax
         config.PRE_EXECUTION_CMDS = ["echo 'pre' > %s" % tmp_file]
         config.POST_EXECUTION_CMDS = ["echo 'post' >> %s" % tmp_file]
-        krun.util.assign_platform(config, mock_platform)
-        sched = make_scheduler_skipping_first_reboot(config, mock_platform,
+
+        n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
-        sched.run()
+        assert n_reboots == 1
         os.unlink(config.results_filename())
         os.unlink(ManifestManager.PATH)
 
@@ -261,3 +232,58 @@ class TestScheduler(BaseKrunTest):
 
         os.unlink(tmp_file)
         assert got == "pre\npost\n"
+
+    def test_boot_loop0001(self, monkeypatch, mock_platform, caplog):
+        make_reboot_raise(monkeypatch)
+
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+        krun.util.assign_platform(config, mock_platform)
+
+        sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
+                                   dry_run=True, on_first_invokation=True)
+
+        # Do the initial reboot
+        try:
+            sched.run()
+        except TestReboot:
+            pass
+        else:
+            assert False
+
+        # Simulate a boot loop
+        sched.results.reboots = 9999  # way too many
+        sched.results.write_to_file()
+
+        # Run the first process execution
+        sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
+                                   dry_run=True, on_first_invokation=False)
+        with pytest.raises(krun.util.FatalKrunError):
+            sched.run()
+
+        expect = ("HALTING now to prevent an infinite reboot loop: "
+                  "INVARIANT num_reboots <= num_jobs violated. Krun was about "
+                  "to execute reboot number: 10000. 1 jobs have been "
+                  "completed, 7 are left to go.")
+        assert expect in caplog.text()
+
+        os.unlink(config.results_filename())
+        os.unlink(ManifestManager.PATH)
+
+    def test_empty_schedule0001(self, mock_platform, monkeypatch, caplog):
+        config = Config(os.path.join(TEST_DIR, "one_exec.krun"))
+        n_reboots, sched = run_with_captured_reboots(config, mock_platform,
+                                                     monkeypatch)
+        assert n_reboots == 1
+
+        # The schedule is now empty, so this should not run anything
+        def dummy_run(self, mailer, dry_run=False):
+            assert False  # running a job wil cause a test failure
+        monkeypatch.setattr(ExecutionJob, "run", dummy_run)
+
+        sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
+                                   dry_run=True, on_first_invokation=False)
+        sched.run()
+        assert "Empty schedule!" in caplog.text()
+
+        os.unlink(config.results_filename())
+        os.unlink(ManifestManager.PATH)
