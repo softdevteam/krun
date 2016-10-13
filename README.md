@@ -28,6 +28,8 @@ using, e.g. on Linux you should be able to run `sudo`.
 
 ### Dependencies
 
+Krun runs Linux systems (running a 3.x kernel) and OpenBSD.
+
 You need to have the following installed:
 
   * Python2.7 (pre-installed in Debian)
@@ -36,7 +38,7 @@ You need to have the following installed:
   * cffi (`python-cffi` package in Debian)
   * cset (for pinning on Linux only. `cpuset` package in Debian)
   * virt-what (Linux only. `virt-what` package in Debian)
-  * rmsr (Linux only. https://github.com/softdevteam/rmsr)
+  * Linux kernel headers (Linux only. linux-headers-3... in Debian)
 
 If you want to benchmark Java, you will also need:
   * A Java SDK 7 (`openjdk-7-jdk` package in Debian)

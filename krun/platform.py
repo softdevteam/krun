@@ -22,6 +22,7 @@ from krun.vm_defs import BENCHMARK_USER
 NICE_PRIORITY = -20
 DIR = os.path.abspath(os.path.dirname(__file__))
 LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkrun")
+RMSR_DIR = os.path.join(DIR, "..", "rmsr")
 SYNC_SLEEP_SECS = 30  # time to wait for sync() to finish
 
 
@@ -764,6 +765,7 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
+        self._check_rmsr_loaded()
         if not self.no_tickless_check:
             self._check_tickless_kernel()
         self._check_aslr_disabled()
@@ -1005,6 +1007,24 @@ class LinuxPlatform(UnixLikePlatform):
                       "This should not happen, as this feature only applies to "
                       "pstate CPU scaling and Krun just determined that "
                       "the system is not!")
+
+    def _check_rmsr_loaded(self):
+        debug("Checking 'rmsr' module is loaded")
+        cmd = "lsmod"
+        stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=True)
+        if 'rmsr' in  stdout:
+            return
+        if (os.environ.get("TRAVIS", None) == "true"):
+            debug("Running on Travis-CI so not calling insmod.")
+            return
+        # rmsr git repo should have been cloned and compiled by 'make all'.
+        debug("Auto-loading 'rmsr' module.")
+        cmd = "%s rmmod msr" % self.change_user_cmd
+        stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+        module = os.path.join(RMSR_DIR, "rmsr.ko")
+        cmd = "%s insmod %s" % (self.change_user_cmd, module)
+        stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=True)
+        debug("rmsr loaded successfully.")
 
     def _check_aslr_disabled(self):
         debug("Checking ASLR is off")
