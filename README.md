@@ -261,16 +261,6 @@ $ python krun.py --dump-reboots examples/example_results.json.bz2
 8
 ```
 
-This directory (`examples/`) contains two Python scripts which show
-how to consume results in Krun format:
-
-  * `results2csv.py` which converts the results data to `.csv` files
-  * `chart_results.py` which shows a number of interactive charts
-
-`results2csv.py` only requires the Python standard library.
-`chart_results.py` requires maptplotlib and statsmodels v0.6 or higher.
-
-
 ## Testing your configurations
 
 It is often useful to test a configuration file, without actually
