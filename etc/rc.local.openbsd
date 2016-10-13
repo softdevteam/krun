@@ -26,5 +26,4 @@ PYTHON=/usr/local/bin/python2.7
 # Don't change anything below here
 
 env PATH=${PATH}:/usr/local/bin sudo -u ${INITIAL_USER} sh -c \
-    "cd ${EXPERIMENT_DIR} && ${PYTHON} ${KRUN_DIR}/krun.py \
-   --resume --reboot --started-by-init ${CONFIG_FILE}" &
+    "cd ${EXPERIMENT_DIR} && ${PYTHON} ${KRUN_DIR}/krun.py ${CONFIG_FILE}" &

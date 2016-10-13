@@ -264,22 +264,18 @@ class ExecutionJob(object):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config, mailer, platform,
-                 resume=False, reboot=False, dry_run=False,
-                 started_by_init=False):
+    def __init__(self, config, mailer, platform, dry_run=False,
+                 on_first_invokation=False):
         self.mailer = mailer
 
         self.config = config
         self.eta_avail = 0
         self.platform = platform
-        self.resume = resume
-        self.reboot = reboot
+        self.on_first_invokation = on_first_invokation
         self.dry_run = dry_run
-        self.started_by_init = started_by_init
+        self.log_path = self.config.log_filename(not self.on_first_invokation)
 
-        self.log_path = self.config.log_filename(self.resume)
-
-        if not self.resume:
+        if on_first_invokation:
             self.manifest = ManifestManager.from_config(config)
             self.results = Results(self.config, self.platform)
             self.results.write_to_file()  # scaffold results file
@@ -334,7 +330,7 @@ class ExecutionScheduler(object):
     def run(self):
         """Benchmark execution starts here"""
 
-        if not self.started_by_init:
+        if not self.on_first_invokation:
             util.log_and_mail(self.mailer, debug,
                               "Benchmarking started",
                               "Benchmarking started.\nLogging to %s" %
@@ -350,131 +346,134 @@ class ExecutionScheduler(object):
             info("Empty schedule!")
             return
 
-        while True:
-            self.platform.wait_for_temperature_sensors()
+        self.platform.wait_for_temperature_sensors()
 
-            if self.reboot and not self.resume:
-                info("Reboot prior to first execution")
-                self._reboot(self.manifest.total_num_execs)
+        if self.on_first_invokation:
+            info("Reboot prior to first execution")
+            self._reboot(self.manifest.total_num_execs)
 
-            bench, vm, variant = self.manifest.next_exec_key.split(":")
-            job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
-                               self.config.BENCHMARKS[bench])
+        # If we get here, this is a real run, with a benchmark about to
+        # run. Results should never be in memory at this point (as they
+        # grow over time, and can get very large, thus potentially
+        # influencing the benchmark)
+        assert self.results is None
 
-            # Run the user's pre-process-execution commands We can't put an ETA
-            # estimate in the evironment for the pre-commands as we have not
-            # (and should not) load the results file into memory yet.
-            util.run_shell_cmd_list(
-                self.config.PRE_EXECUTION_CMDS,
-            )
+        bench, vm, variant = self.manifest.next_exec_key.split(":")
+        job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
+                           self.config.BENCHMARKS[bench])
 
-            # Results should never be in memory while a benchmark runs because
-            # their size (which gets large) increases over the course of the
-            # benchmark session. If results were loaded, then each benchmark
-            # would be subject to a different memory layout, which is not fair.
-            assert self.results is None
+        # Run the user's pre-process-execution commands We can't put an ETA
+        # estimate in the evironment for the pre-commands as we have not
+        # (and should not) load the results file into memory yet.
+        util.run_shell_cmd_list(
+            self.config.PRE_EXECUTION_CMDS,
+        )
 
-            # We collect rough execution times separate from real results. The
-            # reason for this is that, even if a benchmark crashes it takes
-            # time and we need to account for this when making estimates. A
-            # crashing benchmark will give an empty list of iteration times,
-            # meaning we can't use 'raw_exec_result' below for estimates.
-            exec_start_time = time.time()
-            measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
-            exec_end_time = time.time()
+        # Results should never be in memory while a benchmark runs because
+        # their size (which gets large) increases over the course of the
+        # benchmark session. If results were loaded, then each benchmark
+        # would be subject to a different memory layout, which is not fair.
+        assert self.results is None
 
-            # Store results
-            self.results = Results(self.config, self.platform,
-                                   results_file=self.config.results_filename())
-            self.results.append_exec_measurements(job.key, measurements)
-            self.results.add_instr_data(job.key, instr_data)
+        # We collect rough execution times separate from real results. The
+        # reason for this is that, even if a benchmark crashes it takes
+        # time and we need to account for this when making estimates. A
+        # crashing benchmark will give an empty list of iteration times,
+        # meaning we can't use 'raw_exec_result' below for estimates.
+        exec_start_time = time.time()
+        measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
+        exec_end_time = time.time()
 
-            if flag == "E":
-                self.results.error_flag = True
+        # Store results
+        self.results = Results(self.config, self.platform,
+                               results_file=self.config.results_filename())
+        self.results.append_exec_measurements(job.key, measurements)
+        self.results.add_instr_data(job.key, instr_data)
 
-            eta_info = exec_end_time - exec_start_time
-            if self.reboot and not self.platform.fake_reboots:
-                # Add time taken to wait for system to come up if we are in
-                # reboot mode.
-                eta_info += STARTUP_WAIT_SECONDS
-            self.add_eta_info(job.key, eta_info)
+        if flag == "E":
+            self.results.error_flag = True
 
-            # We dump the json after each process exec so we can monitor the
-            # JSON file mid-run. It is overwritten each time.
-            self.results.write_to_file()
-            self.manifest.update(flag)
+        eta_info = exec_end_time - exec_start_time
+        if not self.platform.fake_reboots:
+            # Add time taken to wait for system to come up if we are in
+            # reboot mode.
+            eta_info += STARTUP_WAIT_SECONDS
+        self.add_eta_info(job.key, eta_info)
 
-            # Run the user's post-process-execution commands with updated
-            # ETA estimates. Important that this happens *after* dumping
-            # results, as the user is likely copying intermediate results to
-            # another host.
-            util.run_shell_cmd_list(
-                self.config.POST_EXECUTION_CMDS,
-                extra_env=self._make_pre_post_cmd_env()
-            )
+        # We dump the json after each process exec so we can monitor the
+        # JSON file mid-run. It is overwritten each time.
+        self.results.write_to_file()
+        self.manifest.update(flag)
 
-            tfmt = self.get_overall_time_estimate_formatter()
+        # Run the user's post-process-execution commands with updated
+        # ETA estimates. Important that this happens *after* dumping
+        # results, as the user is likely copying intermediate results to
+        # another host.
+        util.run_shell_cmd_list(
+            self.config.POST_EXECUTION_CMDS,
+            extra_env=self._make_pre_post_cmd_env()
+        )
 
-            if self.manifest.eta_avail_idx == self.manifest.next_exec_idx:
-                # We just found out roughly how long the session has left, mail out.
-                msg = "ETA for current session now known: %s" % tfmt.finish_str
-                util.log_and_mail(self.mailer, debug,
-                             "ETA for Current Session Available",
-                             msg, bypass_limiter=True)
+        tfmt = self.get_overall_time_estimate_formatter()
 
-            info("{:<25s}: {} ({} from now)".format(
-                "Estimated completion (whole session)", tfmt.finish_str,
+        if self.manifest.eta_avail_idx == self.manifest.next_exec_idx:
+            # We just found out roughly how long the session has left, mail out.
+            msg = "ETA for current session now known: %s" % tfmt.finish_str
+            util.log_and_mail(self.mailer, debug,
+                         "ETA for Current Session Available",
+                         msg, bypass_limiter=True)
+
+        info("{:<25s}: {} ({} from now)".format(
+            "Estimated completion (whole session)", tfmt.finish_str,
+            tfmt.delta_str))
+
+        info("%d executions left in scheduler queue" % self.manifest.num_execs_left)
+
+        if self.manifest.num_execs_left > 0 and \
+                self.manifest.eta_avail_idx > self.manifest.next_exec_idx:
+            info("Executions until ETA known: %s" %
+                 (self.manifest.eta_avail_idx -
+                  self.manifest.next_exec_idx))
+
+        if self.platform.check_dmesg_for_changes():
+            self.results.error_flag = True
+
+        if self.manifest.num_execs_left > 0:
+            # print info about the next job
+            benchmark, vm_name, variant = \
+                self.manifest.next_exec_key.split(":")
+            info("Next execution is '%s(%d)' (%s variant) under '%s'" %
+                 (benchmark, self.config.BENCHMARKS[benchmark], variant, vm_name))
+
+            tfmt = self.get_exec_estimate_time_formatter(job.key)
+            info("{:<35s}: {} ({} from now)".format(
+                "Estimated completion (next execution)",
+                tfmt.finish_str,
                 tfmt.delta_str))
 
-            info("%d executions left in scheduler queue" % self.manifest.num_execs_left)
+            info("Reboot in preparation for next execution")
+            self._reboot(self.manifest.total_num_execs)
 
-            if self.manifest.num_execs_left > 0 and \
-                    self.manifest.eta_avail_idx > self.manifest.next_exec_idx:
-                info("Executions until ETA known: %s" %
-                     (self.manifest.eta_avail_idx -
-                      self.manifest.next_exec_idx))
+        elif self.manifest.num_execs_left < 0:
+            assert False
 
-            if self.platform.check_dmesg_for_changes():
-                self.results.error_flag = True
+        elif self.manifest.num_execs_left ==  0:
+            self.platform.save_power()
 
-            if self.manifest.num_execs_left > 0:
-                # print info about the next job
-                benchmark, vm_name, variant = \
-                    self.manifest.next_exec_key.split(":")
-                info("Next execution is '%s(%d)' (%s variant) under '%s'" %
-                     (benchmark, self.config.BENCHMARKS[benchmark], variant, vm_name))
+            info("Done: Results dumped to %s" % self.config.results_filename())
+            err_msg = "Errors/warnings occurred -- read the log!"
+            if self.results.error_flag:
+                warn(err_msg)
 
-                tfmt = self.get_exec_estimate_time_formatter(job.key)
-                info("{:<35s}: {} ({} from now)".format(
-                    "Estimated completion (next execution)",
-                    tfmt.finish_str,
-                    tfmt.delta_str))
-            elif self.manifest.num_execs_left == 0:
-                break  # done
-            else:
-                assert False
+            msg = "Session completed. Log file at: '%s'" % (self.log_path)
 
-            if self.reboot and self.manifest.num_execs_left > 0:
-                info("Reboot in preparation for next execution")
-                self._reboot(self.manifest.total_num_execs)
+            if self.results.error_flag:
+                msg += "\n\n%s" % err_msg
 
-        self.platform.save_power()
-
-        info("Done: Results dumped to %s" % self.config.results_filename())
-        err_msg = "Errors/warnings occurred -- read the log!"
-        if self.results.error_flag:
-            warn(err_msg)
-
-        msg = "Session completed. Log file at: '%s'" % (self.log_path)
-
-        if self.results.error_flag:
-            msg += "\n\n%s" % err_msg
-
-        if self.reboot:
             msg += "\n\nDon't forget to disable Krun at boot."
 
-        util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
-                          bypass_limiter=True)
+            util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
+                              bypass_limiter=True)
 
     def _reboot(self, expected_reboots):
         self.results.reboots += 1
@@ -496,8 +495,6 @@ class ExecutionScheduler(object):
         if self.platform.fake_reboots:
             warn("SIMULATED: reboot (--fake-reboots)")
             args =  sys.argv
-            if not self.started_by_init:
-                args.extend(["--resume", "--started-by-init"])
             debug("Simulated reboot with args: " + " ".join(args))
             os.execv(args[0], args)  # replace myself
             assert False  # unreachable

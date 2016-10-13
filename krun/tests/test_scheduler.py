@@ -1,14 +1,11 @@
 from krun.audit import Audit
 from krun.config import Config
-from krun.results import Results
 from krun.scheduler import (mean, ExecutionJob, ExecutionScheduler,
-                            JobMissingError, ManifestManager,
-                            EMPTY_MEASUREMENTS)
+                            ManifestManager, EMPTY_MEASUREMENTS)
 from krun.tests import BaseKrunTest
 import krun.util
-from krun.tests import no_sleep
 
-import os, pytest, subprocess
+import os, pytest
 from krun.tests import TEST_DIR
 
 
@@ -46,13 +43,12 @@ def run_with_captured_reboots(config, platform, monkeypatch):
 
     reboots = 0
     while True:
-        resume = False
+        on_first_invokation = True
         if reboots > 0:
-            resume = True
+            on_first_invokation = False
 
-        sched = ExecutionScheduler(config, platform.mailer, platform,
-                                   resume=resume, reboot=True, dry_run=True,
-                                   started_by_init=False)
+        sched = ExecutionScheduler(config, platform.mailer, platform, dry_run=True,
+                                   on_first_invokation=on_first_invokation)
         try:
             sched.run()
         except TestReboot:
@@ -73,16 +69,14 @@ def make_scheduler_skipping_first_reboot(config, platform, monkeypatch):
         assert False
     monkeypatch.setattr(ExecutionScheduler, '_reboot', dummy_reboot)
 
-    # Run with resume set False, thus emulating Krun running the first time
-    # in a session. Doing so will make a manifest file.
+    # Run with on_first_invokation set to True, to emulate Krun running the
+    # first time in a session. Doing so will create a manifest file on disk.
     ExecutionScheduler(config, platform.mailer, platform,
-                       resume=False, reboot=True, dry_run=True,
-                       started_by_init=False)
+                       dry_run=True, on_first_invokation=True)
 
-    # Run with resume set True, thus emulating Krun coming up from reboot
+    # Emulate Krun coming up from reboot
     sched = ExecutionScheduler(config, platform.mailer, platform,
-                               resume=True, reboot=True, dry_run=True,
-                               started_by_init=False)
+                               dry_run=True, on_first_invokation=False)
     return sched
 
 

@@ -6,7 +6,7 @@ Benchmark, running many fresh processes.
 usage: runner.py <config_file.krun>
 """
 
-import argparse, json, logging, os, sys
+import argparse, logging, os, sys
 from logging import debug, info, warn
 import locale
 
@@ -14,7 +14,7 @@ import krun.util as util
 from krun.config import Config
 from krun.platform import detect_platform
 from krun.results import Results
-from krun.scheduler import ExecutionScheduler
+from krun.scheduler import ExecutionScheduler, ManifestManager
 from krun import ABS_TIME_FORMAT
 from krun.mail import Mailer
 
@@ -77,18 +77,6 @@ def create_arg_parser():
     """
     parser = argparse.ArgumentParser(description="Benchmark, running many fresh processes.")
 
-    # Upper-case '-I' so as to make it harder to use by accident.
-    # Real users should never use -I. Only the OS init system.
-    parser.add_argument("--started-by-init", "-I", action="store_true",
-                        default=False, dest="started_by_init", required=False,
-                        help="Krun is being invoked by OS init system")
-    parser.add_argument("--resume", "-r", action="store_true", default=False,
-                        dest="resume", required=False,
-                        help=("Resume benchmarking if interrupted " +
-                              "and append to an existing results file"))
-    parser.add_argument("--reboot", "-b", action="store_true", default=False,
-                        dest="reboot", required=False,
-                        help="Reboot before each benchmark is executed")
     parser.add_argument("--debug", "-g", action="store", default='INFO',
                         dest="debug_level", required=False,
                         help=("Debug level used by logger. Must be one of: " +
@@ -189,7 +177,10 @@ def main(parser):
         util.print_session_info(config)
         return
 
-    attach_log_file(config, args.resume)
+    on_first_invokation = not (os.path.isfile(ManifestManager.PATH) and
+                               os.stat(ManifestManager.PATH).st_size > 0)
+
+    attach_log_file(config, not on_first_invokation)
     debug("Krun invoked with arguments: %s" % sys.argv)
 
     mail_recipients = config.MAIL_TO
@@ -199,7 +190,7 @@ def main(parser):
     mailer = Mailer(mail_recipients, max_mails=config.MAX_MAILS)
 
     try:
-        inner_main(mailer, config, args)
+        inner_main(mailer, on_first_invokation, config, args)
     except util.FatalKrunError as e:
         subject = "Fatal Krun Exception"
         mailer.send(subject, e.args[0], bypass_limiter=True)
@@ -207,7 +198,7 @@ def main(parser):
         raise e
 
 
-def inner_main(mailer, config, args):
+def inner_main(mailer, on_first_invokation, config, args):
     out_file = config.results_filename()
     out_file_exists = os.path.exists(out_file)
 
@@ -215,19 +206,12 @@ def inner_main(mailer, config, args):
         util.fatal(
             "Output file '%s' exists but is not a regular file" % out_file)
 
-    if out_file_exists and not args.resume:
-        util.fatal("Output file '%s' already exists. "
-                   "Either resume the session (--resume) or "
-                   "move the file away" % out_file)
+    if out_file_exists and on_first_invokation:
+        util.fatal("Output results file '%s' already exists. "
+                   "Move the file away before running Krun." % out_file)
 
-    if not out_file_exists and args.resume:
+    if not out_file_exists and not on_first_invokation:
         util.fatal("No results file to resume. Expected '%s'" % out_file)
-
-    if args.started_by_init and not args.reboot:
-        util.fatal("--started-by-init makes no sense without --reboot")
-
-    if args.started_by_init and not args.resume:
-        util.fatal("--started-by-init makes no sense without --resume")
 
     # Initialise platform instance and assign to VM defs.
     # This needs to be done early, so VM sanity checks can run.
@@ -256,7 +240,7 @@ def inner_main(mailer, config, args):
                  "identical to the one on which the last results were " +
                  "gathered, which is not the case.")
     current = None
-    if args.resume:
+    if not on_first_invokation:
         # output file must exist, due to check above
         assert(out_file_exists)
         current = Results(config, platform, results_file=out_file)
@@ -268,8 +252,8 @@ def inner_main(mailer, config, args):
         platform.starting_temperatures = current.starting_temperatures
     else:
         # Touch the config file to update its mtime. This is required
-        # by resume-mode which uses the mtime to determine the name of
-        # the log file, should this benchmark be resumed.
+        # by when resuming a partially complete benchmark, in which case Krun
+        # uses the mtime to determine the name of the log file.
         _, _, rc = util.run_shell_cmd("touch " + args.filename)
         if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)
@@ -291,10 +275,8 @@ def inner_main(mailer, config, args):
     sched = ExecutionScheduler(config,
                                mailer,
                                platform,
-                               resume=args.resume,
-                               reboot=args.reboot,
                                dry_run=args.dry_run,
-                               started_by_init=args.started_by_init)
+                               on_first_invokation=on_first_invokation)
     sched.run()
 
 
