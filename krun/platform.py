@@ -40,7 +40,7 @@ class BasePlatform(object):
         self.no_user_change = False
         self.no_pstate_check = False
         self.no_tickless_check = False
-        self.fake_reboots = False
+        self.hardware_reboots = False
         self.mailer = mailer
         self.audit = OrderedDict()
         self.config = config

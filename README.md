@@ -214,7 +214,7 @@ The structure of the JSON results is as follows:
     },
     'reboots': N, # An int containing the number of reboots that have
                   # already taken place. Only used when Krun is started
-                  # without --fake-reboots. This field used to check that the
+                  # with --hardware-reboots. This field used to check that the
                   # benchmarking machine has rebooted the correct number
                   # of times. It can be safely ignored by users.
     'starting_temperatures': [ ... ], # Temperatures recorded at the beginning
@@ -354,7 +354,8 @@ easier.
 
   * `--no-pstate-check`: Do not crash out if Intel P-states are not disabled.
 
-  * `--fake-reboots`: Restart Krun in-place (using execv) instead of rebooting.
+  * `--hardware-reboots`: Restart physical hardware before each benchmark
+    execution.
 
 Note that you should not collect results intended for publication with
 development switches turned on.

@@ -125,9 +125,9 @@ def create_arg_parser():
     parser.add_argument("--no-tickless-check", action="store_true", default=False,
                         help=("Don't check if the Linux kernel is tickless. "
                               "Linux kernel. For development only."))
-    parser.add_argument("--fake-reboots", action="store_true", default=False,
-                        help=("Restart Krun in place instead of rebooting. "
-                              "For development only."))
+    parser.add_argument("--hardware-reboots", action="store_true", default=False,
+                        help=("Reboot physical hardware before each benchmark "
+                              "execution. Off by default."))
 
     filename_help = ("Krun configuration or results file. FILENAME should" +
                      " be a configuration file when running benchmarks " +
@@ -221,7 +221,7 @@ def inner_main(mailer, on_first_invokation, config, args):
     platform.no_user_change = args.no_user_change
     platform.no_tickless_check = args.no_tickless_check
     platform.no_pstate_check = args.no_pstate_check
-    platform.fake_reboots = args.fake_reboots
+    platform.hardware_reboots = args.hardware_reboots
 
     debug("Checking platform preliminaries")
     platform.check_preliminaries()

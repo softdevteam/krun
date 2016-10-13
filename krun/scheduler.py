@@ -394,9 +394,9 @@ class ExecutionScheduler(object):
             self.results.error_flag = True
 
         eta_info = exec_end_time - exec_start_time
-        if not self.platform.fake_reboots:
+        if self.platform.hardware_reboots:
             # Add time taken to wait for system to come up if we are in
-            # reboot mode.
+            # hardware-reboot mode.
             eta_info += STARTUP_WAIT_SECONDS
         self.add_eta_info(job.key, eta_info)
 
@@ -492,8 +492,8 @@ class ExecutionScheduler(object):
                         "Krun was about to execute reboot number: %g. " +
                         "%g jobs have been completed, %g are left to go.") %
                        (self.results.reboots, self.jobs_done, len(self)))
-        if self.platform.fake_reboots:
-            warn("SIMULATED: reboot (--fake-reboots)")
+        if not self.platform.hardware_reboots:
+            warn("SIMULATED: reboot (--hardware-reboots is OFF)")
             args =  sys.argv
             debug("Simulated reboot with args: " + " ".join(args))
             os.execv(args[0], args)  # replace myself
