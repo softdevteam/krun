@@ -249,17 +249,17 @@ class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
     def __init__(self, config, mailer, platform, dry_run=False,
-                 on_first_invokation=False):
+                 on_first_invocation=False):
         self.mailer = mailer
 
         self.config = config
         self.eta_avail = 0
         self.platform = platform
-        self.on_first_invokation = on_first_invokation
+        self.on_first_invocation = on_first_invocation
         self.dry_run = dry_run
-        self.log_path = self.config.log_filename(not self.on_first_invokation)
+        self.log_path = self.config.log_filename(not self.on_first_invocation)
 
-        if on_first_invokation:
+        if on_first_invocation:
             self.manifest = ManifestManager.from_config(config)
             self.results = Results(self.config, self.platform)
         else:
@@ -313,7 +313,7 @@ class ExecutionScheduler(object):
     def run(self):
         """Benchmark execution starts here"""
 
-        if not self.on_first_invokation:
+        if not self.on_first_invocation:
             util.log_and_mail(self.mailer, debug,
                               "Benchmarking started",
                               "Benchmarking started.\nLogging to %s" %
@@ -331,7 +331,7 @@ class ExecutionScheduler(object):
 
         self.platform.wait_for_temperature_sensors()
 
-        if self.on_first_invokation:
+        if self.on_first_invocation:
             info("Reboot prior to first execution")
             self._reboot()
 

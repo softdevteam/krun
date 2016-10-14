@@ -177,10 +177,10 @@ def main(parser):
         util.print_session_info(config)
         return
 
-    on_first_invokation = not (os.path.isfile(ManifestManager.PATH) and
+    on_first_invocation = not (os.path.isfile(ManifestManager.PATH) and
                                os.stat(ManifestManager.PATH).st_size > 0)
 
-    attach_log_file(config, not on_first_invokation)
+    attach_log_file(config, not on_first_invocation)
     debug("Krun invoked with arguments: %s" % sys.argv)
 
     mail_recipients = config.MAIL_TO
@@ -190,7 +190,7 @@ def main(parser):
     mailer = Mailer(mail_recipients, max_mails=config.MAX_MAILS)
 
     try:
-        inner_main(mailer, on_first_invokation, config, args)
+        inner_main(mailer, on_first_invocation, config, args)
     except util.FatalKrunError as e:
         subject = "Fatal Krun Exception"
         mailer.send(subject, e.args[0], bypass_limiter=True)
@@ -198,7 +198,7 @@ def main(parser):
         raise e
 
 
-def inner_main(mailer, on_first_invokation, config, args):
+def inner_main(mailer, on_first_invocation, config, args):
     out_file = config.results_filename()
     out_file_exists = os.path.exists(out_file)
 
@@ -206,11 +206,11 @@ def inner_main(mailer, on_first_invokation, config, args):
         util.fatal(
             "Output file '%s' exists but is not a regular file" % out_file)
 
-    if out_file_exists and on_first_invokation:
+    if out_file_exists and on_first_invocation:
         util.fatal("Output results file '%s' already exists. "
                    "Move the file away before running Krun." % out_file)
 
-    if not out_file_exists and not on_first_invokation:
+    if not out_file_exists and not on_first_invocation:
         util.fatal("No results file to resume. Expected '%s'" % out_file)
 
     # Initialise platform instance and assign to VM defs.
@@ -240,7 +240,7 @@ def inner_main(mailer, on_first_invokation, config, args):
                  "identical to the one on which the last results were " +
                  "gathered, which is not the case.")
     current = None
-    if not on_first_invokation:
+    if not on_first_invocation:
         # output file must exist, due to check above
         assert(out_file_exists)
         current = Results(config, platform, results_file=out_file)
@@ -276,7 +276,7 @@ def inner_main(mailer, on_first_invokation, config, args):
                                mailer,
                                platform,
                                dry_run=args.dry_run,
-                               on_first_invokation=on_first_invokation)
+                               on_first_invocation=on_first_invocation)
     sched.run()
 
 

@@ -47,12 +47,12 @@ def run_with_captured_reboots(config, platform, monkeypatch):
     krun.util.assign_platform(config, platform)
     reboots = 0
     while True:
-        on_first_invokation = True
+        on_first_invocation = True
         if reboots > 0:
-            on_first_invokation = False
+            on_first_invocation = False
 
         sched = ExecutionScheduler(config, platform.mailer, platform, dry_run=True,
-                                   on_first_invokation=on_first_invokation)
+                                   on_first_invocation=on_first_invocation)
         try:
             sched.run()
         except TestReboot:
@@ -240,7 +240,7 @@ class TestScheduler(BaseKrunTest):
         krun.util.assign_platform(config, mock_platform)
 
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
-                                   dry_run=True, on_first_invokation=True)
+                                   dry_run=True, on_first_invocation=True)
 
         # Do the initial reboot
         try:
@@ -256,7 +256,7 @@ class TestScheduler(BaseKrunTest):
 
         # Run the first process execution
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
-                                   dry_run=True, on_first_invokation=False)
+                                   dry_run=True, on_first_invocation=False)
         with pytest.raises(krun.util.FatalKrunError):
             sched.run()
 
@@ -281,7 +281,7 @@ class TestScheduler(BaseKrunTest):
         monkeypatch.setattr(ExecutionJob, "run", dummy_run)
 
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
-                                   dry_run=True, on_first_invokation=False)
+                                   dry_run=True, on_first_invocation=False)
         sched.run()
         assert "Empty schedule!" in caplog.text()
 
