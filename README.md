@@ -2,7 +2,7 @@
 
 Krun is a framework for running software benchmarking experiments.
 
-**Krun uses sudo to elevate priveleges! Please read these instructions in
+**Krun uses sudo to elevate privileges! Please read these instructions in
 full.**
 
 The `examples/` directory contains a simple experiment using Krun.
@@ -214,7 +214,7 @@ The structure of the JSON results is as follows:
     },
     'reboots': N, # An int containing the number of reboots that have
                   # already taken place. Only used when Krun is started
-                  # with --reboot. This field used to check that the
+                  # with --hardware-reboots. This field used to check that the
                   # benchmarking machine has rebooted the correct number
                   # of times. It can be safely ignored by users.
     'starting_temperatures': [ ... ], # Temperatures recorded at the beginning
@@ -277,45 +277,6 @@ switches.
 Another switch, `--info`, reports various statistics about the setup described in the
 specified config file, such as the total number of process executions and which
 benchmark keys will be skipped etc.
-
-## Running in reboot and resume modes
-
-Krun can resume an interrupted benchmark by passing in the `--resume`
-flag.
-This will read and re-use results from previous process executions of your
-benchmarks, and run the remaining process executions detailed in your configuration
-file.
-
-```bash
-$ ../krun.py --resume example.krun
-```
-
-You may wish to use this facility to reboot after every process execution.
-To do this, you can pass in the `--reboot` flag when you start Krun:
-
-```bash
-$ ../krun.py --reboot example.krun
-```
-
-You will also need to ensure that Krun is restarted once the machine has
-rebooted.
-You can do this by hand, or by using the boot configuration provided by
-your OS.
-A boot configuration file should pass in the `--reboot`, `--resume` and
-`started-by-init` flags to Krun.
-This will suppress some emails that Krun sends out.
-
-The `krun/etc` directory contains an `rc.local.linux` file which goes
-with the examples here.
-This file is compatible with some Linux machines.
-
-### Testing a benchmark run with `--reboot`
-
-If you need to test a benchmark configuration with `--reboot`, you can
-still use the `--dry-run` flag.
-In a dry run, Krun will not reboot your machine (it will simulate
-rebooting by restarting Krun automatically) and will not pause to
-wait for your network interface to come up.
 
 ## Creating your own experiments
 
@@ -393,35 +354,11 @@ easier.
 
   * `--no-pstate-check`: Do not crash out if Intel P-states are not disabled.
 
-  * `--fake-reboots`: Restart Krun in-place (using execv) instead of rebooting.
+  * `--hardware-reboots`: Restart physical hardware before each benchmark
+    execution.
 
 Note that you should not collect results intended for publication with
 development switches turned on.
-
-## Re-running Part of your Experiment
-
-Sometimes it is necessary to re-run a subset of your experiment. For example,
-if after completing an experiment, you find that one of your VMs was
-miscompiled, you may want to re-run all benchmarks for the troublesome VM only.
-Of course, under ideal circumstances, you would collect all results in one go.
-
-You can use the `--strip-results` mode to strip results from your result file.
-Once stripped, you can run with `--resume` to re-collect the results you
-stripped.
-
-The switch accepts a "key-spec". All process executions matching the key-spec
-are removed. A key-spec is of the form 'benchmark:vm:variant". Any of the three
-fields can also be a star '*' to indicate a wildcard. E.g. `--strip-results
-'*:CPython:*'` will remove all results for the 'CPython' VM. If ou use a
-wildcard, be sure to quote the argument so the shell does not expand the stars.
-
-Note also that the stars are not true wildcards. E.g. the key-spec '*:CPy*:*'
-will not match 'mybenchmark:CPython:myvariant'. Fields are either a value or
-literally '*'.
-
-Once you have stripped results, if you ran an experiment in reboot mode you
-will need to reboot manually to re-run the stripped results (with rc.local set
-up correctly).
 
 ## Security Notes
 
@@ -434,7 +371,7 @@ Sudo is used to:
  * Switch users.
  * Change the CPU speed.
  * Set the perf sample rate (Linux only)
- * Automatically reboot the system.
+ * Automatically reboot the system (`--hardware-reboots` only).
  * Set process priorities.
  * Create cgroup shields (Linux only, off by default)
  * Detect virtualised hosts.

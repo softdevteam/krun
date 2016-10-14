@@ -4,10 +4,11 @@ from krun.util import (format_raw_exec_results,
                        run_shell_cmd, run_shell_cmd_bench,
                        get_git_version,
                        ExecutionFailed, get_session_info,
-                       run_shell_cmd_list, FatalKrunError, strip_results)
+                       run_shell_cmd_list, FatalKrunError)
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
+from krun.scheduler import ManifestManager
 
 import json
 import logging
@@ -162,6 +163,7 @@ def test_get_session_info0001():
         "nbody:CPython:default-python",
     ])
     assert info["non_skipped_keys"] == expect_non_skipped_keys
+    os.unlink(ManifestManager.PATH)
 
 
 def test_get_session_info0002():
@@ -241,6 +243,8 @@ def test_get_session_info0002():
 
     # There should be no overlap in the used and skipped keys
     assert info["skipped_keys"].intersection(info["non_skipped_keys"]) == set()
+
+    os.unlink(ManifestManager.PATH)
 
 
 def test_run_shell_cmd_list0001():
@@ -328,38 +332,3 @@ def to_strip():
     results = Results(config, platform,
                       results_file=config.results_filename())
     return results
-
-
-def test_strip_results0001(to_strip):
-    key_spec = "dummy:CPython:default-python"
-    n_removed = to_strip.strip_results(key_spec)
-    assert n_removed == 1
-    assert to_strip.reboots == 3
-
-
-def test_strip_results0002(to_strip):
-    key_spec = "dummy:*:*"
-    n_removed = to_strip.strip_results(key_spec)
-    assert n_removed == 2
-    assert to_strip.reboots == 2
-
-
-def test_strip_results0003(to_strip):
-    key_spec = "*:*:*"
-    n_removed = to_strip.strip_results(key_spec)
-    assert n_removed == 4
-    assert to_strip.reboots == 0
-
-
-def test_strip_results0004(to_strip):
-    key_spec = "j:k:l"  # nonexistent key
-    n_removed = to_strip.strip_results(key_spec)
-    assert n_removed == 0
-    assert to_strip.reboots == 4
-
-
-def test_strip_results0005(to_strip, caplog):
-    key_spec = "jkl"  # malformed key
-    with pytest.raises(FatalKrunError):
-        to_strip.strip_results(key_spec)
-    assert "malformed key" in caplog.text()
