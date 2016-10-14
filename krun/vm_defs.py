@@ -4,6 +4,7 @@ import select
 import fnmatch
 import re
 import json
+import getpass
 from abc import ABCMeta, abstractmethod
 
 from logging import info, debug, warn
@@ -201,6 +202,9 @@ class BaseVMDef(object):
 
         if self.platform.no_user_change:
             warn("Not changing user (--no-change-user)")
+            # We still have to sudo back to the user who ran krun, as we raised
+            # privs to root in order to nice the process etc.
+            wrapper_args += self.platform.change_user_args(getpass.getuser())
         else:
             wrapper_args += self.platform.change_user_args(BENCHMARK_USER)
 
