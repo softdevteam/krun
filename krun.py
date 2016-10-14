@@ -192,9 +192,9 @@ def main(parser):
     try:
         inner_main(mailer, on_first_invocation, config, args)
     except util.FatalKrunError as e:
+        util.run_shell_cmd_list(config.POST_EXECUTION_CMDS)
         subject = "Fatal Krun Exception"
         mailer.send(subject, e.args[0], bypass_limiter=True)
-        util.run_shell_cmd_list(config.POST_EXECUTION_CMDS)
         raise e
 
 
