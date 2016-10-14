@@ -360,30 +360,6 @@ easier.
 Note that you should not collect results intended for publication with
 development switches turned on.
 
-## Re-running Part of your Experiment
-
-Sometimes it is necessary to re-run a subset of your experiment. For example,
-if after completing an experiment, you find that one of your VMs was
-miscompiled, you may want to re-run all benchmarks for the troublesome VM only.
-Of course, under ideal circumstances, you would collect all results in one go.
-
-You can use the `--strip-results` mode to strip results from your result file.
-Once stripped, you can re-run to re-collect the results you stripped.
-
-The switch accepts a "key-spec". All process executions matching the key-spec
-are removed. A key-spec is of the form 'benchmark:vm:variant". Any of the three
-fields can also be a star '*' to indicate a wildcard. E.g. `--strip-results
-'*:CPython:*'` will remove all results for the 'CPython' VM. If ou use a
-wildcard, be sure to quote the argument so the shell does not expand the stars.
-
-Note also that the stars are not true wildcards. E.g. the key-spec '*:CPy*:*'
-will not match 'mybenchmark:CPython:myvariant'. Fields are either a value or
-literally '*'.
-
-Once you have stripped results, if you ran an experiment in reboot mode you
-will need to reboot manually to re-run the stripped results (with rc.local set
-up correctly).
-
 ## Security Notes
 
 Krun is not intended to be run on a secure multi-user system, as it uses sudo
