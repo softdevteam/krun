@@ -1,7 +1,7 @@
 from krun.audit import Audit
 from krun.config import Config
 from krun.scheduler import (mean, ExecutionJob, ExecutionScheduler,
-                            ManifestManager, EMPTY_MEASUREMENTS)
+                            ManifestManager)
 from krun.tests import BaseKrunTest
 import krun.util
 
@@ -147,7 +147,7 @@ class TestScheduler(BaseKrunTest):
     def test_run_schedule0005(self, mock_platform, monkeypatch):
 
         def dummy_execjob_run(self, mailer, dryrun=False):
-            return EMPTY_MEASUREMENTS, {}, "E"  # pretend jobs fail
+            return self.empty_measurements, {}, "E"  # pretend jobs fail
         monkeypatch.setattr(ExecutionJob, 'run', dummy_execjob_run)
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))

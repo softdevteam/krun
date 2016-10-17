@@ -4,6 +4,7 @@ import re
 import select
 from subprocess import Popen, PIPE
 from logging import error, debug, info
+from bz2 import BZ2File
 
 FLOAT_FORMAT = ".6f"
 
@@ -332,3 +333,28 @@ def get_git_version():
         run_shell_cmd("sh -c 'cd %s && git rev-parse --verify HEAD'" % DIR)
 
     return out.strip()  # returns the hash
+
+
+def get_instr_json_dir(config):
+    assert config.filename.endswith(".krun")
+    config_base = config.filename[:-5]
+    return os.path.join(os.getcwd(), "%s_instr_data" % config_base)
+
+
+def dump_instr_json(key, exec_num, config, instr_data):
+    """Write per-execution instrumentation data to a separate JSON file"""
+
+    instr_json_dir = get_instr_json_dir(config)
+    if not os.path.exists(instr_json_dir):
+        os.mkdir(instr_json_dir)
+
+    filename = "%s__%s.json.bz2" % (key.replace(":", "_"), exec_num)
+    path = os.path.join(instr_json_dir, filename)
+
+    # The directory was checked to be non-existant when the benchmark session
+    # started, so it follows that the instrumentation JSON file (each of which
+    # is written at most once) should not exist either. If it does, the user
+    # did something strange.
+    assert not os.path.exists(path)
+    with BZ2File(path, "w") as fh:
+        fh.write(json.dumps(instr_data))

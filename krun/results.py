@@ -29,10 +29,6 @@ class Results(object):
 
         self.reboots = 0
 
-        # "bmark:vm:variant" ->
-        #     (instrumentation name -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...])
-        self.instr_data = {}
-
         # Record how long execs are taking so we can give the user a rough ETA.
         # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
         self.eta_estimates = dict()
@@ -78,7 +74,6 @@ class Results(object):
                     self.core_cycle_counts[key] = []
                     self.aperf_counts[key] = []
                     self.mperf_counts[key] = []
-                    self.instr_data[key] = defaultdict(list)
                     self.eta_estimates[key] = []
 
     def read_from_file(self, results_file):
@@ -167,7 +162,6 @@ class Results(object):
             "core_cycle_counts": self.core_cycle_counts,
             "aperf_counts": self.aperf_counts,
             "mperf_counts": self.mperf_counts,
-            "instr_data": self.instr_data,
             "audit": self.audit.audit,
             "reboots": self.reboots,
             "starting_temperatures": self.starting_temperatures,
@@ -177,12 +171,6 @@ class Results(object):
         with bz2.BZ2File(self.filename, "w") as f:
             f.write(json.dumps(to_write,
                                indent=1, sort_keys=True, encoding='utf-8'))
-
-    def add_instr_data(self, bench_key, instr_dct):
-        """Record instrumentation data into results object."""
-
-        for instr_key, v in instr_dct.iteritems():
-            self.instr_data[bench_key][instr_key].append(v)
 
     def jobs_completed(self, key):
         """Return number of executions for which we have data for a given
