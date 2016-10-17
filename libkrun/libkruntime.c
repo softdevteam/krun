@@ -184,6 +184,11 @@ Java_IterationsRunner_JNI_1krun_1get_1wallclock(JNIEnv *e, jclass c,
     return krun_get_wallclock(mdata_idx);
 }
 
+JNIEXPORT jdouble JNICALL
+Java_IterationsRunner_JNI_1krun_1clock_1gettime_1monotonic(JNIEnv *e, jclass c) {
+    return krun_clock_gettime_monotonic();
+}
+
 JNIEXPORT jlong JNICALL
 Java_IterationsRunner_JNI_1krun_1get_1core_1cycles(JNIEnv *e, jclass c,
         int mdata_idx, jint core)
