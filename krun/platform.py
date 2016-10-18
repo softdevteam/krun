@@ -472,16 +472,20 @@ class OpenBSDPlatform(UnixLikePlatform):
     def __init__(self, mailer, config):
         UnixLikePlatform.__init__(self, mailer, config)
 
+        # per-core measurements not supported yet
+        self.num_per_core_measurements = 0
+
     def find_temperature_sensors(self):
         lines = self._get_sysctl_sensor_lines()
         sensors = []
-        for line in lines.split("\n"):
-            elems = line.split("=")
+        if lines is not None:
+            for line in lines.split("\n"):
+                elems = line.split("=")
 
-            if len(elems) != 2:
-                fatal("Malformed sysctl line: '%s'" % line)
+                if len(elems) != 2:
+                    fatal("Malformed sysctl line: '%s'" % line)
 
-            sensors.append(elems[0].strip())
+                sensors.append(elems[0].strip())
         self.temp_sensors = sensors
 
     def bench_env_changes(self):
@@ -521,9 +525,20 @@ class OpenBSDPlatform(UnixLikePlatform):
             adjust = True
 
         # Second, the CPU should be running as fast as possible
-        out, _, _ = run_shell_cmd(self.GET_SETPERF_CMD)
+        out, err, _ = run_shell_cmd(self.GET_SETPERF_CMD)
         elems = out.split("=")
-        if len(elems) != 2 or elems[1].strip() != "100":
+        if len(elems) != 2:
+            if "value is not available" in err:
+                # sysctl returns 0 even on error. OpenBSD bug?
+                warn("hw.setperf is not available -- can't check apm state")
+
+                # Try anyway
+                out, _, _ = run_shell_cmd("apm -H")
+                return
+            else:
+                fatal("Can't run: %s" % self.GET_SETPERF_CMD)
+
+        if elems[1].strip() != "100":
             debug("hw.setperf is '%s' not '100'" % elems[1])
             adjust = True
 
@@ -534,7 +549,14 @@ class OpenBSDPlatform(UnixLikePlatform):
 
     def _get_sysctl_sensor_lines(self):
         # separate for test mocking
-        return run_shell_cmd(self.FIND_TEMP_SENSORS_CMD)[0]
+        out, err, rc = run_shell_cmd(self.FIND_TEMP_SENSORS_CMD, failure_fatal=False)
+        if rc == 0:
+            return out
+        elif rc == 1:
+            # not really an error. Actually no lines matched, thus no sensors.
+            warn("System does not appear to have temperature sensors.")
+        else:
+            fatal("Failed to run: %s" % self.FIND_TEMP_SENSORS_CMD)
 
     def _raw_read_temperature_sensor(self, sensor):
         # mocked in tests
