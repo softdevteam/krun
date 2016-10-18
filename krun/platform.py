@@ -472,6 +472,9 @@ class OpenBSDPlatform(UnixLikePlatform):
     def __init__(self, mailer, config):
         UnixLikePlatform.__init__(self, mailer, config)
 
+        # per-core measurements not supported yet
+        self.num_per_core_measurements = 0
+
     def find_temperature_sensors(self):
         lines = self._get_sysctl_sensor_lines()
         sensors = []
