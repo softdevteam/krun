@@ -6,9 +6,8 @@ Benchmark, running many fresh processes.
 usage: runner.py <config_file.krun>
 """
 
-import argparse, logging, os, sys
+import argparse, locale, logging, os, sys, traceback
 from logging import debug, info, warn
-import locale
 
 import krun.util as util
 from krun.config import Config
@@ -191,10 +190,14 @@ def main(parser):
 
     try:
         inner_main(mailer, on_first_invocation, config, args)
-    except util.FatalKrunError as e:
-        util.run_shell_cmd_list(config.POST_EXECUTION_CMDS)
+    except Exception:
+        error_info = sys.exc_info()
         subject = "Fatal Krun Exception"
-        mailer.send(subject, e.args[0], bypass_limiter=True)
+        lines = ["Fatal Krun error: %s\n" % str(error_info[1])]
+        for frame in traceback.format_tb(error_info[2]):
+            lines.append(frame)
+        msg = "".join(lines)
+        util.log_and_mail(mailer, debug, subject, msg, bypass_limiter=False)
         raise e
 
 
