@@ -525,9 +525,20 @@ class OpenBSDPlatform(UnixLikePlatform):
             adjust = True
 
         # Second, the CPU should be running as fast as possible
-        out, _, _ = run_shell_cmd(self.GET_SETPERF_CMD)
+        out, err, _ = run_shell_cmd(self.GET_SETPERF_CMD)
         elems = out.split("=")
-        if len(elems) != 2 or elems[1].strip() != "100":
+        if len(elems) != 2:
+            if "value is not available" in err:
+                # sysctl returns 0 even on error. OpenBSD bug?
+                warn("hw.setperf is not available -- can't check apm state")
+
+                # Try anyway
+                out, _, _ = run_shell_cmd("apm -H")
+                return
+            else:
+                fatal("Can't run: %s" % self.GET_SETPERF_CMD)
+
+        if elems[1].strip() != "100":
             debug("hw.setperf is '%s' not '100'" % elems[1])
             adjust = True
 

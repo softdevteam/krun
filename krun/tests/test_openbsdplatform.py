@@ -104,6 +104,10 @@ class TestOpenBSDPlatform(BaseKrunTest):
         run_shell_cmd("apm -C")  # cool mode; forces krun to change this.
 
         platform._check_apm_state()
+
+        if "hw.setperf is not available" in caplog.text():
+            pytest.skip()
+
         assert "performance mode is not manual" in caplog.text()
         # Hard to check hw.setperf, as it may well be temproarily 100
         assert "adjusting performance mode" in caplog.text()
