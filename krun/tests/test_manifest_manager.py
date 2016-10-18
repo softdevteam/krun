@@ -67,6 +67,18 @@ E dummy:CPython:default-python
 E nbody:CPython:default-python
 """
 
+IRREGULAR_EXAMPLE_MANIFEST = """eta_avail_idx=4
+keys
+E dummy:Java:default-java
+C nbody:Java:default-java
+C dummy:CPython:default-python
+S nbody:CPython:default-python
+C dummy:Java:default-java
+S nbody:Java:default-java
+O dummy:CPython:default-python
+E nbody:CPython:default-python
+"""
+
 
 def _setup(filename, contents):
     ManifestManager.PATH = os.path.join(TEST_DIR, filename)
@@ -95,6 +107,12 @@ def test_parse_manifest():
         "nbody:Java:default-java": 2,
         "dummy:CPython:default-python": 2,
         "nbody:CPython:default-python": 2,
+    }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 0,
+        "nbody:Java:default-java": 0,
+        "dummy:CPython:default-python": 0,
+        "nbody:CPython:default-python": 0,
     }
     assert manifest.skipped_keys == set()
     assert manifest.non_skipped_keys == set(["dummy:Java:default-java",
@@ -162,6 +180,12 @@ def test_parse_with_skips():
         "dummy:CPython:default-python": 2,
         "nbody:CPython:default-python": 2,
     }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 0,
+        "nbody:Java:default-java": 0,
+        "dummy:CPython:default-python": 0,
+        "nbody:CPython:default-python": 0,
+    }
     assert manifest.skipped_keys == set(["dummy:Java:default-java",
                                         "nbody:Java:default-java"])
     assert manifest.non_skipped_keys == set(["dummy:Java:default-java",
@@ -181,6 +205,12 @@ def test_parse_with_all_skips():
     assert manifest.next_exec_idx == -1
     assert manifest.next_exec_flag_offset == None
     assert manifest.outstanding_exec_counts == {
+        "dummy:Java:default-java": 0,
+        "nbody:Java:default-java": 0,
+        "dummy:CPython:default-python": 0,
+        "nbody:CPython:default-python": 0,
+    }
+    assert manifest.completed_exec_counts == {
         "dummy:Java:default-java": 0,
         "nbody:Java:default-java": 0,
         "dummy:CPython:default-python": 0,
@@ -208,6 +238,12 @@ def test_parse_with_all_errors():
         "dummy:CPython:default-python": 0,
         "nbody:CPython:default-python": 0,
     }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 2,
+        "nbody:Java:default-java": 2,
+        "dummy:CPython:default-python": 2,
+        "nbody:CPython:default-python": 2,
+    }
     assert manifest.skipped_keys == set()
     assert manifest.non_skipped_keys == set(["dummy:Java:default-java",
         "nbody:Java:default-java","dummy:CPython:default-python",
@@ -229,6 +265,12 @@ def test_parse_with_skips_at_end():
         "nbody:Java:default-java": 2,
         "dummy:CPython:default-python": 1,
         "nbody:CPython:default-python": 1,
+    }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 0,
+        "nbody:Java:default-java": 0,
+        "dummy:CPython:default-python": 0,
+        "nbody:CPython:default-python": 0,
     }
     assert manifest.skipped_keys == set(["dummy:CPython:default-python",
                                          "nbody:CPython:default-python",])
@@ -278,6 +320,12 @@ def test_update_blank():
         "dummy:CPython:default-python": 2,
         "nbody:CPython:default-python": 2,
     }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 0,
+        "nbody:Java:default-java": 0,
+        "dummy:CPython:default-python": 0,
+        "nbody:CPython:default-python": 0,
+    }
     # Benchmark completed.
     manifest.update("C")
     assert manifest.num_execs_left == 7
@@ -291,6 +339,12 @@ def test_update_blank():
         "dummy:CPython:default-python": 2,
         "nbody:CPython:default-python": 2,
     }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 1,
+        "nbody:Java:default-java": 0,
+        "dummy:CPython:default-python": 0,
+        "nbody:CPython:default-python": 0,
+    }
     # Benchmark failed.
     manifest.update("E")
     assert manifest.num_execs_left == 6
@@ -303,6 +357,12 @@ def test_update_blank():
         "nbody:Java:default-java": 1,
         "dummy:CPython:default-python": 2,
         "nbody:CPython:default-python": 2,
+    }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 1,
+        "nbody:Java:default-java": 1,
+        "dummy:CPython:default-python": 0,
+        "nbody:CPython:default-python": 0,
     }
     _tear_down()
 
@@ -321,6 +381,12 @@ def test_update_to_completion():
         "dummy:CPython:default-python": 2,
         "nbody:CPython:default-python": 2,
     }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 0,
+        "nbody:Java:default-java": 0,
+        "dummy:CPython:default-python": 0,
+        "nbody:CPython:default-python": 0,
+    }
     # Complete each benchmark.
     for completed in xrange(1, 9):
         manifest.update("C")
@@ -332,5 +398,33 @@ def test_update_to_completion():
         "nbody:Java:default-java": 0,
         "dummy:CPython:default-python": 0,
         "nbody:CPython:default-python": 0,
+    }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 2,
+        "nbody:Java:default-java": 2,
+        "dummy:CPython:default-python": 2,
+        "nbody:CPython:default-python": 2,
+    }
+    _tear_down()
+
+def test_irregular_manifest():
+    _setup("example_blank.manifest", IRREGULAR_EXAMPLE_MANIFEST)
+    manifest = ManifestManager()
+    assert manifest.num_execs_left == 1
+    assert manifest.total_num_execs == 6
+    assert manifest.next_exec_key == "dummy:CPython:default-python"
+    assert manifest.next_exec_idx == 6
+    assert manifest.next_exec_flag_offset == 187
+    assert manifest.outstanding_exec_counts == {
+        "dummy:Java:default-java": 0,
+        "nbody:Java:default-java": 0,
+        "dummy:CPython:default-python": 1,
+        "nbody:CPython:default-python": 0,
+    }
+    assert manifest.completed_exec_counts == {
+        "dummy:Java:default-java": 2,
+        "nbody:Java:default-java": 1,
+        "dummy:CPython:default-python": 1,
+        "nbody:CPython:default-python": 1,
     }
     _tear_down()

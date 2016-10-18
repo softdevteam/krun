@@ -9,13 +9,6 @@ import os, subprocess, sys, time
 # Wait this many seconds for the init system to finish bringing up services.
 STARTUP_WAIT_SECONDS = 2 * 60
 
-EMPTY_MEASUREMENTS = {
-    "wallclock_times": [],
-    "core_cycle_counts": [],
-    "aperf_counts": [],
-    "mperf_counts": [],
-}
-
 def mean(seq):
     if len(seq) == 0:
         raise ValueError("Cannot calculate mean of empty sequence.")
@@ -41,6 +34,7 @@ class ManifestManager(object):
         self.total_num_execs = 0
         self.eta_avail_idx = 0
         self.outstanding_exec_counts = {}
+        self.completed_exec_counts = {}  # including errors
         self.skipped_keys = set()
         self.non_skipped_keys = set()
 
@@ -83,6 +77,8 @@ class ManifestManager(object):
             flag, key = line.strip().split(" ")
             if key not in self.outstanding_exec_counts:
                 self.outstanding_exec_counts[key] = 0
+            if not key in self.completed_exec_counts:
+                self.completed_exec_counts[key] = 0
 
             if flag in ["S", "E", "C"]:  # skip, error, completed
                 pass
@@ -92,6 +88,7 @@ class ManifestManager(object):
                     self.next_exec_key = key
                     self.next_exec_flag_offset = offset
                     self.next_exec_idx = exec_idx
+
                 self.num_execs_left += 1
             else:
                 assert False  # bogus flag
@@ -101,6 +98,9 @@ class ManifestManager(object):
                 self.total_num_execs += 1
             else:
                 self.skipped_keys |= set([key])
+
+            if flag in ["E", "C"]:
+                self.completed_exec_counts[key] += 1
 
             exec_idx += 1
             offset += len(line)
@@ -182,6 +182,22 @@ class ExecutionJob(object):
         # Used in results JSON and ETA dict
         self.key = "%s:%s:%s" % (self.benchmark, self.vm_name, self.variant)
 
+        self.empty_measurements = self.make_empty_measurement()
+
+    def make_empty_measurement(self):
+        """Constructs the dummy result that is used when a benchmark crashes"""
+
+        num_cores = self.sched.platform.num_per_core_measurements
+        def dummy_core_data():
+            return [[] for _ in xrange(num_cores)]
+
+        return {
+            "wallclock_times": [],
+            "core_cycle_counts": dummy_core_data(),
+            "aperf_counts": dummy_core_data(),
+            "mperf_counts": dummy_core_data(),
+        }
+
     def __str__(self):
         return self.key
 
@@ -221,17 +237,22 @@ class ExecutionJob(object):
                 flag = "C"
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
-                measurements = EMPTY_MEASUREMENTS
+                measurements = self.empty_measurements
                 flag = "E"
 
             if vm_def.instrument:
-                instr_data = vm_def.get_instr_data()
-                for k, v in instr_data.iteritems():
-                    assert len(instr_data[k]) == in_proc_iters
+                if flag != "E":
+                    instr_data = vm_def.get_instr_data()
+                    for k, v in instr_data.iteritems():
+                        assert len(instr_data[k]) == in_proc_iters
+                else:
+                    # The benchmark failed, so we assume the instrumentation
+                    # data to be compromised, and thus discard it.
+                    instr_data = {}
             else:
                 instr_data = {}
         else:
-            measurements = EMPTY_MEASUREMENTS
+            measurements = self.empty_measurements
             instr_data = {}
             flag = "C"
 
@@ -371,7 +392,11 @@ class ExecutionScheduler(object):
         self.results = Results(self.config, self.platform,
                                results_file=self.config.results_filename())
         self.results.append_exec_measurements(job.key, measurements)
-        self.results.add_instr_data(job.key, instr_data)
+
+        # Store instrumentation data in a separate file
+        if job.vm_info["vm_def"].instrument:
+            key_exec_num = self.manifest.completed_exec_counts[job.key]
+            util.dump_instr_json(job.key, key_exec_num, self.config, instr_data)
 
         if flag == "E":
             self.results.error_flag = True

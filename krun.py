@@ -202,6 +202,9 @@ def inner_main(mailer, on_first_invocation, config, args):
     out_file = config.results_filename()
     out_file_exists = os.path.exists(out_file)
 
+    instr_dir = util.get_instr_json_dir(config)
+    instr_dir_exists = os.path.exists(instr_dir)
+
     if out_file_exists and not os.path.isfile(out_file):
         util.fatal(
             "Output file '%s' exists but is not a regular file" % out_file)
@@ -209,6 +212,10 @@ def inner_main(mailer, on_first_invocation, config, args):
     if out_file_exists and on_first_invocation:
         util.fatal("Output results file '%s' already exists. "
                    "Move the file away before running Krun." % out_file)
+
+    if instr_dir_exists and on_first_invocation:
+        util.fatal("Instrumentation dir '%s' exists (from an older run?)" %
+                   (instr_dir))
 
     if not out_file_exists and not on_first_invocation:
         util.fatal("No results file to resume. Expected '%s'" % out_file)
