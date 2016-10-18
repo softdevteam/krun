@@ -9,6 +9,7 @@ import os, subprocess, sys, time
 # Wait this many seconds for the init system to finish bringing up services.
 STARTUP_WAIT_SECONDS = 2 * 60
 
+
 def mean(seq):
     if len(seq) == 0:
         raise ValueError("Cannot calculate mean of empty sequence.")
@@ -366,60 +367,62 @@ class ExecutionScheduler(object):
         job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
                            self.config.BENCHMARKS[bench])
 
-        # Run the user's pre-process-execution commands We can't put an ETA
-        # estimate in the evironment for the pre-commands as we have not
-        # (and should not) load the results file into memory yet.
-        util.run_shell_cmd_list(
-            self.config.PRE_EXECUTION_CMDS,
-        )
+        # Run the pre-exec commands, the benchmark and the post-exec commands.
+        # These are wrapped in a try/except, so that the post-exec commands
+        # are always executed, even if an exception has occurred. We only
+        # reboot /after/ the post-exec commands have completed.
+        try:
+            # Run the user's pre-process-execution commands We can't put an ETA
+            # estimate in the environment for the pre-commands as we have not
+            # (and should not) load the results file into memory yet.
+            util.run_shell_cmd_list(self.config.PRE_EXECUTION_CMDS,)
 
-        # Results should never be in memory while a benchmark runs because
-        # their size (which gets large) increases over the course of the
-        # benchmark session. If results were loaded, then each benchmark
-        # would be subject to a different memory layout, which is not fair.
-        assert self.results is None
+            # Results should never be in memory while a benchmark runs because
+            # their size (which gets large) increases over the course of the
+            # benchmark session. If results were loaded, then each benchmark
+            # would be subject to a different memory layout, which is not fair.
+            assert self.results is None
 
-        # We collect rough execution times separate from real results. The
-        # reason for this is that, even if a benchmark crashes it takes
-        # time and we need to account for this when making estimates. A
-        # crashing benchmark will give an empty list of iteration times,
-        # meaning we can't use 'raw_exec_result' below for estimates.
-        exec_start_time = time.time()
-        measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
-        exec_end_time = time.time()
+            # We collect rough execution times separate from real results. The
+            # reason for this is that, even if a benchmark crashes it takes
+            # time and we need to account for this when making estimates. A
+            # crashing benchmark will give an empty list of iteration times,
+            # meaning we can't use 'raw_exec_result' below for estimates.
+            exec_start_time = time.time()
+            measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
+            exec_end_time = time.time()
 
-        # Store results
-        self.results = Results(self.config, self.platform,
-                               results_file=self.config.results_filename())
-        self.results.append_exec_measurements(job.key, measurements)
+            # Store results
+            self.results = Results(self.config, self.platform,
+                                   results_file=self.config.results_filename())
+            self.results.append_exec_measurements(job.key, measurements)
 
-        # Store instrumentation data in a separate file
-        if job.vm_info["vm_def"].instrument:
-            key_exec_num = self.manifest.completed_exec_counts[job.key]
-            util.dump_instr_json(job.key, key_exec_num, self.config, instr_data)
+            # Store instrumentation data in a separate file
+            if job.vm_info["vm_def"].instrument:
+                key_exec_num = self.manifest.completed_exec_counts[job.key]
+                util.dump_instr_json(job.key, key_exec_num, self.config, instr_data)
 
-        if flag == "E":
-            self.results.error_flag = True
+            eta_info = exec_end_time - exec_start_time
+            if self.platform.hardware_reboots:
+                # Add time taken to wait for system to come up if we are in
+                # hardware-reboot mode.
+                eta_info += STARTUP_WAIT_SECONDS
+            self.add_eta_info(job.key, eta_info)
 
-        eta_info = exec_end_time - exec_start_time
-        if self.platform.hardware_reboots:
-            # Add time taken to wait for system to come up if we are in
-            # hardware-reboot mode.
-            eta_info += STARTUP_WAIT_SECONDS
-        self.add_eta_info(job.key, eta_info)
-
-        # We dump the json after each process exec so we can monitor the
-        # JSON file mid-run. It is overwritten each time.
-        self.manifest.update(flag)
-
-        # Run the user's post-process-execution commands with updated
-        # ETA estimates. Important that this happens *after* dumping
-        # results, as the user is likely copying intermediate results to
-        # another host.
-        util.run_shell_cmd_list(
-            self.config.POST_EXECUTION_CMDS,
-            extra_env=self._make_pre_post_cmd_env()
-        )
+            # We dump the json after each process exec so we can monitor the
+            # JSON file mid-run. It is overwritten each time.
+            self.manifest.update(flag)
+        except Exception as exn:
+            raise exn
+        finally:
+            # Run the user's post-process-execution commands with updated
+            # ETA estimates. Important that this happens *after* dumping
+            # results, as the user is likely copying intermediate results to
+            # another host.
+            util.run_shell_cmd_list(
+                self.config.POST_EXECUTION_CMDS,
+                extra_env=self._make_pre_post_cmd_env()
+            )
 
         tfmt = self.get_overall_time_estimate_formatter()
 
