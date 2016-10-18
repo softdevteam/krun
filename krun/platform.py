@@ -478,13 +478,14 @@ class OpenBSDPlatform(UnixLikePlatform):
     def find_temperature_sensors(self):
         lines = self._get_sysctl_sensor_lines()
         sensors = []
-        for line in lines.split("\n"):
-            elems = line.split("=")
+        if lines is not None:
+            for line in lines.split("\n"):
+                elems = line.split("=")
 
-            if len(elems) != 2:
-                fatal("Malformed sysctl line: '%s'" % line)
+                if len(elems) != 2:
+                    fatal("Malformed sysctl line: '%s'" % line)
 
-            sensors.append(elems[0].strip())
+                sensors.append(elems[0].strip())
         self.temp_sensors = sensors
 
     def bench_env_changes(self):
@@ -537,7 +538,14 @@ class OpenBSDPlatform(UnixLikePlatform):
 
     def _get_sysctl_sensor_lines(self):
         # separate for test mocking
-        return run_shell_cmd(self.FIND_TEMP_SENSORS_CMD)[0]
+        out, err, rc = run_shell_cmd(self.FIND_TEMP_SENSORS_CMD, failure_fatal=False)
+        if rc == 0:
+            return out
+        elif rc == 1:
+            # not really an error. Actually no lines matched, thus no sensors.
+            warn("System does not appear to have temperature sensors.")
+        else:
+            fatal("Failed to run: %s" % self.FIND_TEMP_SENSORS_CMD)
 
     def _raw_read_temperature_sensor(self, sensor):
         # mocked in tests
