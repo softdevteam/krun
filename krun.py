@@ -190,7 +190,7 @@ def main(parser):
 
     try:
         inner_main(mailer, on_first_invocation, config, args)
-    except Exception:
+    except Exception as exn:
         error_info = sys.exc_info()
         subject = "Fatal Krun Exception"
         lines = ["Fatal Krun error: %s\n" % str(error_info[1])]
@@ -198,7 +198,7 @@ def main(parser):
             lines.append(frame)
         msg = "".join(lines)
         util.log_and_mail(mailer, debug, subject, msg, bypass_limiter=False)
-        raise e
+        raise exn
 
 
 def inner_main(mailer, on_first_invocation, config, args):
@@ -328,5 +328,5 @@ if __name__ == "__main__":
 
     try:
         main(parser)
-    except util.FatalKrunError as e:
+    except:
         sys.exit(1)
