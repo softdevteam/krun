@@ -424,6 +424,12 @@ class ExecutionScheduler(object):
             # ETA estimates. Important that this happens *after* dumping
             # results, as the user is likely copying intermediate results to
             # another host.
+
+            # _make_pre_post_cmd_env() needs the results. If an exception
+            # occurred, they may not have been loaded.
+            if self.results is None:
+                self.results = Results(self.config, self.platform,
+                                       results_file=self.config.results_filename())
             util.run_shell_cmd_list(
                 self.config.POST_EXECUTION_CMDS,
                 extra_env=self._make_pre_post_cmd_env()
