@@ -372,9 +372,14 @@ class ExecutionScheduler(object):
         # are always executed, even if an exception has occurred. We only
         # reboot /after/ the post-exec commands have completed.
         try:
-            # Run the user's pre-process-execution commands We can't put an ETA
-            # estimate in the environment for the pre-commands as we have not
-            # (and should not) load the results file into memory yet.
+            # Run the user's pre-process-execution commands. We can't put an
+            # ETA estimate in the environment for the pre-commands as we have
+            # not (and should not) load the results file into memory yet.
+            #
+            # It might seem tempting to move this outside the try block, to
+            # ensure that post-hooks are only run if pre-hooks ran. We don't,
+            # thus avoiding the case where only *part* of the pre-hooks run,
+            # but the post-hooks then don't run.
             util.run_shell_cmd_list(self.config.PRE_EXECUTION_CMDS,)
 
             # Results should never be in memory while a benchmark runs because
@@ -392,7 +397,8 @@ class ExecutionScheduler(object):
             measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
-            # Store results
+            # Store new measurements in memory. They will be written to disk
+            # later at reboot time.
             self.results = Results(self.config, self.platform,
                                    results_file=self.config.results_filename())
             self.results.append_exec_measurements(job.key, measurements)
@@ -408,9 +414,6 @@ class ExecutionScheduler(object):
                 # hardware-reboot mode.
                 eta_info += STARTUP_WAIT_SECONDS
             self.add_eta_info(job.key, eta_info)
-
-            # We dump the json after each process exec so we can monitor the
-            # JSON file mid-run. It is overwritten each time.
             self.manifest.update(flag)
         except Exception as exn:
             raise exn
@@ -419,6 +422,12 @@ class ExecutionScheduler(object):
             # ETA estimates. Important that this happens *after* dumping
             # results, as the user is likely copying intermediate results to
             # another host.
+
+            # _make_pre_post_cmd_env() needs the results. If an exception
+            # occurred, they may not have been loaded.
+            if self.results is None:
+                self.results = Results(self.config, self.platform,
+                                       results_file=self.config.results_filename())
             util.run_shell_cmd_list(
                 self.config.POST_EXECUTION_CMDS,
                 extra_env=self._make_pre_post_cmd_env()
@@ -463,7 +472,7 @@ class ExecutionScheduler(object):
                 tfmt.delta_str))
 
             info("Reboot in preparation for next execution")
-            self._reboot()
+            self._reboot()  # also deals with dumping results file
         elif self.manifest.num_execs_left == 0:
             self.results.write_to_file()
             self.platform.save_power()
