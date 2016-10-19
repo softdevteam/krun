@@ -1162,6 +1162,16 @@ class LinuxPlatform(UnixLikePlatform):
                 "isolcpus", "isolcpus should not be in the kernel command line"
             )
 
+    def get_allowed_dmesg_patterns(self):
+        return UnixLikePlatform.get_allowed_dmesg_patterns(self) + \
+            [
+                # Bringing the network up and down on Linux (which some
+                # experiments may wish to do) makes some noise. Ignore.
+                re.compile("^.*ADDRCONF\(NETDEV_UP\)"),
+                re.compile("^.*ADDRCONF\(NETDEV_CHANGE\)"),
+                re.compile("^.*NIC Link is Up"),
+            ]
+
     def _sched_get_priority_max(self):
         # If we later support other operating systems which too support static
         # thread priorities, then move this method into a super-class and call
