@@ -328,5 +328,5 @@ if __name__ == "__main__":
 
     try:
         main(parser)
-    except util.FatalKrunError as e:
+    except:
         sys.exit(1)
