@@ -372,9 +372,14 @@ class ExecutionScheduler(object):
         # are always executed, even if an exception has occurred. We only
         # reboot /after/ the post-exec commands have completed.
         try:
-            # Run the user's pre-process-execution commands We can't put an ETA
-            # estimate in the environment for the pre-commands as we have not
-            # (and should not) load the results file into memory yet.
+            # Run the user's pre-process-execution commands. We can't put an
+            # ETA estimate in the environment for the pre-commands as we have
+            # not (and should not) load the results file into memory yet.
+            #
+            # It might seem tempting to move this outside the try block, to
+            # ensure that post-hooks are only run if pre-hooks ran. We don't,
+            # thus avoiding the case where only *part* of the pre-hooks run,
+            # but the post-hooks then don't run.
             util.run_shell_cmd_list(self.config.PRE_EXECUTION_CMDS,)
 
             # Results should never be in memory while a benchmark runs because
