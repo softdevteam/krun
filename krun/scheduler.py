@@ -397,7 +397,8 @@ class ExecutionScheduler(object):
             measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
-            # Store results
+            # Store new measurements in memory. They will be written to disk
+            # later at reboot time.
             self.results = Results(self.config, self.platform,
                                    results_file=self.config.results_filename())
             self.results.append_exec_measurements(job.key, measurements)
@@ -413,9 +414,6 @@ class ExecutionScheduler(object):
                 # hardware-reboot mode.
                 eta_info += STARTUP_WAIT_SECONDS
             self.add_eta_info(job.key, eta_info)
-
-            # We dump the json after each process exec so we can monitor the
-            # JSON file mid-run. It is overwritten each time.
             self.manifest.update(flag)
         except Exception as exn:
             raise exn
@@ -474,7 +472,7 @@ class ExecutionScheduler(object):
                 tfmt.delta_str))
 
             info("Reboot in preparation for next execution")
-            self._reboot()
+            self._reboot()  # also deals with dumping results file
         elif self.manifest.num_execs_left == 0:
             self.results.write_to_file()
             self.platform.save_power()
