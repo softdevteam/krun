@@ -1,39 +1,50 @@
 import sys
 import os
-import tempfile
+from tempfile import NamedTemporaryFile
 import pytest
 import json
 from StringIO import StringIO
-from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef, JavaVMDef
+from krun.vm_defs import (BaseVMDef, PythonVMDef, PyPyVMDef, JavaVMDef,
+                          WRAPPER_SCRIPT)
 from krun.config import Config
 from distutils.spawn import find_executable
 from krun.env import EnvChange
 from krun.tests.mocks import MockPlatform
+from krun.tests import BaseKrunTest
 from krun import EntryPoint
 from krun import util
+from krun import vm_defs
 
 PYPY_JIT_SUMMARY_EVENT = ["[fffffffffffe] {jit-summary",
                           "[ffffffffffff] jit-summary}"]
 
-class TestVMDef(object):
+class TestVMDef(BaseKrunTest):
     """Test stuff in VM definitions"""
 
-    def test_make_wrapper_script0001(self):
+    def test_make_wrapper_script0001(self, mock_platform):
         args = ["arg1", "arg2", "arg3"]
         heap_lim_k = 1024 * 1024 * 1024  # 1GiB
         stack_lim_k = 8192
         dash = find_executable("dash")
         assert dash is not None
+        vmdef = PythonVMDef("python2.7")
+        vmdef.set_platform(mock_platform)
 
+        envlog_filename = vmdef.make_wrapper_script(args, heap_lim_k, stack_lim_k)
         expect = [
             '#!%s' % dash,
+            'ENVLOG=`env`',
             'ulimit -d %s || exit $?' % heap_lim_k,
             'ulimit -s %s || exit $?' % stack_lim_k,
             'arg1 arg2 arg3',
+            'echo "${ENVLOG}" > %s' % envlog_filename,
             'exit $?'
         ]
 
-        got = BaseVMDef.make_wrapper_script(args, heap_lim_k, stack_lim_k)
+        with open(WRAPPER_SCRIPT) as fh:
+            got = fh.read().splitlines()
+
+        util.del_envlog_tempfile(envlog_filename, mock_platform)
         assert expect == got
 
     def test_env_ctor0001(self):
@@ -139,7 +150,7 @@ class TestVMDef(object):
         args = [sys.executable, "-c",
                 "import sys; sys.stdout.write('STDOUT'); sys.stderr.write('STDERR')"]
 
-        with tempfile.NamedTemporaryFile(delete=False, prefix="kruntest") as fh:
+        with NamedTemporaryFile(delete=False, prefix="kruntest") as fh:
             filename = fh.name
             out, err, rv = vm_def._run_exec_popen(args, fh)
 

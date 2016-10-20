@@ -1,19 +1,19 @@
-from krun.util import (format_raw_exec_results,
-                       log_and_mail, fatal,
-                       check_and_parse_execution_results,
-                       run_shell_cmd, run_shell_cmd_bench,
-                       get_git_version,
-                       ExecutionFailed, get_session_info,
-                       run_shell_cmd_list, FatalKrunError)
+from krun.util import (format_raw_exec_results, log_and_mail, fatal,
+                       check_and_parse_execution_results, run_shell_cmd,
+                       run_shell_cmd_bench, get_git_version, ExecutionFailed,
+                       get_session_info, run_shell_cmd_list, FatalKrunError,
+                       stash_envlog)
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
 from krun.scheduler import ManifestManager
+from krun.tests.mocks import mock_platform
 
 import json
 import logging
 import pytest
 import os
+from tempfile import NamedTemporaryFile
 
 
 def test_fatal(capsys, caplog):
@@ -318,6 +318,27 @@ def test_get_git_version0001():
     vers = get_git_version()
     num = int(vers, 16)
     # should not crash
+
+
+def test_stash_envlog0001(mock_platform):
+    path = os.path.join(TEST_DIR, "example.krun")
+    config = Config(path)
+
+    env = "A=1\nB=2\nC=3\n"
+    with NamedTemporaryFile(prefix="kruntest-", delete=False) as fh:
+        fh.write(env)
+        filename = fh.name
+
+    stash_envlog(filename, config, mock_platform, "bench:vm:variant", 1337)
+    stashed_logdir = os.path.join(TEST_DIR, "example_envlogs")
+    stashed_logfile = os.path.join(stashed_logdir,
+                                   "bench__vm__variant__1337.env")
+    with open(stashed_logfile) as fh:
+        got = fh.read()
+
+    os.unlink(stashed_logfile)
+    os.rmdir(stashed_logdir)
+    assert got == env
 
 
 @pytest.fixture

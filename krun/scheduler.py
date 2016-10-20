@@ -227,7 +227,7 @@ class ExecutionJob(object):
         stack_limit_kb = self.sched.config.STACK_LIMIT
         in_proc_iters = self.vm_info["n_iterations"]
 
-        stdout, stderr, rc = vm_def.run_exec(
+        stdout, stderr, rc, envlog_filename = vm_def.run_exec(
             entry_point, self.benchmark, in_proc_iters,
             self.parameter, heap_limit_kb, stack_limit_kb)
 
@@ -262,6 +262,12 @@ class ExecutionJob(object):
         # before the next execution, so we are grand.
         info("Finished '%s(%d)' (%s variant) under '%s'" %
                     (self.benchmark, self.parameter, self.variant, self.vm_name))
+
+        # Move the environment log out of /tmp
+        if not dry_run:
+            key_exec_num = self.sched.manifest.completed_exec_counts[self.key]
+            util.stash_envlog(envlog_filename, self.sched.config,
+                              self.sched.platform, self.key, key_exec_num)
 
         assert flag is not None
         return measurements, instr_data, flag
@@ -415,8 +421,8 @@ class ExecutionScheduler(object):
                 eta_info += STARTUP_WAIT_SECONDS
             self.add_eta_info(job.key, eta_info)
             self.manifest.update(flag)
-        except Exception as exn:
-            raise exn
+        except Exception:
+            raise
         finally:
             # Run the user's post-process-execution commands with updated
             # ETA estimates. Important that this happens *after* dumping

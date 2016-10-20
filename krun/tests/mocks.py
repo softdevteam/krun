@@ -1,4 +1,6 @@
 from krun.platform import BasePlatform
+from krun.config import Config
+import pytest
 
 
 class MockMailer(object):
@@ -22,6 +24,7 @@ class MockPlatform(BasePlatform):
         self.audit = dict()
         self.num_cpus = 0
         self.num_per_core_measurements = 0
+        self.no_user_change = True
 
     def pin_process_args(self):
         return []
@@ -91,3 +94,8 @@ class MockPlatform(BasePlatform):
 
     def make_fresh_krun_user(self):
         pass
+
+
+@pytest.fixture
+def mock_platform():
+    return MockPlatform(MockMailer(), Config())

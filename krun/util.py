@@ -2,6 +2,8 @@ import json
 import os
 import re
 import select
+import shutil
+import getpass
 from subprocess import Popen, PIPE
 from logging import error, debug, info
 from bz2 import BZ2File
@@ -243,10 +245,11 @@ def spawn_sanity_check(platform, entry_point, vm_def,
     iterations = 1
     param = 666
 
-    stdout, stderr, rc = \
+    stdout, stderr, rc, envlog_filename = \
         vm_def.run_exec(entry_point, check_name, iterations,
                         param, SANITY_CHECK_HEAP_KB, SANITY_CHECK_STACK_KB,
                         force_dir=force_dir, sync_disks=False)
+    del_envlog_tempfile(envlog_filename, platform)
 
     try:
         _ = check_and_parse_execution_results(stdout, stderr, rc)
@@ -358,3 +361,40 @@ def dump_instr_json(key, exec_num, config, instr_data):
     assert not os.path.exists(path)
     with BZ2File(path, "w") as fh:
         fh.write(json.dumps(instr_data))
+
+
+def get_envlog_dir(config):
+    assert config.filename.endswith(".krun")
+    config_base = config.filename[:-5]
+    return os.path.join(os.getcwd(), "%s_envlogs" % config_base)
+
+
+def stash_envlog(tmp_filename, config, platform, key, exec_num):
+    """Move the environment log file out of /tmp into the experiment dir"""
+
+    envlog_dir = get_envlog_dir(config)
+    if not os.path.exists(envlog_dir):
+        os.mkdir(envlog_dir)
+
+    new_filename = "%s__%s.env" % (key.replace(":", "__"), exec_num)
+    new_path = os.path.join(envlog_dir, new_filename)
+
+    # Similarly to dump_instr_json(), the file cannot exist at this point
+    assert not os.path.exists(new_path)
+    shutil.copyfile(tmp_filename, new_path)
+    del_envlog_tempfile(tmp_filename, platform)
+
+
+def del_envlog_tempfile(filename, platform):
+    """Clear away the old file"""
+
+    if not os.path.exists(filename):  # some tests skip creation
+        return
+
+    if platform.no_user_change:
+        os.unlink(filename)
+    else:
+        # Is owned by BENCHMARK_USER so we can't directly remove the file
+        from krun.vm_defs import BENCHMARK_USER
+        args = platform.change_user_args(BENCHMARK_USER) + ["rm", filename]
+        run_shell_cmd(" ".join(args))
