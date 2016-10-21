@@ -358,17 +358,3 @@ def test_dump_instr_json0001():
     os.rmdir(dump_dir)
 
     assert js == instr_data
-
-
-@pytest.fixture
-def to_strip():
-    from krun.platform import detect_platform
-    from krun.results import Results
-
-    path = os.path.join(TEST_DIR, "quick.krun")
-    config = Config(path)
-
-    platform = detect_platform(None, config)
-    results = Results(config, platform,
-                      results_file=config.results_filename())
-    return results
