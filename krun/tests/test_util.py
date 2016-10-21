@@ -2,12 +2,13 @@ from krun.util import (format_raw_exec_results, log_and_mail, fatal,
                        check_and_parse_execution_results, run_shell_cmd,
                        run_shell_cmd_bench, get_git_version, ExecutionFailed,
                        get_session_info, run_shell_cmd_list, FatalKrunError,
-                       stash_envlog)
+                       stash_envlog, dump_instr_json)
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
 from krun.scheduler import ManifestManager
 from krun.tests.mocks import mock_platform
+from bz2 import BZ2File
 
 import json
 import logging
@@ -339,6 +340,24 @@ def test_stash_envlog0001(mock_platform):
     os.unlink(stashed_logfile)
     os.rmdir(stashed_logdir)
     assert got == env
+
+
+def test_dump_instr_json0001():
+    path = os.path.join(TEST_DIR, "example.krun")
+    config = Config(path)
+
+    instr_data = {k: ord(k) for k in "abcdef"}
+    dump_instr_json("bench:vm:variant", 666, config, instr_data)
+
+    dump_dir = os.path.join(TEST_DIR, "example_instr_data")
+    dump_file = os.path.join(dump_dir, "bench__vm__variant__666.json.bz2")
+    with BZ2File(dump_file) as fh:
+        js = json.load(fh)
+
+    os.unlink(dump_file)
+    os.rmdir(dump_dir)
+
+    assert js == instr_data
 
 
 @pytest.fixture

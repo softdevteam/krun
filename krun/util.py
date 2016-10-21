@@ -351,7 +351,7 @@ def dump_instr_json(key, exec_num, config, instr_data):
     if not os.path.exists(instr_json_dir):
         os.mkdir(instr_json_dir)
 
-    filename = "%s__%s.json.bz2" % (key.replace(":", "_"), exec_num)
+    filename = "%s__%s.json.bz2" % (key.replace(":", "__"), exec_num)
     path = os.path.join(instr_json_dir, filename)
 
     # The directory was checked to be non-existant when the benchmark session
