@@ -21,7 +21,7 @@ from distutils.spawn import find_executable
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
-BENCHMARK_USER = "krun"  # user is expected to have made this
+BENCHMARK_USER = "krun"
 INST_STDERR_FILE = "/tmp/krun.stderr"
 
 DASH = find_executable("dash")
