@@ -208,6 +208,9 @@ def inner_main(mailer, on_first_invocation, config, args):
     instr_dir = util.get_instr_json_dir(config)
     instr_dir_exists = os.path.exists(instr_dir)
 
+    envlog_dir = util.get_envlog_dir(config)
+    envlog_dir_exists = os.path.exists(envlog_dir)
+
     if out_file_exists and not os.path.isfile(out_file):
         util.fatal(
             "Output file '%s' exists but is not a regular file" % out_file)
@@ -217,8 +220,10 @@ def inner_main(mailer, on_first_invocation, config, args):
                    "Move the file away before running Krun." % out_file)
 
     if instr_dir_exists and on_first_invocation:
-        util.fatal("Instrumentation dir '%s' exists (from an older run?)" %
-                   (instr_dir))
+        util.fatal("Instrumentation dir '%s' exists." % instr_dir)
+
+    if envlog_dir_exists and on_first_invocation:
+        util.fatal("Env log dir '%s' exists." % envlog_dir)
 
     if not out_file_exists and not on_first_invocation:
         util.fatal("No results file to resume. Expected '%s'" % out_file)

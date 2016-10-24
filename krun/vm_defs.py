@@ -5,6 +5,11 @@ import fnmatch
 import re
 import json
 import getpass
+import tempfile
+import pwd
+import shutil
+import util
+import stat
 from abc import ABCMeta, abstractmethod
 
 from logging import info, debug, warn
@@ -34,6 +39,9 @@ if DASH is None:
 
 class BaseVMDef(object):
     __metaclass__ = ABCMeta
+
+    # Read/write for user and group
+    ENVLOG_MODE = stat.S_IRUSR | stat.S_IRGRP | stat.S_IWUSR | stat.S_IWGRP
 
     def __init__(self, iterations_runner, env=None, instrument=False):
         self.iterations_runner = iterations_runner
@@ -108,18 +116,42 @@ class BaseVMDef(object):
                  stack_lim_k, force_dir=None, sync_disks=True):
         pass
 
-    @staticmethod
-    def make_wrapper_script(args, heap_lim_k, stack_lim_k):
-        """Make lines for the wrapper script.
-        Separate for testing purposes"""
+    def make_wrapper_script(self, args, heap_lim_k, stack_lim_k):
+        """Write the wrapper script.
+        Separate for testing purposes.
 
-        return [
+        Returns the (unique) filename of the environment log"""
+
+        # Make a tempfile for the environment log
+        fd, envlog_filename = tempfile.mkstemp(prefix="envlog-", suffix=".env")
+        os.close(fd)  # we just need the name
+
+        lines = [
             "#!%s" % DASH,
+            "ENVLOG=`env`",  # store in memory to avoid IO prior to benchmark
             "ulimit -d %s || exit $?" % heap_lim_k,
             "ulimit -s %s || exit $?" % stack_lim_k,
             " ".join(args),
+            # quotes around ENVLOG required to have one var per-line
+            "echo \"${ENVLOG}\" > %s" % envlog_filename,
             "exit $?",
         ]
+        debug("Writing out wrapper script to %s" % WRAPPER_SCRIPT)
+        debug("Wrapper script source:\n%s" % ("\n".join(lines)))
+
+        with open(WRAPPER_SCRIPT, "w") as fh:
+            for line in lines:
+                fh.write(line + "\n")
+
+        # Make the file R/W for both users.
+        # We need root to transfer ownership to BENCHMARK_USER.
+        os.chmod(envlog_filename, BaseVMDef.ENVLOG_MODE)
+        if not self.platform.no_user_change:
+            chown_args = self.platform.change_user_args("root") + \
+                ["chown", BENCHMARK_USER, envlog_filename]
+            util.run_shell_cmd(" ".join(chown_args))
+
+        return envlog_filename
 
     def _run_exec(self, args, heap_lim_k, stack_lim_k, bench_env_changes=None,
                   sync_disks=True):
@@ -158,23 +190,16 @@ class BaseVMDef(object):
 
         if self.dry_run:
             warn("SIMULATED: Benchmark process execution (--dryrun)")
-            return ("", "", 0)
-
-        # We write out a wrapper script whose job is to enforce ulimits
-        # before executing the VM.
-        debug("Writing out wrapper script to %s" % WRAPPER_SCRIPT)
-        lines = BaseVMDef.make_wrapper_script(args, heap_lim_k, stack_lim_k)
-        with open(WRAPPER_SCRIPT, "w") as fh:
-            for line in lines:
-                fh.write(line + "\n")
-
-        debug("Wrapper script:\n%s" % ("\n".join(lines)))
-
-        wrapper_args = self._wrapper_args()
-        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
+            return ("", "", 0, None)
 
         if not self.platform.no_user_change:
             self.platform.make_fresh_krun_user()
+
+        envlog_filename = \
+            self.make_wrapper_script(args, heap_lim_k, stack_lim_k)
+
+        wrapper_args = self._wrapper_args()
+        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
 
         # Do an OS-level sync. Forces pending writes on to the physical disk.
         # We do this in an attempt to prevent disk commits happening during
@@ -182,13 +207,13 @@ class BaseVMDef(object):
         if sync_disks:
             self.platform.sync_disks()
 
-        rv = self._run_exec_popen(wrapper_args, stderr_file)
+        out, err, rc = self._run_exec_popen(wrapper_args, stderr_file)
 
         if self.instrument:
             stderr_file.close()
 
         os.unlink(WRAPPER_SCRIPT)
-        return rv
+        return out, err, rc, envlog_filename
 
     # separate for testing
     def _wrapper_args(self):
