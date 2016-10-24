@@ -35,4 +35,6 @@ clean:
 	cd libkrun && ${MAKE} clean
 	cd vm_sanity_checks && ${MAKE} clean
 	cd platform_sanity_checks && ${MAKE} clean
+ifeq ($(shell uname -s),Linux)
 	cd rmsr && ${MAKE} clean
+endif
