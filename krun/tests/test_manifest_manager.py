@@ -116,7 +116,7 @@ def test_parse_manifest():
     }
     assert manifest.skipped_keys == set()
     assert manifest.non_skipped_keys == set(["dummy:Java:default-java",
-        "nbody:Java:default-java","dummy:CPython:default-python",
+        "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",]
     )
     _tear_down()
@@ -189,7 +189,7 @@ def test_parse_with_skips():
     assert manifest.skipped_keys == set(["dummy:Java:default-java",
                                         "nbody:Java:default-java"])
     assert manifest.non_skipped_keys == set(["dummy:Java:default-java",
-        "nbody:Java:default-java","dummy:CPython:default-python",
+        "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",]
     )
     _tear_down()
@@ -217,7 +217,7 @@ def test_parse_with_all_skips():
         "nbody:CPython:default-python": 0,
     }
     assert manifest.skipped_keys == set(["dummy:Java:default-java",
-        "nbody:Java:default-java","dummy:CPython:default-python",
+        "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",])
     assert manifest.non_skipped_keys == set()
     _tear_down()
@@ -246,7 +246,7 @@ def test_parse_with_all_errors():
     }
     assert manifest.skipped_keys == set()
     assert manifest.non_skipped_keys == set(["dummy:Java:default-java",
-        "nbody:Java:default-java","dummy:CPython:default-python",
+        "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",])
     _tear_down()
 
@@ -275,7 +275,7 @@ def test_parse_with_skips_at_end():
     assert manifest.skipped_keys == set(["dummy:CPython:default-python",
                                          "nbody:CPython:default-python",])
     assert manifest.non_skipped_keys == set(["dummy:Java:default-java",
-        "nbody:Java:default-java","dummy:CPython:default-python",
+        "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",]
     )
     _tear_down()

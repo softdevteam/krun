@@ -4,7 +4,7 @@ from tempfile import NamedTemporaryFile
 import pytest
 import json
 from StringIO import StringIO
-from krun.vm_defs import (BaseVMDef, PythonVMDef, PyPyVMDef, JavaVMDef)
+from krun.vm_defs import (PythonVMDef, PyPyVMDef, JavaVMDef)
 from krun.config import Config
 from distutils.spawn import find_executable
 from krun.env import EnvChange
@@ -12,7 +12,6 @@ from krun.tests.mocks import MockPlatform
 from krun.tests import BaseKrunTest
 from krun import EntryPoint
 from krun import util
-from krun import vm_defs
 
 PYPY_JIT_SUMMARY_EVENT = ["[fffffffffffe] {jit-summary",
                           "[ffffffffffff] jit-summary}"]
@@ -61,7 +60,7 @@ class TestVMDef(BaseKrunTest):
 
         assert len(vm.common_env_changes) == 2
 
-        ec1= vm.common_env_changes[0]
+        ec1 = vm.common_env_changes[0]
         assert ec1.var == "LD_LIBRARY_PATH"
         assert ec1.val == "/path/to/happiness"
 
@@ -296,4 +295,4 @@ class TestVMDef(BaseKrunTest):
 
         vmd = JavaVMDef("/pretend/java")
         with pytest.raises(AssertionError):
-            got = vmd.parse_instr_stderr_file(stderr_file)
+            vmd.parse_instr_stderr_file(stderr_file)

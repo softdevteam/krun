@@ -1,6 +1,5 @@
 import subprocess
 import os
-import select
 import fnmatch
 import re
 import json
@@ -11,10 +10,10 @@ from tempfile import NamedTemporaryFile
 import tempfile
 from abc import ABCMeta, abstractmethod
 
-from logging import info, debug, warn
+from logging import debug, warn
 from krun import EntryPoint
 from krun.util import (fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR,
-        read_popen_output_carefully)
+                       read_popen_output_carefully)
 from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
 from distutils.spawn import find_executable
 
@@ -359,7 +358,7 @@ class JavaVMDef(BaseVMDef):
         ]
 
         args = [self.vm_path] + self.extra_vm_args
-        args += [self.iterations_runner,entry_point.target,
+        args += [self.iterations_runner, entry_point.target,
                  str(iterations), str(param)]
 
         return self._run_exec(args, heap_lim_k, stack_lim_k,
@@ -417,7 +416,7 @@ def find_internal_jvmci_java_home(base_dir):
 
     try:
         matches = fnmatch.filter(os.listdir(base_dir), 'jdk1.8*')
-    except OSError as e:
+    except OSError:
         # we didn't find an internal JDK
         fatal("couldn't find the JVMCI internal JDK")
 

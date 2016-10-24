@@ -22,4 +22,3 @@ def test_print_stderr_linewise():
     assert l == ["stderr: abcdef", "stderr: ab", "stderr: de"]
     pr.send("\n")
     assert l == ["stderr: abcdef", "stderr: ab", "stderr: de", "stderr: fg"]
-

@@ -1,7 +1,7 @@
 from krun.env import EnvChangeSet, EnvChangeAppend
 from krun.util import FatalKrunError
 
-import logging, os
+import os
 import pytest
 
 
@@ -43,6 +43,6 @@ def test_env_apply_all():
     assert env0.var == "bach"
     assert env0.val == 1685
     dict0 = {}
-    dict1 = {"handel":1685, "vivaldi":1678, "bach":1685}
+    dict1 = {"handel": 1685, "vivaldi": 1678, "bach": 1685}
     env0.apply_all((env0, env1, env2), dict0)
     assert dict0 == dict1
