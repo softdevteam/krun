@@ -158,10 +158,11 @@ class TestOpenBSDPlatform(BaseKrunTest):
         ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
-        got = vm_def._wrapper_args()
+        wrapper_filename = "/tmp/abcdefg.dash"
+        got = vm_def._wrapper_args(wrapper_filename)
         expect = ['/usr/local/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
                   '/usr/local/bin/sudo', '-u', 'krun', '/usr/local/bin/dash',
-                  '/tmp/krun_wrapper.dash']
+                  wrapper_filename]
         assert got == expect
 
     def test_wrapper_args0002(self, platform):
@@ -171,8 +172,9 @@ class TestOpenBSDPlatform(BaseKrunTest):
         ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
-        got = vm_def._wrapper_args()
+        wrapper_filename = "/tmp/abcdefg.dash"
+        got = vm_def._wrapper_args(wrapper_filename)
         expect = ['/usr/local/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
                   '/usr/local/bin/sudo', '-u', 'krun', '/usr/local/bin/dash',
-                  '/tmp/krun_wrapper.dash']
+                  wrapper_filename]
         assert got == expect
