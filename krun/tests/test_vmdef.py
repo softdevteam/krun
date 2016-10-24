@@ -4,8 +4,7 @@ from tempfile import NamedTemporaryFile
 import pytest
 import json
 from StringIO import StringIO
-from krun.vm_defs import (BaseVMDef, PythonVMDef, PyPyVMDef, JavaVMDef,
-                          WRAPPER_SCRIPT)
+from krun.vm_defs import (BaseVMDef, PythonVMDef, PyPyVMDef, JavaVMDef)
 from krun.config import Config
 from distutils.spawn import find_executable
 from krun.env import EnvChange
@@ -30,7 +29,8 @@ class TestVMDef(BaseKrunTest):
         vmdef = PythonVMDef("python2.7")
         vmdef.set_platform(mock_platform)
 
-        envlog_filename = vmdef.make_wrapper_script(args, heap_lim_k, stack_lim_k)
+        wrapper_filename, envlog_filename = vmdef.make_wrapper_script(
+            args, heap_lim_k, stack_lim_k)
         expect = [
             '#!%s' % dash,
             'ENVLOG=`env`',
@@ -41,7 +41,7 @@ class TestVMDef(BaseKrunTest):
             'exit $?'
         ]
 
-        with open(WRAPPER_SCRIPT) as fh:
+        with open(wrapper_filename) as fh:
             got = fh.read().splitlines()
 
         util.del_envlog_tempfile(envlog_filename, mock_platform)

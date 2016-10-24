@@ -5,11 +5,10 @@ import fnmatch
 import re
 import json
 import getpass
-import tempfile
-import pwd
-import shutil
-import util
 import stat
+import util
+from tempfile import NamedTemporaryFile
+import tempfile
 from abc import ABCMeta, abstractmethod
 
 from logging import info, debug, warn
@@ -25,7 +24,6 @@ BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
 BENCHMARK_USER = "krun"  # user is expected to have made this
 INST_STDERR_FILE = "/tmp/krun.stderr"
 
-WRAPPER_SCRIPT = os.sep + os.path.join("tmp", "krun_wrapper.dash")
 DASH = find_executable("dash")
 if DASH is None:
     fatal("dash shell not found")
@@ -39,6 +37,10 @@ if DASH is None:
 
 class BaseVMDef(object):
     __metaclass__ = ABCMeta
+
+    # Everyone read, only owner write
+    WRAPPER_SCRIPT_MODE = stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH \
+        | stat.S_IWUSR
 
     # Read/write for user and group
     ENVLOG_MODE = stat.S_IRUSR | stat.S_IRGRP | stat.S_IWUSR | stat.S_IWGRP
@@ -120,7 +122,9 @@ class BaseVMDef(object):
         """Write the wrapper script.
         Separate for testing purposes.
 
-        Returns the (unique) filename of the environment log"""
+        Returns a pair, the (unique) filename of the wrapper script, and the
+        (unique) filename of where the (temporary) environment log will be
+        written"""
 
         # Make a tempfile for the environment log
         fd, envlog_filename = tempfile.mkstemp(prefix="envlog-", suffix=".env")
@@ -136,12 +140,14 @@ class BaseVMDef(object):
             "echo \"${ENVLOG}\" > %s" % envlog_filename,
             "exit $?",
         ]
-        debug("Writing out wrapper script to %s" % WRAPPER_SCRIPT)
-        debug("Wrapper script source:\n%s" % ("\n".join(lines)))
-
-        with open(WRAPPER_SCRIPT, "w") as fh:
+        with NamedTemporaryFile(prefix="krunwrapper-", suffix=".dash",
+                                delete=False) as fh:
+            wrapper_filename = fh.name
+            debug("Writing out wrapper script to %s" % wrapper_filename)
             for line in lines:
                 fh.write(line + "\n")
+        debug("Wrapper script:\n%s" % ("\n".join(lines)))
+        os.chmod(wrapper_filename, BaseVMDef.WRAPPER_SCRIPT_MODE)
 
         # Make the file R/W for both users.
         # We need root to transfer ownership to BENCHMARK_USER.
@@ -151,7 +157,7 @@ class BaseVMDef(object):
                 ["chown", BENCHMARK_USER, envlog_filename]
             util.run_shell_cmd(" ".join(chown_args))
 
-        return envlog_filename
+        return wrapper_filename, envlog_filename
 
     def _run_exec(self, args, heap_lim_k, stack_lim_k, bench_env_changes=None,
                   sync_disks=True):
@@ -195,10 +201,9 @@ class BaseVMDef(object):
         if not self.platform.no_user_change:
             self.platform.make_fresh_krun_user()
 
-        envlog_filename = \
+        wrapper_filename, envlog_filename = \
             self.make_wrapper_script(args, heap_lim_k, stack_lim_k)
-
-        wrapper_args = self._wrapper_args()
+        wrapper_args = self._wrapper_args(wrapper_filename)
         debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
 
         # Do an OS-level sync. Forces pending writes on to the physical disk.
@@ -212,11 +217,11 @@ class BaseVMDef(object):
         if self.instrument:
             stderr_file.close()
 
-        os.unlink(WRAPPER_SCRIPT)
+        os.unlink(wrapper_filename)
         return out, err, rc, envlog_filename
 
     # separate for testing
-    def _wrapper_args(self):
+    def _wrapper_args(self, wrapper_filename):
         """Build arguments used to run the wrapper script"""
 
         wrapper_args = self.platform.change_user_args("root") + \
@@ -233,7 +238,7 @@ class BaseVMDef(object):
         else:
             wrapper_args += self.platform.change_user_args(BENCHMARK_USER)
 
-        wrapper_args += [DASH, WRAPPER_SCRIPT]
+        wrapper_args += [DASH, wrapper_filename]
 
         return wrapper_args
 
