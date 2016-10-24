@@ -2,7 +2,6 @@ import pytest
 import krun.platform
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import FatalKrunError
-from krun import EntryPoint
 from krun.vm_defs import  PythonVMDef
 import sys
 from StringIO import StringIO
@@ -169,7 +168,6 @@ class TestLinuxPlatform(BaseKrunTest):
         assert got == expect
 
     def test_wrapper_args0001(self, platform):
-        ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
         wrapper_filename = "abcdefg.dash"
@@ -181,7 +179,6 @@ class TestLinuxPlatform(BaseKrunTest):
     def test_wrapper_args0002(self, platform):
         platform.config.ENABLE_PINNING = False
 
-        ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
         wrapper_filename = "abcdefg.dash"

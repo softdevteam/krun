@@ -282,10 +282,11 @@ def test_run_shell_cmd_list0002(caplog):
     os.unlink(path)
     assert got == "1\n"
 
-    expect = "Shell command failed: '/flibblebop"
+    expect = "Command failed: '/flibblebop"
     assert expect in caplog.text()
 
-def test_run_shell_cmd_list0002():
+
+def test_run_shell_cmd_list0003():
     path = os.path.join(TEST_DIR, "shell-out")
     cmds = [
         "echo ${TESTVAR}  > %s" % path,
@@ -301,7 +302,8 @@ def test_run_shell_cmd_list0002():
     os.unlink(path)
     assert got == "test123\ntest456\n"
 
-def test_run_shell_cmd_list0003(caplog):
+
+def test_run_shell_cmd_list0004(caplog):
     path = os.path.join(TEST_DIR, "shell-out")
     cmds = [
         "echo ${TESTVAR}  > %s" % path,
@@ -317,7 +319,7 @@ def test_run_shell_cmd_list0003(caplog):
 
 def test_get_git_version0001():
     vers = get_git_version()
-    num = int(vers, 16)
+    int(vers, 16)
     # should not crash
 
 

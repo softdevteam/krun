@@ -1,11 +1,9 @@
 from krun.audit import Audit
-from krun.config import Config
-from logging import debug, info
+from logging import debug
 from krun.util import fatal, format_raw_exec_results
 
 import bz2  # decent enough compression with Python 2.7 compatibility.
 import json
-from collections import defaultdict
 
 
 class Results(object):

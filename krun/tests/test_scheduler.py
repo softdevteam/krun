@@ -92,7 +92,7 @@ class TestScheduler(BaseKrunTest):
         for key, execs in results.wallclock_times.iteritems():
             assert len(execs) == 1
             for _exec in execs:
-               assert len(_exec) == 0  # due to dry run
+                assert len(_exec) == 0  # due to dry run
 
         os.unlink(config.results_filename())
         os.unlink(ManifestManager.PATH)
@@ -139,7 +139,7 @@ class TestScheduler(BaseKrunTest):
                 assert len(execs) == 2
 
             for _exec in execs:
-               assert len(_exec) == 0  # due to dry run
+                assert len(_exec) == 0  # due to dry run
 
         os.unlink(config.results_filename())
         os.unlink(ManifestManager.PATH)
@@ -163,7 +163,7 @@ class TestScheduler(BaseKrunTest):
             assert len(execs) == 2
 
             for _exec in execs:
-               assert len(_exec) == 0  # due to error
+                assert len(_exec) == 0  # due to error
 
         os.unlink(config.results_filename())
         os.unlink(ManifestManager.PATH)

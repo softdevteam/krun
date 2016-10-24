@@ -261,7 +261,7 @@ class ExecutionJob(object):
         # committed during benchmarking. In production, we will be rebooting
         # before the next execution, so we are grand.
         info("Finished '%s(%d)' (%s variant) under '%s'" %
-                    (self.benchmark, self.parameter, self.variant, self.vm_name))
+             (self.benchmark, self.parameter, self.variant, self.vm_name))
 
         # Move the environment log out of /tmp
         if not dry_run:

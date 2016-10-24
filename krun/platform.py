@@ -797,7 +797,7 @@ class LinuxPlatform(UnixLikePlatform):
 
         # the tool may not be in the path for an unpriveleged user
         ec = EnvChangeAppend("PATH", "/usr/sbin")
-        env = ec.apply(os.environ)
+        ec.apply(os.environ)
 
         from distutils.spawn import find_executable
         exe = find_executable("virt-what")
@@ -824,7 +824,7 @@ class LinuxPlatform(UnixLikePlatform):
             # destroy shield (if existing)
             if os.path.exists(LinuxPlatform.USER_CSET_DIR):
                 return [self.change_user_args("root") + \
-                    [LinuxPlatform.CSET_CMD, "shield", "-r"]]
+                        [LinuxPlatform.CSET_CMD, "shield", "-r"]]
             else:
                 return []  # no commands
 
@@ -1004,7 +1004,7 @@ class LinuxPlatform(UnixLikePlatform):
                         warn("Ignoring enabled P-states (--no-pstate-check)")
                         return
 
-                    scaler_files = [ "  * " + LinuxPlatform.CPU_SCALER_FMT % x for
+                    scaler_files = ["  * " + LinuxPlatform.CPU_SCALER_FMT % x for
                                     x in xrange(self.num_cpus)]
                     self._fatal_kernel_arg(
                         "intel_pstate=disable",

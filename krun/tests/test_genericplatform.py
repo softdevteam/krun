@@ -1,10 +1,8 @@
-from krun.tests import BaseKrunTest, no_sleep
+from krun.tests import BaseKrunTest
 from krun.util import FatalKrunError
 from krun.platform import BasePlatform
 import pytest
 import re
-from krun import util
-from time import localtime
 
 class TestGenericPlatform(BaseKrunTest):
     """Platform tests that can be run on any platform"""
@@ -17,7 +15,7 @@ class TestGenericPlatform(BaseKrunTest):
         def mock_take_temperature_readings():
             # a little hotter than we started
             return {name: temp + 1 for name, temp in temps.iteritems()}
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         mock_platform.wait_for_temperature_sensors(testing=True)
@@ -30,7 +28,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         def mock_take_temperature_readings():
             return {"x": 999}  # system on fire
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         with pytest.raises(FatalKrunError):
@@ -64,7 +62,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         def mock_take_temperature_readings():
             return {"x": 999}  # system on fire
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         flag, _ = mock_platform.temp_sensors_within_interval()
@@ -77,7 +75,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         def mock_take_temperature_readings():
             return {"x": -999}  # system in the arctic again
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         flag, _ = mock_platform.temp_sensors_within_interval()
@@ -90,7 +88,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         def mock_take_temperature_readings():
             return {"x": 31}  # almost spot on
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         flag, _ = mock_platform.temp_sensors_within_interval()
@@ -169,7 +167,6 @@ class TestGenericPlatform(BaseKrunTest):
         # line5 is a problem
         assert mock_platform._check_dmesg_for_changes([], last_dmesg,
                                                       new_dmesg)
-        log = caplog.text()
         assert "\nline5\n" in caplog.text()
         for num in xrange(1, 5):
             assert not ("\nline%s\n" % num) in caplog.text()

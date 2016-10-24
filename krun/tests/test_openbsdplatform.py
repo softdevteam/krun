@@ -3,7 +3,6 @@ import krun.platform
 import sys
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import run_shell_cmd, FatalKrunError
-from krun import EntryPoint
 from krun.vm_defs import PythonVMDef
 
 
@@ -37,7 +36,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         def fake__raw_read_temperature_sensor(self, sensor):
             if sensor == "hw.sensors.cpu0.temp0":
                 return "hw.sensors.cpu0.temp0=64.00 degC"
-            elif sensor== "hw.sensors.acpitz0.temp0":
+            elif sensor == "hw.sensors.acpitz0.temp0":
                 return "hw.sensors.acpitz0.temp0=65.58 degC (zone temperature)"
             else:
                 assert False
@@ -155,7 +154,6 @@ class TestOpenBSDPlatform(BaseKrunTest):
         assert args == expect
 
     def test_wrapper_args0001(self, platform):
-        ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
         wrapper_filename = "/tmp/abcdefg.dash"
@@ -169,7 +167,6 @@ class TestOpenBSDPlatform(BaseKrunTest):
         # Pinning isn't supported on OpenBSD, so it should make no difference
         platform.config.ENABLE_PINNING = False
 
-        ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
         wrapper_filename = "/tmp/abcdefg.dash"

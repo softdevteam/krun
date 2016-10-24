@@ -2,7 +2,6 @@ from collections import OrderedDict
 
 
 class Audit(object):
-
     def __init__(self, audit_dict):
         assert isinstance(audit_dict, dict)
         self._audit = audit_dict
@@ -41,7 +40,7 @@ class Audit(object):
 
     def __eq__(self, other):
         if ((not isinstance(other, self.__class__)) or
-            (not len(self) == len(other))):
+                (not len(self) == len(other))):
             return False
             if "uname" in other:
                 return self["uname"] == other["uname"]

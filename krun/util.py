@@ -3,7 +3,6 @@ import os
 import re
 import select
 import shutil
-import getpass
 from subprocess import Popen, PIPE
 from logging import error, debug, info
 from bz2 import BZ2File
@@ -198,7 +197,7 @@ def check_and_parse_execution_results(stdout, stderr, rc):
     # cset(1) on Linux prints to stdout information about which cpuset a pinned
     # process went to. If this line is present, filter it out.
     stdout = re.sub('^cset: --> last message, executed args into cpuset "/user",'
-           ' new pid is: [0-9]+\n', '', stdout)
+                    ' new pid is: [0-9]+\n', '', stdout)
 
     try:
         json_data = json.loads(stdout)  # expect a list of floats
