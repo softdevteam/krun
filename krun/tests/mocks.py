@@ -1,16 +1,23 @@
 from krun.platform import BasePlatform
 from krun.config import Config
+from krun.mail import Mailer
 import pytest
 
 
-class MockMailer(object):
-    def __init__(self, recipients=[], max_mails=2):
-        self.recipients = recipients
-        self.max_mails = max_mails
+class MockMailer(Mailer):
+    def __init__(self, recipients=None, max_mails=5):
+        Mailer.__init__(self, recipients, max_mails)
+        self.sent = []  # cache here instead of sending for real
+        self.hostname = "tests.suite"
+        self.short_hostname = self.hostname.split(".")[0]
 
-    def send(self, subject, msg, bypass_limiter):
-        assert True  # Confirm a mail will be sent.
-        return None
+    def _sendmail(self, msg):
+        self.sent.append(msg)
+
+
+@pytest.fixture
+def mock_mailer():
+    return MockMailer()
 
 
 class MockPlatform(BasePlatform):
@@ -32,7 +39,7 @@ class MockPlatform(BasePlatform):
     def change_scheduler_args(self):
         return []
 
-    def check_dmesg_for_changes(self):
+    def check_dmesg_for_changes(self, mock_platform):
         pass
 
     def CHANGE_USER_CMD(self):
@@ -99,3 +106,15 @@ class MockPlatform(BasePlatform):
 @pytest.fixture
 def mock_platform():
     return MockPlatform(MockMailer(), Config())
+
+
+class MockManifestManager(object):
+    """For tests which need a manifest, but you don't want a file on-disk or a
+    config instance"""
+
+    def __init__(self):
+        self.num_mails_sent = 0
+
+@pytest.fixture
+def mock_manifest():
+    return MockManifestManager()

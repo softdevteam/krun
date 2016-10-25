@@ -3,6 +3,7 @@ import krun.platform
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import FatalKrunError
 from krun.vm_defs import  PythonVMDef
+from krun.tests.mocks import mock_manifest
 import sys
 from StringIO import StringIO
 
@@ -249,7 +250,7 @@ class TestLinuxPlatform(BaseKrunTest):
         platform._check_virt_what_installed()  # needed to set the command path
         platform.is_virtual()
 
-    def test_check_dmesg_filter0001(self, platform):
+    def test_check_dmesg_filter0001(self, platform, mock_manifest):
         old_lines = ["START"]  # anchor so krun knows where the changes start
         new_lines = [
             "START",
@@ -262,4 +263,4 @@ class TestLinuxPlatform(BaseKrunTest):
             "[  118.714594] IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready",
         ]
         assert not platform._check_dmesg_for_changes(
-            platform.get_allowed_dmesg_patterns(), old_lines, new_lines)
+            platform.get_allowed_dmesg_patterns(), old_lines, new_lines, mock_manifest)

@@ -50,9 +50,10 @@ def fatal(msg):
     raise FatalKrunError(msg)
 
 
-def log_and_mail(mailer, log_fn, subject, msg, exit=False, bypass_limiter=False):
+def log_and_mail(mailer, log_fn, subject, msg, exit=False,
+                 bypass_limiter=False, manifest=None):
     log_fn(msg)
-    mailer.send(subject, msg, bypass_limiter)
+    mailer.send(subject, msg, bypass_limiter=bypass_limiter, manifest=manifest)
     if exit:
         raise FatalKrunError()  # causes post-session commands to run
 
@@ -268,7 +269,7 @@ def get_session_info(config):
     Separated from print_session_info for ease of testing"""
 
     from krun.scheduler import ManifestManager
-    manifest = ManifestManager.from_config(config)
+    manifest = ManifestManager(config, new_file=True)
 
     return {
         "n_proc_execs": manifest.total_num_execs,

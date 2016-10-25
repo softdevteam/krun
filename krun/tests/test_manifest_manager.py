@@ -3,11 +3,13 @@ import pytest
 
 from krun.config import Config
 from krun.scheduler import ManifestManager
+from krun.util import FatalKrunError
 
 DEFAULT_MANIFEST = "krun.manifest"
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 
 BLANK_EXAMPLE_MANIFEST = """eta_avail_idx=4
+num_mails_sent=0000
 keys
 O dummy:Java:default-java
 O nbody:Java:default-java
@@ -20,6 +22,7 @@ O nbody:CPython:default-python
 """
 
 SKIPS_EXAMPLE_MANIFEST = """eta_avail_idx=4
+num_mails_sent=0000
 keys
 S dummy:Java:default-java
 S nbody:Java:default-java
@@ -32,6 +35,7 @@ O nbody:CPython:default-python
 """
 
 SKIPS_END_EXAMPLE_MANIFEST = """eta_avail_idx=4
+num_mails_sent=0000
 keys
 O dummy:Java:default-java
 O nbody:Java:default-java
@@ -44,6 +48,7 @@ S nbody:CPython:default-python
 """
 
 SKIPS_ALL_EXAMPLE_MANIFEST = """eta_avail_idx=4
+num_mails_sent=0000
 keys
 S dummy:Java:default-java
 S nbody:Java:default-java
@@ -56,6 +61,7 @@ S nbody:CPython:default-python
 """
 
 ERRORS_ALL_EXAMPLE_MANIFEST = """eta_avail_idx=4
+num_mails_sent=0000
 keys
 E dummy:Java:default-java
 E nbody:Java:default-java
@@ -68,6 +74,7 @@ E nbody:CPython:default-python
 """
 
 IRREGULAR_EXAMPLE_MANIFEST = """eta_avail_idx=4
+num_mails_sent=0000
 keys
 E dummy:Java:default-java
 C nbody:Java:default-java
@@ -80,28 +87,29 @@ E nbody:CPython:default-python
 """
 
 
-def _setup(filename, contents):
-    ManifestManager.PATH = os.path.join(TEST_DIR, filename)
-    assert ManifestManager.PATH == os.path.join(TEST_DIR, filename)
-    with open(os.path.join(TEST_DIR, filename), "w") as fd:
-        fd.write(contents)
+def _setup(contents):
+    class FakeConfig(object):
+        filename = os.path.join(TEST_DIR, "manifest_tests.krun")
+    config = FakeConfig()
+
+    with open(ManifestManager.get_filename(config), "w") as fh:
+        fh.write(contents)
+    return ManifestManager(config)
 
 
-def _tear_down():
-    os.unlink(ManifestManager.PATH)
-    ManifestManager.PATH = DEFAULT_MANIFEST
-    assert ManifestManager.PATH == DEFAULT_MANIFEST
+def _tear_down(filename):
+    if os.path.exists(filename):
+        os.unlink(filename)
 
 
 def test_parse_manifest():
-    _setup("example_000.manifest", BLANK_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
     assert manifest.eta_avail_idx == 4
     assert manifest.num_execs_left == 8
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "dummy:Java:default-java"
     assert manifest.next_exec_idx == 0
-    assert manifest.next_exec_flag_offset == 21
+    assert manifest.next_exec_flag_offset == 41
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 2,
         "nbody:Java:default-java": 2,
@@ -119,61 +127,57 @@ def test_parse_manifest():
         "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",]
     )
-    _tear_down()
+    _tear_down(manifest.path)
 
 
 def test_parse_empty_manifest():
-    _setup("example_000.manifest", "")
     with pytest.raises(AssertionError):
-        _ = ManifestManager()
-    _tear_down()
+        _setup("")
+    _tear_down("example_000.manifest")
 
 
 def test_parse_erroneous_manifest_001():
-    _setup("example_000.manifest", """eta_avail_idx=4
+    with pytest.raises(AssertionError):
+        _setup("""eta_avail_idx=4
 keys
 X dummy:Java:default-java""")
-    with pytest.raises(AssertionError):
-        _ = ManifestManager()
-    _tear_down()
+    _tear_down("example_000.manifest")
 
 
 def test_parse_erroneous_manifest_002():
-    _setup("example_000.manifest", """eta_aval_idx=4
+    with pytest.raises(FatalKrunError):
+        _setup("""bob=4
 keys
 O dummy:Java:default-java""")
-    with pytest.raises(AssertionError):
-        _ = ManifestManager()
-    _tear_down()
+    _tear_down("example_000.manifest")
 
 
 def test_parse_erroneous_manifest_003():
-    _setup("example_000.manifest", """eta_avail_idx=4
+    with pytest.raises(ValueError):
+        _setup("""eta_avail_idx=4
+num_mails_sent=0000
 keyz
 O dummy:Java:default-java""")
-    with pytest.raises(ValueError):
-        _ = ManifestManager()
-    _tear_down()
+    _tear_down("example_000.manifest")
 
 
 def test_parse_erroneous_manifest_004():
-    _setup("example_000.manifest", """eta_avail_idx=4,
+    with pytest.raises(ValueError):
+        manifest = _setup("""eta_avail_idx=4,
+num_mails_sent=0000
 keys
 O dummy:Java:default-java""")
-    with pytest.raises(ValueError):
-        _ = ManifestManager()
-    _tear_down()
+    _tear_down("example_000.manifest")
 
 
 def test_parse_with_skips():
-    _setup("example_skips.manifest", SKIPS_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(SKIPS_EXAMPLE_MANIFEST)
     assert manifest.eta_avail_idx == 4
     assert manifest.num_execs_left == 6
     assert manifest.total_num_execs == 6
     assert manifest.next_exec_key == "dummy:CPython:default-python"
     assert manifest.next_exec_idx == 2
-    assert manifest.next_exec_flag_offset == 73
+    assert manifest.next_exec_flag_offset == 93
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 1,
         "nbody:Java:default-java": 1,
@@ -192,12 +196,11 @@ def test_parse_with_skips():
         "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",]
     )
-    _tear_down()
+    _tear_down(manifest.path)
 
 
 def test_parse_with_all_skips():
-    _setup("example_skips.manifest", SKIPS_ALL_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(SKIPS_ALL_EXAMPLE_MANIFEST)
     assert manifest.eta_avail_idx == 4
     assert manifest.num_execs_left == 0
     assert manifest.total_num_execs == 0
@@ -220,12 +223,11 @@ def test_parse_with_all_skips():
         "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",])
     assert manifest.non_skipped_keys == set()
-    _tear_down()
+    _tear_down(manifest.path)
 
 
 def test_parse_with_all_errors():
-    _setup("example_errors.manifest", ERRORS_ALL_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(ERRORS_ALL_EXAMPLE_MANIFEST)
     assert manifest.eta_avail_idx == 4
     assert manifest.num_execs_left == 0
     assert manifest.total_num_execs == 8
@@ -248,18 +250,17 @@ def test_parse_with_all_errors():
     assert manifest.non_skipped_keys == set(["dummy:Java:default-java",
         "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",])
-    _tear_down()
+    _tear_down(manifest.path)
 
 
 def test_parse_with_skips_at_end():
-    _setup("example_skips.manifest", SKIPS_END_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(SKIPS_END_EXAMPLE_MANIFEST)
     assert manifest.eta_avail_idx == 4
     assert manifest.num_execs_left == 6
     assert manifest.total_num_execs == 6
     assert manifest.next_exec_key == "dummy:Java:default-java"
     assert manifest.next_exec_idx == 0
-    assert manifest.next_exec_flag_offset == 21
+    assert manifest.next_exec_flag_offset == 41
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 2,
         "nbody:Java:default-java": 2,
@@ -278,42 +279,42 @@ def test_parse_with_skips_at_end():
         "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",]
     )
-    _tear_down()
+    _tear_down(manifest.path)
 
 
 def test_get_total_in_proc_iters():
-    _setup("example_000.manifest", BLANK_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
     config = Config(os.path.join(TEST_DIR, "example.krun"))
     assert manifest.get_total_in_proc_iters(config) == 8 * 5  # Executions * iterations
-    _tear_down()
+    _tear_down(manifest.path)
 
 
-def test_from_config0001():
-    _setup("example_000.manifest", BLANK_EXAMPLE_MANIFEST)
+def test_write_new_manifest0001():
+    _setup(BLANK_EXAMPLE_MANIFEST)
     config = Config(os.path.join(TEST_DIR, "example.krun"))
-    manifest_from_config = ManifestManager.from_config(config)
-    manifest = ManifestManager()
-    assert manifest_from_config == manifest
-    _tear_down()
+    manifest1 = ManifestManager(config, new_file=True)
+    manifest2 = ManifestManager(config)  # reads the file in from the last line
+    assert manifest1 == manifest2
+    _tear_down(manifest2.path)
 
 
-def test_from_config_0002():
+def test_write_new_manifest0002():
+    manifest_path = "example_000.manifest"
     config_path = os.path.join(TEST_DIR, "more_complicated.krun")
     config = Config(config_path)
-    manifest = ManifestManager.from_config(config)
+    manifest = ManifestManager(config, new_file=True)
     assert manifest.total_num_execs == 90  # taking into account skips
-    _tear_down()
+    _tear_down(manifest.path)
 
 
 def test_update_blank():
-    _setup("example_blank.manifest", BLANK_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
     assert manifest.num_execs_left == 8
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "dummy:Java:default-java"
     assert manifest.next_exec_idx == 0
-    assert manifest.next_exec_flag_offset == 21
+    assert manifest.next_exec_flag_offset == 41
+    assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 2,
         "nbody:Java:default-java": 2,
@@ -332,7 +333,8 @@ def test_update_blank():
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "nbody:Java:default-java"
     assert manifest.next_exec_idx == 1
-    assert manifest.next_exec_flag_offset == 47
+    assert manifest.next_exec_flag_offset == 67
+    assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 1,
         "nbody:Java:default-java": 2,
@@ -351,7 +353,8 @@ def test_update_blank():
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "dummy:CPython:default-python"
     assert manifest.next_exec_idx == 2
-    assert manifest.next_exec_flag_offset == 73
+    assert manifest.next_exec_flag_offset == 93
+    assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 1,
         "nbody:Java:default-java": 1,
@@ -364,17 +367,17 @@ def test_update_blank():
         "dummy:CPython:default-python": 0,
         "nbody:CPython:default-python": 0,
     }
-    _tear_down()
+    _tear_down(manifest.path)
 
 
 def test_update_to_completion():
-    _setup("example_blank.manifest", BLANK_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
     assert manifest.num_execs_left == 8
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "dummy:Java:default-java"
     assert manifest.next_exec_idx == 0
-    assert manifest.next_exec_flag_offset == 21
+    assert manifest.next_exec_flag_offset == 41
+    assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 2,
         "nbody:Java:default-java": 2,
@@ -405,16 +408,16 @@ def test_update_to_completion():
         "dummy:CPython:default-python": 2,
         "nbody:CPython:default-python": 2,
     }
-    _tear_down()
+    _tear_down(manifest.path)
 
 def test_irregular_manifest():
-    _setup("example_blank.manifest", IRREGULAR_EXAMPLE_MANIFEST)
-    manifest = ManifestManager()
+    manifest = _setup(IRREGULAR_EXAMPLE_MANIFEST)
     assert manifest.num_execs_left == 1
     assert manifest.total_num_execs == 6
     assert manifest.next_exec_key == "dummy:CPython:default-python"
     assert manifest.next_exec_idx == 6
-    assert manifest.next_exec_flag_offset == 187
+    assert manifest.next_exec_flag_offset == 207
+    assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 0,
         "nbody:Java:default-java": 0,
@@ -427,4 +430,14 @@ def test_irregular_manifest():
         "dummy:CPython:default-python": 1,
         "nbody:CPython:default-python": 1,
     }
-    _tear_down()
+    _tear_down(manifest.path)
+
+def test_update_num_mails_sent0001():
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
+    assert manifest.num_mails_sent == 0
+    manifest.update_num_mails_sent()
+    assert manifest.num_mails_sent == 1
+    manifest.update_num_mails_sent()
+    manifest.update_num_mails_sent()
+    assert manifest.num_mails_sent == 3
+    _tear_down(manifest.path)

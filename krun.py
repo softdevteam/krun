@@ -176,8 +176,9 @@ def main(parser):
         util.print_session_info(config)
         return
 
-    on_first_invocation = not (os.path.isfile(ManifestManager.PATH) and
-                               os.stat(ManifestManager.PATH).st_size > 0)
+    manifest_filename = ManifestManager.get_filename(config)
+    on_first_invocation = not (os.path.isfile(manifest_filename) and
+                               os.stat(manifest_filename).st_size > 0)
 
     attach_log_file(config, not on_first_invocation)
     debug("Krun invoked with arguments: %s" % sys.argv)
@@ -197,7 +198,7 @@ def main(parser):
         for frame in traceback.format_tb(error_info[2]):
             lines.append(frame)
         msg = "".join(lines)
-        util.log_and_mail(mailer, debug, subject, msg, bypass_limiter=False)
+        util.log_and_mail(mailer, debug, subject, msg, bypass_limiter=True)
         raise exn
 
 
