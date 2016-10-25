@@ -1169,7 +1169,8 @@ class LinuxPlatform(UnixLikePlatform):
                 # experiments may wish to do) makes some noise. Ignore.
                 re.compile("^.*ADDRCONF\(NETDEV_UP\)"),
                 re.compile("^.*ADDRCONF\(NETDEV_CHANGE\)"),
-                re.compile("^.*NIC Link is Up"),
+                re.compile("^.*NIC Link is (Up|Down)"),
+                re.compile("^.*irq.* for MSI/MSI-X"),
             ]
 
     def _sched_get_priority_max(self):
