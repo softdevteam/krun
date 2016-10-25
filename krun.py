@@ -331,8 +331,7 @@ if __name__ == "__main__":
     debug("arguments: %s"  % " ".join(sys.argv[1:]))
     parser = create_arg_parser()
     setup_logging(parser)
-
-    try:
-        main(parser)
-    except:
-        sys.exit(1)
+    main(parser)
+    # All fatal exceptions (FatalKrunError, AssertionError, ...) end up here.
+    # Although Some do get caught deeper in the stack, (to try to recover from
+    # various failures) but they are always re-raised.
