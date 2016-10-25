@@ -248,3 +248,18 @@ class TestLinuxPlatform(BaseKrunTest):
 
         platform._check_virt_what_installed()  # needed to set the command path
         platform.is_virtual()
+
+    def test_check_dmesg_filter0001(self, platform):
+        old_lines = ["START"]  # anchor so krun knows where the changes start
+        new_lines = [
+            "START",
+            # all junk to ignore, and that we have seen in the wild
+            "[   76.486320] e1000e: eth0 NIC Link is Down",
+            "[  115.052369] e1000e 0000:00:19.0: irq 43 for MSI/MSI-X",
+            "[  115.153954] e1000e 0000:00:19.0: irq 43 for MSI/MSI-X",  # twice
+            "[  115.154048] IPv6: ADDRCONF(NETDEV_UP): eth0: link is not ready",
+            "[  118.714565] e1000e: eth0 NIC Link is Up 1000 Mbps Full Duplex, Flow Control: None",
+            "[  118.714594] IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready",
+        ]
+        assert not platform._check_dmesg_for_changes(
+            platform.get_allowed_dmesg_patterns(), old_lines, new_lines)
