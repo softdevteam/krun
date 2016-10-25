@@ -343,7 +343,7 @@ class ExecutionScheduler(object):
     def run(self):
         """Benchmark execution starts here"""
 
-        if not self.on_first_invocation:
+        if self.on_first_invocation:
             util.log_and_mail(self.mailer, debug,
                               "Benchmarking started",
                               "Benchmarking started.\nLogging to %s" %
