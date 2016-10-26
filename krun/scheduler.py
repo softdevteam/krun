@@ -39,7 +39,7 @@ class ManifestManager(object):
     def get_filename(config):
         assert config.filename.endswith(".krun")
         config_base = config.filename[:-5]
-        return os.path.abspath(config_base + ".manifest")
+        return config_base + ".manifest"
 
     def _reset(self):
         # All populated in _parse()
@@ -362,8 +362,8 @@ class ExecutionScheduler(object):
     def add_eta_info(self, key, exec_time):
         self.results.eta_estimates[key].append(exec_time)
 
-    def _make_pre_post_cmd_env(self):
-        """Prepare an environment dict for pre/post execution hooks"""
+    def _make_post_cmd_env(self):
+        """Prepare an environment dict for post execution hooks"""
 
         jobs_until_eta_known = self.manifest.eta_avail_idx - \
             self.manifest.next_exec_idx
@@ -378,6 +378,7 @@ class ExecutionScheduler(object):
             "KRUN_LOG_FILE": self.config.log_filename(resume=True),
             "KRUN_ETA_DATUM": now_str(),
             "KRUN_ETA_VALUE": eta_val,
+            "KRUN_MANIFEST_FILE": self.manifest.path,
         }
 
     def run(self):
@@ -471,14 +472,15 @@ class ExecutionScheduler(object):
             # results, as the user is likely copying intermediate results to
             # another host.
 
-            # _make_pre_post_cmd_env() needs the results. If an exception
-            # occurred, they may not have been loaded.
+            # _make_post_cmd_env() needs the results to make an ETA. If an
+            # exception occurred in the above try block, there's a chance that
+            # they have not have been loaded.
             if self.results is None:
                 self.results = Results(self.config, self.platform,
                                        results_file=self.config.results_filename())
             util.run_shell_cmd_list(
                 self.config.POST_EXECUTION_CMDS,
-                extra_env=self._make_pre_post_cmd_env()
+                extra_env=self._make_post_cmd_env()
             )
 
         tfmt = self.get_overall_time_estimate_formatter()

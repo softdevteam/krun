@@ -6,6 +6,7 @@ from krun.tests import BaseKrunTest
 import krun.util
 
 import os, pytest
+import re
 from krun.tests import TEST_DIR
 
 
@@ -221,7 +222,7 @@ class TestScheduler(BaseKrunTest):
     def test_pre_and_post_exec_cmds0002(self, monkeypatch, mock_platform):
         config = Config(os.path.join(TEST_DIR, "one_exec.krun"))
         path = os.path.join(TEST_DIR, "shell-out")
-        cmd = "echo ${KRUN_RESULTS_FILE}:${KRUN_LOG_FILE} > %s" % path
+        cmd = "echo ${KRUN_RESULTS_FILE}:${KRUN_LOG_FILE}:${KRUN_MANIFEST_FILE} > %s" % path
         config.POST_EXECUTION_CMDS = [cmd]
 
         krun.util.assign_platform(config, mock_platform)
@@ -237,8 +238,13 @@ class TestScheduler(BaseKrunTest):
 
         assert n_reboots == 1
         elems = got.split(":")
-        assert elems[0].endswith(".json.bz2")
-        assert elems[1].endswith(".log")
+        assert os.path.basename(elems[0]) == "one_exec_results.json.bz2"
+        assert re.match("one_exec_[0-9]{8}_[0-9]{6}.log", os.path.basename(elems[1]))
+        assert os.path.basename(elems[2]) == "one_exec.manifest"
+
+        # all paths should be in the same dir
+        dirnames = [os.path.dirname(x) for x in elems]
+        assert dirnames[0] == dirnames[1] == dirnames[2]
 
     def test_pre_and_post_cmds0003(self, monkeypatch, mock_platform):
         """Check that the pre/post commands use a shell and don't just exec(3)"""
