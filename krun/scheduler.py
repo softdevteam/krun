@@ -19,30 +19,50 @@ def mean(seq):
 class ManifestManager(object):
     """Data structure for working with the manifest file"""
 
-    PATH = "krun.manifest"
+    NUM_MAILS_BYTES = 4  # number of bytes used for the (ASCII) field
+    NUM_MAILS_FMT = "%%0%dd" % NUM_MAILS_BYTES
 
-    def __init__(self):
-        """Constructor reads an existing manifest file"""
+    def __init__(self, config, new_file=False):
+        """If new_file is True, write a new manifest file to disk based on the
+        contents of the config file, otherwise parse the (existing) manifest
+        file corresponding with the config file."""
 
+        # The max number the field can accommodate
+        self.num_mails_maxout = 10 ** ManifestManager.NUM_MAILS_BYTES - 1
+
+        self.path = ManifestManager.get_filename(config)
+        if new_file:
+            self._write_new_manifest(config)
         self._parse()
+
+    @staticmethod
+    def get_filename(config):
+        assert config.filename.endswith(".krun")
+        config_base = config.filename[:-5]
+        return os.path.abspath(config_base + ".manifest")
 
     def _reset(self):
         # All populated in _parse()
+        #
+        # Do not directly mutate these fields. Use the mutator methods below to
+        # ensure the on-disk manifest file is in sync with the in-memory
+        # instance.
         self.next_exec_key = None
         self.next_exec_idx = -1
         self.next_exec_flag_offset = None
         self.num_execs_left = 0
         self.total_num_execs = 0
         self.eta_avail_idx = 0
+        self.num_mails_sent = 0
+        self.num_mails_sent_offset = None
         self.outstanding_exec_counts = {}
         self.completed_exec_counts = {}  # including errors
         self.skipped_keys = set()
         self.non_skipped_keys = set()
 
     def _open(self):
-        path = os.path.abspath(ManifestManager.PATH)
-        debug("Reading status cookie from %s" % path)
-        return open(path, "r+")
+        debug("Reading status cookie from %s" % self.path)
+        return open(self.path, "r+")
 
     # In its own method, as it needs a config instance
     def get_total_in_proc_iters(self, config):
@@ -61,14 +81,20 @@ class ManifestManager(object):
 
         # Parse manifest header
         for line in fh:
-            offset += len(line)
-            line = line.strip()
-            if line == "keys":
+            strip_line = line.strip()
+            if strip_line == "keys":
+                offset += len(line)
                 break
             else:
-                key, val = line.split("=")
-                assert key == "eta_avail_idx"
-                self.eta_avail_idx = int(val)
+                key, val = strip_line.split("=")
+                if key == "eta_avail_idx":
+                    self.eta_avail_idx = int(val)
+                elif key == "num_mails_sent":
+                    self.num_mails_sent = int(val)
+                    self.num_mails_sent_offset = offset + len(key) + 1  # +1 to skip '='
+                else:
+                    util.fatal("bad key in the manifest header: %s" % key)
+                offset += len(line)
         else:
             assert False
 
@@ -107,6 +133,21 @@ class ManifestManager(object):
             offset += len(line)
         fh.close()
 
+    def update_num_mails_sent(self):
+        """Increments the num_mails_sent_counter in the manifest file"""
+
+        debug("Update num_mails_sent in manifest: %s -> %s" %
+              (self.num_mails_sent, self.num_mails_sent + 1))
+        fh = self._open()
+        fh.seek(self.num_mails_sent_offset)
+        new_val = self.num_mails_sent + 1
+        assert 0 <= new_val <= self.num_mails_maxout
+        fh.write(ManifestManager.NUM_MAILS_FMT % (self.num_mails_sent + 1))
+        fh.close()
+
+        self._reset()
+        self._parse()  # update stats
+
     def update(self, flag):
         """Updates the manifest flag for the just-ran execution
 
@@ -133,8 +174,7 @@ class ManifestManager(object):
                 self.skipped_keys == other.skipped_keys and
                 self.non_skipped_keys == other.non_skipped_keys)
 
-    @classmethod
-    def from_config(cls, config):
+    def _write_new_manifest(self, config):
         """Makes the initial manifest file from the config"""
 
         manifest = []
@@ -157,17 +197,15 @@ class ManifestManager(object):
                                 debug("%s is in skip list. Not scheduling." %
                                       key)
             one_exec_scheduled = True
+        debug("Writing manifest to %s" % self.path)
 
-        path = os.path.abspath(ManifestManager.PATH)
-        debug("Writing manifest to %s" % path)
-
-        with open(path, "w") as fh:
+        num_mails_str = ManifestManager.NUM_MAILS_FMT % 0
+        with open(self.path, "w") as fh:
             fh.write("eta_avail_idx=%s\n" % eta_avail_idx)
+            fh.write("num_mails_sent=%s\n" % num_mails_str)
             fh.write("keys\n")
             for item in manifest:
                 fh.write("%s\n" % item)
-
-        return cls()
 
 
 class ExecutionJob(object):
@@ -237,7 +275,9 @@ class ExecutionJob(object):
                     stdout, stderr, rc)
                 flag = "C"
             except util.ExecutionFailed as e:
-                util.log_and_mail(mailer, error, "Benchmark failure: %s" % self.key, e.message)
+                util.log_and_mail(mailer, error, "Benchmark failure: %s" %
+                                  self.key, e.message,
+                                  manifest=self.sched.manifest)
                 measurements = self.empty_measurements
                 flag = "E"
 
@@ -288,10 +328,10 @@ class ExecutionScheduler(object):
         self.log_path = self.config.log_filename(not self.on_first_invocation)
 
         if on_first_invocation:
-            self.manifest = ManifestManager.from_config(config)
+            self.manifest = ManifestManager(config, new_file=True)
             self.results = Results(self.config, self.platform)
         else:
-            self.manifest = ManifestManager()
+            self.manifest = ManifestManager(self.config)
             self.results = None
 
     def get_estimated_exec_duration(self, key):
@@ -343,7 +383,7 @@ class ExecutionScheduler(object):
     def run(self):
         """Benchmark execution starts here"""
 
-        if not self.on_first_invocation:
+        if self.on_first_invocation:
             util.log_and_mail(self.mailer, debug,
                               "Benchmarking started",
                               "Benchmarking started.\nLogging to %s" %
@@ -462,7 +502,7 @@ class ExecutionScheduler(object):
                  (self.manifest.eta_avail_idx -
                   self.manifest.next_exec_idx))
 
-        if self.platform.check_dmesg_for_changes():
+        if self.platform.check_dmesg_for_changes(self.manifest):
             self.results.error_flag = True
 
         assert self.manifest.num_execs_left >= 0

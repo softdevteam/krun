@@ -95,7 +95,7 @@ class TestScheduler(BaseKrunTest):
                 assert len(_exec) == 0  # due to dry run
 
         os.unlink(config.results_filename())
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
 
     def test_run_schedule0002(self, mock_platform, monkeypatch):
         config = Config(os.path.join(TEST_DIR, "example.krun"))
@@ -113,14 +113,14 @@ class TestScheduler(BaseKrunTest):
                assert len(_exec) == 0  # due to dry run
 
         os.unlink(config.results_filename())
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
 
     def test_run_schedule0003(self, mock_platform, monkeypatch):
         config = Config(os.path.join(TEST_DIR, "example_all_skip.krun"))
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
         assert n_reboots == 0 # all skipped!
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
 
     def test_run_schedule0004(self, mock_platform, monkeypatch):
         config = Config(os.path.join(TEST_DIR, "example_skip_1vm.krun"))
@@ -142,7 +142,7 @@ class TestScheduler(BaseKrunTest):
                 assert len(_exec) == 0  # due to dry run
 
         os.unlink(config.results_filename())
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
 
     def test_run_schedule0005(self, mock_platform, monkeypatch):
 
@@ -166,7 +166,36 @@ class TestScheduler(BaseKrunTest):
                 assert len(_exec) == 0  # due to error
 
         os.unlink(config.results_filename())
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
+
+    def test_num_emails_sent_persists0001(self, monkeypatch, mock_platform):
+        make_reboot_raise(monkeypatch)
+
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+        krun.util.assign_platform(config, mock_platform)
+        sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
+                                   dry_run=True, on_first_invocation=True)
+        sched.mailer.recipients = ["noone@localhost"]
+
+        assert sched.manifest.num_mails_sent == 0
+        sched.mailer.send("subject", "body", manifest=sched.manifest)
+        assert sched.manifest.num_mails_sent == 1
+        try:
+            sched.run()
+        except TestReboot:
+            pass
+        else:
+            assert False
+
+        # suppose a reboot happened now
+        del sched
+        del config
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+        krun.util.assign_platform(config, mock_platform)
+        sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
+                                   dry_run=True, on_first_invocation=False)
+        assert sched.manifest.num_mails_sent == 1
+        os.unlink(sched.manifest.path)
 
     def test_pre_and_post_exec_cmds0001(self, monkeypatch, mock_platform):
         cap_cmds = []
@@ -183,7 +212,7 @@ class TestScheduler(BaseKrunTest):
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
         os.unlink(config.results_filename())
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
 
         assert n_reboots == 1
         expect = ["cmd1", "cmd2", "cmd3", "cmd4"]
@@ -204,7 +233,7 @@ class TestScheduler(BaseKrunTest):
             got = fh.read().strip()
 
         os.unlink(path)
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
 
         assert n_reboots == 1
         elems = got.split(":")
@@ -225,7 +254,7 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 1
         os.unlink(config.results_filename())
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
 
         with open(tmp_file) as fh:
             got = fh.read()
@@ -267,7 +296,7 @@ class TestScheduler(BaseKrunTest):
         assert expect in caplog.text()
 
         os.unlink(config.results_filename())
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)
 
     def test_empty_schedule0001(self, mock_platform, monkeypatch, caplog):
         config = Config(os.path.join(TEST_DIR, "one_exec.krun"))
@@ -286,4 +315,4 @@ class TestScheduler(BaseKrunTest):
         assert "Empty schedule!" in caplog.text()
 
         os.unlink(config.results_filename())
-        os.unlink(ManifestManager.PATH)
+        os.unlink(sched.manifest.path)

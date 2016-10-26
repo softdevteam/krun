@@ -142,16 +142,18 @@ class BasePlatform(object):
                 return True  # allowed change of dmesg
         return False
 
-    def check_dmesg_for_changes(self):
+    def check_dmesg_for_changes(self, manifest):
         new_dmesg = self._collect_dmesg_lines()
         patterns = self.get_allowed_dmesg_patterns()
 
-        rv = self._check_dmesg_for_changes(patterns, self.last_dmesg, new_dmesg)
+        rv = self._check_dmesg_for_changes(patterns, self.last_dmesg,
+                                           new_dmesg, manifest)
         self.last_dmesg = new_dmesg
 
         return rv
 
-    def _check_dmesg_for_changes(self, patterns, last_dmesg, new_dmesg):
+    def _check_dmesg_for_changes(self, patterns, last_dmesg, new_dmesg,
+                                 manifest):
         differ = difflib.Differ()
         delta = list(differ.compare(last_dmesg, new_dmesg))
         delta_len = len(delta)
@@ -203,7 +205,8 @@ class BasePlatform(object):
         if new_lines:
             # dmesg changed!
             warn_s = ("New dmesg lines:\n%s" % "\n  ".join(new_lines))
-            log_and_mail(self.mailer, warn, "dmesg changed", warn_s)
+            log_and_mail(self.mailer, warn, "dmesg changed", warn_s,
+                         manifest=manifest)
             rv = True  # i.e. a (potential) error occurred
 
         return rv

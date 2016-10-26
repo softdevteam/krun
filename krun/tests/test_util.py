@@ -7,7 +7,7 @@ from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
 from krun.scheduler import ManifestManager
-from krun.tests.mocks import mock_platform
+from krun.tests.mocks import mock_platform, mock_manifest, mock_mailer
 from bz2 import BZ2File
 
 import json
@@ -27,13 +27,13 @@ def test_fatal(capsys, caplog):
     assert msg in caplog.text()
 
 
-def test_log_and_mail():
+def test_log_and_mail(mock_manifest, mock_mailer):
     log_fn = lambda s: None
-    log_and_mail(MockMailer(), log_fn, "subject", "msg", exit=False,
-                 bypass_limiter=False)
+    log_and_mail(mock_mailer, log_fn, "subject", "msg", exit=False,
+                 bypass_limiter=False, manifest=mock_manifest)
     with pytest.raises(FatalKrunError):
         log_and_mail(MockMailer(), log_fn, "", "", exit=True,
-                     bypass_limiter=False)
+                     bypass_limiter=False, manifest=mock_manifest)
     assert True
 
 
@@ -164,7 +164,7 @@ def test_get_session_info0001():
         "nbody:CPython:default-python",
     ])
     assert info["non_skipped_keys"] == expect_non_skipped_keys
-    os.unlink(ManifestManager.PATH)
+    os.unlink(ManifestManager.get_filename(config))
 
 
 def test_get_session_info0002():
@@ -244,8 +244,7 @@ def test_get_session_info0002():
 
     # There should be no overlap in the used and skipped keys
     assert info["skipped_keys"].intersection(info["non_skipped_keys"]) == set()
-
-    os.unlink(ManifestManager.PATH)
+    os.unlink(ManifestManager.get_filename(config))
 
 
 def test_run_shell_cmd_list0001():
