@@ -307,8 +307,10 @@ class ExecutionScheduler(object):
             per_exec = self.get_estimated_exec_duration(key)
             if per_exec is not None:
                 secs += self.get_estimated_exec_duration(key) * num_execs
+            elif key in self.manifest.skipped_keys:
+                continue
             else:
-                return None  # unknown time
+                return None  # Unknown time for a key which is not skipped.
         return secs
 
     def get_exec_estimate_time_formatter(self, key):
