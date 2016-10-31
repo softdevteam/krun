@@ -261,6 +261,10 @@ class TestLinuxPlatform(BaseKrunTest):
             "[  115.154048] IPv6: ADDRCONF(NETDEV_UP): eth0: link is not ready",
             "[  118.714565] e1000e: eth0 NIC Link is Up 1000 Mbps Full Duplex, Flow Control: None",
             "[  118.714594] IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready",
+            "[    6.672097] r8169 0000:06:00.0 eth0: link up",
+            "[  190.178748] r8169 0000:06:00.0 eth0: link down",
+            "[  190.178780] r8169 0000:06:00.0 eth0: link down",
+            "[  193.276415] r8169 0000:06:00.0 eth0: link up",
         ]
         assert not platform._check_dmesg_for_changes(
             platform.get_allowed_dmesg_patterns(), old_lines, new_lines, mock_manifest)

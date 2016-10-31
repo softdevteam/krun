@@ -1174,6 +1174,7 @@ class LinuxPlatform(UnixLikePlatform):
                 re.compile("^.*ADDRCONF\(NETDEV_CHANGE\)"),
                 re.compile("^.*NIC Link is (Up|Down)"),
                 re.compile("^.*irq.* for MSI/MSI-X"),
+                re.compile("^.*eth[0-9]: link (down|up)"),
             ]
 
     def _sched_get_priority_max(self):
