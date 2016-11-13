@@ -493,7 +493,7 @@ class PyPyVMDef(PythonVMDef):
             if env is None:
                 env = {}
             # Causes PyPy to emit VM events on stderr
-            EnvChangeSet("PYPYLOG", "-").apply(env)
+            EnvChangeSet("PYPYLOG", "gc:-").apply(env)
 
         PythonVMDef.__init__(self, vm_path, env=env, instrument=instrument)
 
@@ -510,10 +510,9 @@ class PyPyVMDef(PythonVMDef):
     def parse_instr_stderr_file(self, file_handle):
         """PyPy instrumentation data collected from the PYPYLOG.
 
-        We record when VM events begin and end. Events occur in a nested
-        fashion, e.g. GC can happen inside tracing. We consume the event
-        stream, building a tree of events which are emitted into the results
-        file for post-processing.
+        We record when GC events begin and end. Events may be nested.  We
+        consume the event stream, building a tree which will be saved away
+        later.
 
         The tree itself is a (compact) JSON-compatible representation. Each
         in-process iteration has one such tree, whose nodes represent VM
@@ -532,7 +531,11 @@ class PyPyVMDef(PythonVMDef):
         "root" and whose start and stop times are None.
 
         This function returns a dict with a single key "raw_vm_events", mapping
-        to a list of root nodes, one per in-process iteration."""
+        to a list of root nodes, one per in-process iteration.
+
+        Note that this parser assumes that events do not cross event
+        boundaries, and cannot be used with tracing events therefore.
+        """
 
         def root_node():
             return ["root", None, None, []]
@@ -593,11 +596,6 @@ class PyPyVMDef(PythonVMDef):
 
         # When we are done, we should be at nesting level 0 with a root node
         assert current_node[0] == "root" and len(parent_stack) == 0
-
-        # One of the children will be the JIT summary node.
-        # Note that other children can appear, e.g. when a GC occurs as the
-        # iterations runner is exiting.
-        assert any([node[0] == "jit-summary" for node in current_node[3]])
 
         return {"raw_vm_events": trees, "jit_times": jit_times}
 
