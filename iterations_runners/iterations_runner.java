@@ -231,7 +231,7 @@ class IterationsRunner {
 
             // Start timed section
             IterationsRunner.JNI_krun_measure(0);
-            checksum += ke.run_iter(param, checksum);
+            checksum = ke.run_iter(param, checksum);
             IterationsRunner.JNI_krun_measure(1);
             // End timed section
 

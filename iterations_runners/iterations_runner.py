@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
         # Start timed section
         krun_measure(0)
-        checksum += bench_func(param, checksum)
+        checksum = bench_func(param, checksum)
         krun_measure(1)
         # End timed section
 
