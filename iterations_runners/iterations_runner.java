@@ -235,8 +235,6 @@ class IterationsRunner {
             IterationsRunner.JNI_krun_measure(1);
             // End timed section
 
-            System.err.println(checksum);
-
             // Instrumentation mode emits a JSON dict onto a marker line.
             if (instrument) {
                 sb.append("@@@ JDK_EVENTS: ");
