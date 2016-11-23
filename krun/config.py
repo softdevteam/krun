@@ -57,7 +57,7 @@ class Config(object):
         config_dict = {}
         try:
             execfile(config_file, config_dict)
-        except Exception as e:
+        except Exception:
             self._fatal_exception_execing_config(sys.exc_info())
 
         for key in CHECK_FIELDS:

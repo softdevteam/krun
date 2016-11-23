@@ -27,4 +27,4 @@ script:
     - make
     - py.test --cov-report term --cov=krun krun libkrun
     - cd examples
-    - python ../krun.py --no-pstate-check --no-tickless-check --no-user-change travis.krun
+    - python ../krun.py --quick --no-pstate-check --no-tickless-check --no-user-change travis.krun

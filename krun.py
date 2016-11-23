@@ -6,15 +6,14 @@ Benchmark, running many fresh processes.
 usage: runner.py <config_file.krun>
 """
 
-import argparse, json, logging, os, sys
+import argparse, locale, logging, os, sys, traceback
 from logging import debug, info, warn
-import locale
 
 import krun.util as util
 from krun.config import Config
 from krun.platform import detect_platform
 from krun.results import Results
-from krun.scheduler import ExecutionScheduler
+from krun.scheduler import ExecutionScheduler, ManifestManager
 from krun import ABS_TIME_FORMAT
 from krun.mail import Mailer
 
@@ -77,18 +76,6 @@ def create_arg_parser():
     """
     parser = argparse.ArgumentParser(description="Benchmark, running many fresh processes.")
 
-    # Upper-case '-I' so as to make it harder to use by accident.
-    # Real users should never use -I. Only the OS init system.
-    parser.add_argument("--started-by-init", "-I", action="store_true",
-                        default=False, dest="started_by_init", required=False,
-                        help="Krun is being invoked by OS init system")
-    parser.add_argument("--resume", "-r", action="store_true", default=False,
-                        dest="resume", required=False,
-                        help=("Resume benchmarking if interrupted " +
-                              "and append to an existing results file"))
-    parser.add_argument("--reboot", "-b", action="store_true", default=False,
-                        dest="reboot", required=False,
-                        help="Reboot before each benchmark is executed")
     parser.add_argument("--debug", "-g", action="store", default='INFO',
                         dest="debug_level", required=False,
                         help=("Debug level used by logger. Must be one of: " +
@@ -121,9 +108,6 @@ def create_arg_parser():
     parser.add_argument("--info", action="store_true",
                         help=("Print session info for specified "
                               "config file and exit"))
-    parser.add_argument("--strip-results", action="store",
-                        metavar="KEY-SPEC",
-                        help="Strip result key from results file")
 
     # Developer switches
     parser.add_argument("--quick", action="store_true", default=False,
@@ -140,9 +124,9 @@ def create_arg_parser():
     parser.add_argument("--no-tickless-check", action="store_true", default=False,
                         help=("Don't check if the Linux kernel is tickless. "
                               "Linux kernel. For development only."))
-    parser.add_argument("--fake-reboots", action="store_true", default=False,
-                        help=("Restart Krun in place instead of rebooting. "
-                              "For development only."))
+    parser.add_argument("--hardware-reboots", action="store_true", default=False,
+                        help=("Reboot physical hardware before each benchmark "
+                              "execution. Off by default."))
 
     filename_help = ("Krun configuration or results file. FILENAME should" +
                      " be a configuration file when running benchmarks " +
@@ -192,11 +176,11 @@ def main(parser):
         util.print_session_info(config)
         return
 
-    if args.strip_results:
-        util.strip_results(config, args.strip_results)
-        return
+    manifest_filename = ManifestManager.get_filename(config)
+    on_first_invocation = not (os.path.isfile(manifest_filename) and
+                               os.stat(manifest_filename).st_size > 0)
 
-    attach_log_file(config, args.resume)
+    attach_log_file(config, not on_first_invocation)
     debug("Krun invoked with arguments: %s" % sys.argv)
 
     mail_recipients = config.MAIL_TO
@@ -206,35 +190,44 @@ def main(parser):
     mailer = Mailer(mail_recipients, max_mails=config.MAX_MAILS)
 
     try:
-        inner_main(mailer, config, args)
-    except util.FatalKrunError as e:
+        inner_main(mailer, on_first_invocation, config, args)
+    except Exception as exn:
+        error_info = sys.exc_info()
         subject = "Fatal Krun Exception"
-        mailer.send(subject, e.args[0], bypass_limiter=True)
-        util.run_shell_cmd_list(config.POST_EXECUTION_CMDS)
-        raise e
+        lines = ["Fatal Krun error: %s\n" % str(error_info[1])]
+        for frame in traceback.format_tb(error_info[2]):
+            lines.append(frame)
+        msg = "".join(lines)
+        util.log_and_mail(mailer, debug, subject, msg, bypass_limiter=True)
+        raise exn
 
 
-def inner_main(mailer, config, args):
+def inner_main(mailer, on_first_invocation, config, args):
     out_file = config.results_filename()
     out_file_exists = os.path.exists(out_file)
+
+    instr_dir = util.get_instr_json_dir(config)
+    instr_dir_exists = os.path.exists(instr_dir)
+
+    envlog_dir = util.get_envlog_dir(config)
+    envlog_dir_exists = os.path.exists(envlog_dir)
 
     if out_file_exists and not os.path.isfile(out_file):
         util.fatal(
             "Output file '%s' exists but is not a regular file" % out_file)
 
-    if out_file_exists and not args.resume:
-        util.fatal("Output file '%s' already exists. "
-                   "Either resume the session (--resume) or "
-                   "move the file away" % out_file)
+    if out_file_exists and on_first_invocation:
+        util.fatal("Output results file '%s' already exists. "
+                   "Move the file away before running Krun." % out_file)
 
-    if not out_file_exists and args.resume:
+    if instr_dir_exists and on_first_invocation:
+        util.fatal("Instrumentation dir '%s' exists." % instr_dir)
+
+    if envlog_dir_exists and on_first_invocation:
+        util.fatal("Env log dir '%s' exists." % envlog_dir)
+
+    if not out_file_exists and not on_first_invocation:
         util.fatal("No results file to resume. Expected '%s'" % out_file)
-
-    if args.started_by_init and not args.reboot:
-        util.fatal("--started-by-init makes no sense without --reboot")
-
-    if args.started_by_init and not args.resume:
-        util.fatal("--started-by-init makes no sense without --resume")
 
     # Initialise platform instance and assign to VM defs.
     # This needs to be done early, so VM sanity checks can run.
@@ -244,7 +237,7 @@ def inner_main(mailer, config, args):
     platform.no_user_change = args.no_user_change
     platform.no_tickless_check = args.no_tickless_check
     platform.no_pstate_check = args.no_pstate_check
-    platform.fake_reboots = args.fake_reboots
+    platform.hardware_reboots = args.hardware_reboots
 
     debug("Checking platform preliminaries")
     platform.check_preliminaries()
@@ -263,7 +256,7 @@ def inner_main(mailer, config, args):
                  "identical to the one on which the last results were " +
                  "gathered, which is not the case.")
     current = None
-    if args.resume:
+    if not on_first_invocation:
         # output file must exist, due to check above
         assert(out_file_exists)
         current = Results(config, platform, results_file=out_file)
@@ -275,8 +268,8 @@ def inner_main(mailer, config, args):
         platform.starting_temperatures = current.starting_temperatures
     else:
         # Touch the config file to update its mtime. This is required
-        # by resume-mode which uses the mtime to determine the name of
-        # the log file, should this benchmark be resumed.
+        # by when resuming a partially complete benchmark session, in which
+        # case Krun uses the mtime to determine the name of the log file.
         _, _, rc = util.run_shell_cmd("touch " + args.filename)
         if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)
@@ -298,11 +291,8 @@ def inner_main(mailer, config, args):
     sched = ExecutionScheduler(config,
                                mailer,
                                platform,
-                               resume=args.resume,
-                               reboot=args.reboot,
                                dry_run=args.dry_run,
-                               started_by_init=args.started_by_init)
-    sched.build_schedule()
+                               on_first_invocation=on_first_invocation)
     sched.run()
 
 
@@ -341,8 +331,7 @@ if __name__ == "__main__":
     debug("arguments: %s"  % " ".join(sys.argv[1:]))
     parser = create_arg_parser()
     setup_logging(parser)
-
-    try:
-        main(parser)
-    except util.FatalKrunError as e:
-        sys.exit(1)
+    main(parser)
+    # All fatal exceptions (FatalKrunError, AssertionError, ...) end up here.
+    # Although Some do get caught deeper in the stack, (to try to recover from
+    # various failures) but they are always re-raised.

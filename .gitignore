@@ -2,6 +2,7 @@
 examples/*.log
 examples/*.json
 examples/*.bz2
+examples/*.manifest
 **/*.pyc
 **/*.swp
 **/__pycache__

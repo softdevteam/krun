@@ -1,11 +1,9 @@
 from krun.audit import Audit
-from krun.config import Config
-from logging import debug, info
+from logging import debug
 from krun.util import fatal, format_raw_exec_results
 
 import bz2  # decent enough compression with Python 2.7 compatibility.
 import json
-from collections import defaultdict
 
 
 class Results(object):
@@ -15,6 +13,7 @@ class Results(object):
 
     def __init__(self, config, platform, results_file=None):
         self.config = config
+        self.platform = platform
 
         # "bmark:vm:variant" -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...]
         self.wallclock_times = dict()  # wall-clock times
@@ -27,10 +26,6 @@ class Results(object):
         self.mperf_counts = dict()
 
         self.reboots = 0
-
-        # "bmark:vm:variant" ->
-        #     (instrumentation name -> [[e0i0, e0i1, ...], [e1i0, e1i1, ...], ...])
-        self.instr_data = {}
 
         # Record how long execs are taking so we can give the user a rough ETA.
         # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
@@ -77,7 +72,6 @@ class Results(object):
                     self.core_cycle_counts[key] = []
                     self.aperf_counts[key] = []
                     self.mperf_counts[key] = []
-                    self.instr_data[key] = defaultdict(list)
                     self.eta_estimates[key] = []
 
     def read_from_file(self, results_file):
@@ -93,10 +87,72 @@ class Results(object):
                 self.config.check_config_consistency(config, results_file)
             self.audit = results["audit"]
 
+    def integrity_check(self):
+        """Check the results make sense"""
+
+        num_cores = self.platform.num_per_core_measurements
+        for key in self.wallclock_times.iterkeys():
+            wct_len = len(self.wallclock_times[key])
+            eta_len = len(self.eta_estimates[key])
+            cycles_len = len(self.core_cycle_counts[key])
+            aperf_len = len(self.aperf_counts[key])
+            mperf_len = len(self.mperf_counts[key])
+
+            if eta_len != wct_len:
+                fatal("inconsistent etas length: %s: %d vs %d" % (key, eta_len, wct_len))
+
+            if cycles_len != wct_len:
+                fatal("inconsistent cycles length: %s: %d vs %d" % (key, cycles_len, wct_len))
+
+            if aperf_len != wct_len:
+                fatal("inconsistent aperf length: %s: %d vs %d" % (key, aperf_len, wct_len))
+
+            if mperf_len != wct_len:
+                fatal("inconsistent mperf length: %s: %d vs %d" % (key, mperf_len, wct_len))
+
+            # Check the length of the different measurements match and that the
+            # number of per-core measurements is consistent.
+            for exec_idx in xrange(len(self.wallclock_times[key])):
+                expect_num_iters = len(self.wallclock_times[key][exec_idx])
+
+                cycles_num_cores = len(self.core_cycle_counts[key][exec_idx])
+                if cycles_num_cores != num_cores:
+                    fatal("wrong #cores in core_cycle_counts: %s[%d]: %d vs %d" %
+                          (key, exec_idx, num_cores, cycles_num_cores))
+                for core_idx, core in enumerate(self.core_cycle_counts[key][exec_idx]):
+                    core_len = len(core)
+                    if core_len != expect_num_iters:
+                        fatal("inconsistent #iters in core_cycle_counts: "
+                              "%s[%d][%d]. %d vs %d" %
+                              (key, exec_idx, core_idx, core_len, expect_num_iters))
+
+                aperf_num_cores = len(self.aperf_counts[key][exec_idx])
+                if aperf_num_cores != num_cores:
+                    fatal("wrong #cores in aperf_counts: %s[%d]: %d vs %d" %
+                          (key, exec_idx, num_cores, aperf_num_cores))
+                for core_idx, core in enumerate(self.aperf_counts[key][exec_idx]):
+                    core_len = len(core)
+                    if core_len != expect_num_iters:
+                        fatal("inconsistent #iters in aperf_counts: "
+                              "%s[%d][%d]. %d vs %d" %
+                              (key, exec_idx, core_idx, core_len, expect_num_iters))
+
+                mperf_num_cores = len(self.mperf_counts[key][exec_idx])
+                if mperf_num_cores != num_cores:
+                    fatal("wrong #cores in mperf_counts: %s[%d]: %d vs %d" %
+                          (key, exec_idx, num_cores, mperf_num_cores))
+                for core_idx, core in enumerate(self.mperf_counts[key][exec_idx]):
+                    core_len = len(core)
+                    if core_len != expect_num_iters:
+                        fatal("inconsistent #iters in mperf_counts: "
+                              "%s[%d][%d]. %d vs %d" %
+                              (key, exec_idx, core_idx, core_len, expect_num_iters))
+
     def write_to_file(self):
         """Serialise object on disk."""
 
         debug("Writing results out to: %s" % self.filename)
+        self.integrity_check()
 
         to_write = {
             "config": self.config.text,
@@ -104,7 +160,6 @@ class Results(object):
             "core_cycle_counts": self.core_cycle_counts,
             "aperf_counts": self.aperf_counts,
             "mperf_counts": self.mperf_counts,
-            "instr_data": self.instr_data,
             "audit": self.audit.audit,
             "reboots": self.reboots,
             "starting_temperatures": self.starting_temperatures,
@@ -114,12 +169,6 @@ class Results(object):
         with bz2.BZ2File(self.filename, "w") as f:
             f.write(json.dumps(to_write,
                                indent=1, sort_keys=True, encoding='utf-8'))
-
-    def add_instr_data(self, bench_key, instr_dct):
-        """Record instrumentation data into results object."""
-
-        for instr_key, v in instr_dct.iteritems():
-            self.instr_data[bench_key][instr_key].append(v)
 
     def jobs_completed(self, key):
         """Return number of executions for which we have data for a given
@@ -140,53 +189,6 @@ class Results(object):
                 self.starting_temperatures == other.starting_temperatures and
                 self.eta_estimates == other.eta_estimates and
                 self.error_flag == other.error_flag)
-
-    def strip_results(self, key_spec):
-        debug("Strip results: %s" % key_spec)
-
-        spec_elems = key_spec.split(":")
-        if len(spec_elems) != 3:
-            fatal("malformed key spec: %s" % key_spec)
-
-        new_wallclock_times = self.wallclock_times.copy()
-        removed_keys = 0
-        removed_execs = 0
-
-        # We have to keep track of how many executions have run successfully so
-        # that we can set self.reboots accordingly. It's not correct to simply
-        # deduct one for each execution we remove, as the reboots value is one
-        # higher due to the initial reboot. Bear in mind the user may strip
-        # several result keys in succession, so counting the completed
-        # executions is the only safe way.
-        completed_execs = 0
-
-        for key in self.wallclock_times.iterkeys():
-            key_elems = key.split(":")
-            # deal with wildcards
-            for i in xrange(3):
-                if spec_elems[i] == "*":
-                    key_elems[i] = "*"
-
-            # decide whether to remove
-            if key_elems == spec_elems:
-                removed_keys += 1
-                removed_execs += len(new_wallclock_times[key])
-                new_wallclock_times[key] = []
-                self.eta_estimates[key] = []
-                self.core_cycle_counts[key] = []
-                self.aperf_counts[key] = []
-                self.mperf_counts[key] = []
-                info("Removed results for: %s" % key)
-            else:
-                completed_execs += len(new_wallclock_times[key])
-
-        self.wallclock_times = new_wallclock_times
-
-        # If the results were collected with reboot mode, update reboots count
-        if self.reboots != 0:
-            self.reboots = completed_execs
-
-        return removed_keys
 
     def append_exec_measurements(self, key, measurements):
         """Unpacks a measurements dict into the Results instance"""

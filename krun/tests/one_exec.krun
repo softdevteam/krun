@@ -1,0 +1,24 @@
+import os
+import sys
+from krun.vm_defs import (PythonVMDef, JavaVMDef)
+from krun import EntryPoint
+
+HEAP_LIMIT = 2097152
+STACK_LIMIT = 8192
+
+VARIANTS = {"default-python": EntryPoint("bench.py", subdir="python")}
+
+VMS = {
+    'CPython': {
+        'vm_def': PythonVMDef(sys.executable),
+        'variants': ['default-python'],
+        'n_iterations': 3,
+    }
+}
+
+BENCHMARKS = {
+    'dummy': 1000,
+}
+
+N_EXECUTIONS = 1
+TEMP_READ_PAUSE = 1

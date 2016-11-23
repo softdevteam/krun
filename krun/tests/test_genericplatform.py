@@ -1,10 +1,9 @@
-from krun.tests import BaseKrunTest, no_sleep
+from krun.tests import BaseKrunTest
 from krun.util import FatalKrunError
 from krun.platform import BasePlatform
+from krun.tests.mocks import mock_manifest
 import pytest
 import re
-from krun import util
-from time import localtime
 
 class TestGenericPlatform(BaseKrunTest):
     """Platform tests that can be run on any platform"""
@@ -17,7 +16,7 @@ class TestGenericPlatform(BaseKrunTest):
         def mock_take_temperature_readings():
             # a little hotter than we started
             return {name: temp + 1 for name, temp in temps.iteritems()}
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         mock_platform.wait_for_temperature_sensors(testing=True)
@@ -30,7 +29,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         def mock_take_temperature_readings():
             return {"x": 999}  # system on fire
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         with pytest.raises(FatalKrunError):
@@ -64,7 +63,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         def mock_take_temperature_readings():
             return {"x": 999}  # system on fire
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         flag, _ = mock_platform.temp_sensors_within_interval()
@@ -77,7 +76,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         def mock_take_temperature_readings():
             return {"x": -999}  # system in the arctic again
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         flag, _ = mock_platform.temp_sensors_within_interval()
@@ -90,7 +89,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         def mock_take_temperature_readings():
             return {"x": 31}  # almost spot on
-        monkeypatch.setattr(mock_platform,"take_temperature_readings",
+        monkeypatch.setattr(mock_platform, "take_temperature_readings",
                             mock_take_temperature_readings)
 
         flag, _ = mock_platform.temp_sensors_within_interval()
@@ -131,50 +130,50 @@ class TestGenericPlatform(BaseKrunTest):
         expect = "Inconsistent sensors. ['a', 'b'] vs ['a']"
         assert expect in caplog.text()
 
-    def test_dmesg_filter0001(self, mock_platform, caplog):
+    def test_dmesg_filter0001(self, mock_platform, caplog, mock_manifest):
         last_dmesg = ["line1", "line2"]
         new_dmesg = ["line1", "line2", "line3"]
 
         # this should indicate change
-        assert mock_platform._check_dmesg_for_changes([], last_dmesg, new_dmesg)
+        assert mock_platform._check_dmesg_for_changes(
+            [], last_dmesg, new_dmesg, mock_manifest)
 
         # and the log will indicate this also
         assert "New dmesg lines" in caplog.text()
         assert "\nline3" in caplog.text()
 
-    def test_dmesg_filter0002(self, mock_platform, caplog):
+    def test_dmesg_filter0002(self, mock_platform, caplog, mock_manifest):
         last_dmesg = ["line1", "line2"]
         new_dmesg = ["line1", "line2", "sliced_bread"]
 
         # this should indicate no change because we allowed the change
         patterns = [re.compile("red.*herring"), re.compile("sl[ixd]c.*bread$")]
-        assert not mock_platform._check_dmesg_for_changes(patterns, last_dmesg,
-                                                          new_dmesg)
+        assert not mock_platform._check_dmesg_for_changes(
+            patterns, last_dmesg, new_dmesg, mock_manifest)
 
-    def test_dmesg_filter0003(self, mock_platform, caplog):
+    def test_dmesg_filter0003(self, mock_platform, caplog, mock_manifest):
         # simulate 2 lines falling off the top of the dmesg buffer
         last_dmesg = ["line1", "line2", "line3", "line4"]
         new_dmesg = ["line3", "line4"]
 
         # despite lines dropping off, this should still indicate no change
-        assert not mock_platform._check_dmesg_for_changes([], last_dmesg,
-                                                          new_dmesg)
+        assert not mock_platform._check_dmesg_for_changes(
+            [], last_dmesg, new_dmesg, mock_manifest)
 
-    def test_dmesg_filter0004(self, mock_platform, caplog):
+    def test_dmesg_filter0004(self, mock_platform, caplog, mock_manifest):
         # simulate 2 lines falling off the top of the dmesg buffer, *and* a
         # new line coming on the bottom of the buffer.
         last_dmesg = ["line1", "line2", "line3", "line4"]
         new_dmesg = ["line3", "line4", "line5"]
 
         # line5 is a problem
-        assert mock_platform._check_dmesg_for_changes([], last_dmesg,
-                                                      new_dmesg)
-        log = caplog.text()
+        assert mock_platform._check_dmesg_for_changes(
+            [], last_dmesg, new_dmesg, mock_manifest)
         assert "\nline5\n" in caplog.text()
         for num in xrange(1, 5):
             assert not ("\nline%s\n" % num) in caplog.text()
 
-    def test_dmesg_filter0005(self, mock_platform, caplog):
+    def test_dmesg_filter0005(self, mock_platform, caplog, mock_manifest):
         # simulate 2 lines falling off the top of the dmesg buffer, *and* a
         # new line coming on the bottom of the buffer, but the filter accepts
         # the new line.
@@ -182,10 +181,10 @@ class TestGenericPlatform(BaseKrunTest):
         new_dmesg = ["line3", "line4", "line5"]
 
         patterns = [re.compile(".*5$")]
-        assert not mock_platform._check_dmesg_for_changes(patterns, last_dmesg,
-                                                          new_dmesg)
+        assert not mock_platform._check_dmesg_for_changes(
+            patterns, last_dmesg, new_dmesg, mock_manifest)
 
-    def test_dmesg_filter0006(self, mock_platform, caplog):
+    def test_dmesg_filter0006(self, mock_platform, caplog, mock_manifest):
         # Simulate partial line falling off the dmesg buffer due to a new line.
         # The change incurred by the partial line should not trigger our "dmesg
         # changed" flagging code.
@@ -193,14 +192,15 @@ class TestGenericPlatform(BaseKrunTest):
         new_dmesg = ["e1", "line2", "line3", "xx"]  # 3 chars 'xx\n'
 
         patterns = [re.compile("^xx$")]
-        assert not mock_platform._check_dmesg_for_changes(patterns, last_dmesg,
-                                                          new_dmesg)
+        assert not mock_platform._check_dmesg_for_changes(
+            patterns, last_dmesg, new_dmesg, mock_manifest)
 
-    def test_dmesg_filter0007(self, mock_platform, caplog):
+    def test_dmesg_filter0007(self, mock_platform, caplog, mock_manifest):
         # Simulate partial dmesg buffer completely replaced!
         # This should be an error as we have potentially missed other
         # important messages that flew off the top of the buffer too!
         last_dmesg = ["x", "x", "x"]
         new_dmesg = ["y", "y", "y"]
 
-        assert mock_platform._check_dmesg_for_changes([], last_dmesg, new_dmesg)
+        assert mock_platform._check_dmesg_for_changes(
+            [], last_dmesg, new_dmesg, mock_manifest)

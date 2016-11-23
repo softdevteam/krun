@@ -1,0 +1,4 @@
+[submodule "rmsr"]
+	path = rmsr
+	url = https://github.com/softdevteam/rmsr.git
+

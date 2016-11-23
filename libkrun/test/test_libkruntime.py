@@ -1,6 +1,5 @@
 from subprocess import Popen, PIPE
 import os
-import glob
 import sys
 import pytest
 
@@ -137,7 +136,6 @@ class TestLibKrunTime(object):
     def test_read_everything_all_cores(self):
         rv, out, err = invoke_c_prog("read_everything_all_cores")
         assert rv == 0
-        lines = out.splitlines()
         dct = parse_keyvals(out, doubles=True)
 
         # Two wallclock measurements

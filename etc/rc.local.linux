@@ -31,7 +31,6 @@ PYTHON=/usr/bin/python2.7
 # Don't change anything below here
 
 sudo -u ${INITIAL_USER} sh -c "cd ${EXPERIMENT_DIR}  && \
-    ${PYTHON} ${KRUN_DIR}/krun.py --resume --reboot --started-by-init \
-    ${CONFIG_FILE}" &
+    ${PYTHON} ${KRUN_DIR}/krun.py --hardware-reboots ${CONFIG_FILE}" &
 
 exit 0  # must return 0 on Linux

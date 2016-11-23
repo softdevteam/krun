@@ -1,25 +1,28 @@
 import subprocess
 import os
-import select
 import fnmatch
 import re
 import json
+import getpass
+import stat
+import util
+from tempfile import NamedTemporaryFile
+import tempfile
 from abc import ABCMeta, abstractmethod
 
-from logging import info, debug, warn
+from logging import debug, warn
 from krun import EntryPoint
 from krun.util import (fatal, spawn_sanity_check, VM_SANITY_CHECKS_DIR,
-        read_popen_output_carefully)
+                       read_popen_output_carefully)
 from krun.env import EnvChangeAppend, EnvChangeSet, EnvChange
 from distutils.spawn import find_executable
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 ITERATIONS_RUNNER_DIR = os.path.abspath(os.path.join(DIR, "..", "iterations_runners"))
 BENCHMARKS_DIR = os.path.abspath(os.path.join(os.getcwd(), "benchmarks"))
-BENCHMARK_USER = "krun"  # user is expected to have made this
+BENCHMARK_USER = "krun"
 INST_STDERR_FILE = "/tmp/krun.stderr"
 
-WRAPPER_SCRIPT = os.sep + os.path.join("tmp", "krun_wrapper.dash")
 DASH = find_executable("dash")
 if DASH is None:
     fatal("dash shell not found")
@@ -33,6 +36,13 @@ if DASH is None:
 
 class BaseVMDef(object):
     __metaclass__ = ABCMeta
+
+    # Everyone read, only owner write
+    WRAPPER_SCRIPT_MODE = stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH \
+        | stat.S_IWUSR
+
+    # Read/write for user and group
+    ENVLOG_MODE = stat.S_IRUSR | stat.S_IRGRP | stat.S_IWUSR | stat.S_IWGRP
 
     def __init__(self, iterations_runner, env=None, instrument=False):
         self.iterations_runner = iterations_runner
@@ -107,18 +117,46 @@ class BaseVMDef(object):
                  stack_lim_k, force_dir=None, sync_disks=True):
         pass
 
-    @staticmethod
-    def make_wrapper_script(args, heap_lim_k, stack_lim_k):
-        """Make lines for the wrapper script.
-        Separate for testing purposes"""
+    def make_wrapper_script(self, args, heap_lim_k, stack_lim_k):
+        """Write the wrapper script.
+        Separate for testing purposes.
 
-        return [
+        Returns a pair, the (unique) filename of the wrapper script, and the
+        (unique) filename of where the (temporary) environment log will be
+        written"""
+
+        # Make a tempfile for the environment log
+        fd, envlog_filename = tempfile.mkstemp(prefix="envlog-", suffix=".env")
+        os.close(fd)  # we just need the name
+
+        lines = [
             "#!%s" % DASH,
+            "ENVLOG=`env`",  # store in memory to avoid IO prior to benchmark
             "ulimit -d %s || exit $?" % heap_lim_k,
             "ulimit -s %s || exit $?" % stack_lim_k,
             " ".join(args),
+            # quotes around ENVLOG required to have one var per-line
+            "echo \"${ENVLOG}\" > %s" % envlog_filename,
             "exit $?",
         ]
+        with NamedTemporaryFile(prefix="krunwrapper-", suffix=".dash",
+                                delete=False) as fh:
+            wrapper_filename = fh.name
+            debug("Writing out wrapper script to %s" % wrapper_filename)
+            for line in lines:
+                fh.write(line + "\n")
+        debug("Wrapper script:\n%s" % ("\n".join(lines)))
+        os.chmod(wrapper_filename, BaseVMDef.WRAPPER_SCRIPT_MODE)
+
+        # Make the file R/W for both users.
+        # We need root to transfer ownership to BENCHMARK_USER.
+        os.chmod(envlog_filename, BaseVMDef.ENVLOG_MODE)
+        if not self.platform.no_user_change:
+            chown_args = self.platform.change_user_args("root") + \
+                ["chown", BENCHMARK_USER, envlog_filename]
+            util.run_shell_cmd(" ".join(chown_args))
+
+        return wrapper_filename, envlog_filename
 
     def _run_exec(self, args, heap_lim_k, stack_lim_k, bench_env_changes=None,
                   sync_disks=True):
@@ -157,23 +195,15 @@ class BaseVMDef(object):
 
         if self.dry_run:
             warn("SIMULATED: Benchmark process execution (--dryrun)")
-            return ("", "", 0)
-
-        # We write out a wrapper script whose job is to enforce ulimits
-        # before executing the VM.
-        debug("Writing out wrapper script to %s" % WRAPPER_SCRIPT)
-        lines = BaseVMDef.make_wrapper_script(args, heap_lim_k, stack_lim_k)
-        with open(WRAPPER_SCRIPT, "w") as fh:
-            for line in lines:
-                fh.write(line + "\n")
-
-        debug("Wrapper script:\n%s" % ("\n".join(lines)))
-
-        wrapper_args = self._wrapper_args()
-        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
+            return ("", "", 0, None)
 
         if not self.platform.no_user_change:
             self.platform.make_fresh_krun_user()
+
+        wrapper_filename, envlog_filename = \
+            self.make_wrapper_script(args, heap_lim_k, stack_lim_k)
+        wrapper_args = self._wrapper_args(wrapper_filename)
+        debug("Execute wrapper: %s" % (" ".join(wrapper_args)))
 
         # Do an OS-level sync. Forces pending writes on to the physical disk.
         # We do this in an attempt to prevent disk commits happening during
@@ -181,16 +211,16 @@ class BaseVMDef(object):
         if sync_disks:
             self.platform.sync_disks()
 
-        rv = self._run_exec_popen(wrapper_args, stderr_file)
+        out, err, rc = self._run_exec_popen(wrapper_args, stderr_file)
 
         if self.instrument:
             stderr_file.close()
 
-        os.unlink(WRAPPER_SCRIPT)
-        return rv
+        os.unlink(wrapper_filename)
+        return out, err, rc, envlog_filename
 
     # separate for testing
-    def _wrapper_args(self):
+    def _wrapper_args(self, wrapper_filename):
         """Build arguments used to run the wrapper script"""
 
         wrapper_args = self.platform.change_user_args("root") + \
@@ -201,10 +231,13 @@ class BaseVMDef(object):
 
         if self.platform.no_user_change:
             warn("Not changing user (--no-change-user)")
+            # We still have to sudo back to the user who ran krun, as we raised
+            # privs to root in order to nice the process etc.
+            wrapper_args += self.platform.change_user_args(getpass.getuser())
         else:
             wrapper_args += self.platform.change_user_args(BENCHMARK_USER)
 
-        wrapper_args += [DASH, WRAPPER_SCRIPT]
+        wrapper_args += [DASH, wrapper_filename]
 
         return wrapper_args
 
@@ -325,7 +358,7 @@ class JavaVMDef(BaseVMDef):
         ]
 
         args = [self.vm_path] + self.extra_vm_args
-        args += [self.iterations_runner,entry_point.target,
+        args += [self.iterations_runner, entry_point.target,
                  str(iterations), str(param)]
 
         return self._run_exec(args, heap_lim_k, stack_lim_k,
@@ -383,7 +416,7 @@ def find_internal_jvmci_java_home(base_dir):
 
     try:
         matches = fnmatch.filter(os.listdir(base_dir), 'jdk1.8*')
-    except OSError as e:
+    except OSError:
         # we didn't find an internal JDK
         fatal("couldn't find the JVMCI internal JDK")
 
@@ -460,7 +493,7 @@ class PyPyVMDef(PythonVMDef):
             if env is None:
                 env = {}
             # Causes PyPy to emit VM events on stderr
-            EnvChangeSet("PYPYLOG", "-").apply(env)
+            EnvChangeSet("PYPYLOG", "gc:-").apply(env)
 
         PythonVMDef.__init__(self, vm_path, env=env, instrument=instrument)
 
@@ -477,10 +510,9 @@ class PyPyVMDef(PythonVMDef):
     def parse_instr_stderr_file(self, file_handle):
         """PyPy instrumentation data collected from the PYPYLOG.
 
-        We record when VM events begin and end. Events occur in a nested
-        fashion, e.g. GC can happen inside tracing. We consume the event
-        stream, building a tree of events which are emitted into the results
-        file for post-processing.
+        We record when GC events begin and end. Events may be nested.  We
+        consume the event stream, building a tree which will be saved away
+        later.
 
         The tree itself is a (compact) JSON-compatible representation. Each
         in-process iteration has one such tree, whose nodes represent VM
@@ -499,7 +531,11 @@ class PyPyVMDef(PythonVMDef):
         "root" and whose start and stop times are None.
 
         This function returns a dict with a single key "raw_vm_events", mapping
-        to a list of root nodes, one per in-process iteration."""
+        to a list of root nodes, one per in-process iteration.
+
+        Note that this parser assumes that events do not cross event
+        boundaries, and cannot be used with tracing events therefore.
+        """
 
         def root_node():
             return ["root", None, None, []]
@@ -560,11 +596,6 @@ class PyPyVMDef(PythonVMDef):
 
         # When we are done, we should be at nesting level 0 with a root node
         assert current_node[0] == "root" and len(parent_stack) == 0
-
-        # One of the children will be the JIT summary node.
-        # Note that other children can appear, e.g. when a GC occurs as the
-        # iterations runner is exiting.
-        assert any([node[0] == "jit-summary" for node in current_node[3]])
 
         return {"raw_vm_events": trees, "jit_times": jit_times}
 

@@ -135,6 +135,7 @@ class IterationsRunner {
     public static native void JNI_krun_done();
     public static native void JNI_krun_measure(int mindex);
     public static native double JNI_krun_get_wallclock(int mindex);
+    public static native double JNI_krun_clock_gettime_monotonic();
     public static native long JNI_krun_get_core_cycles(int mindex, int core);
     public static native long JNI_krun_get_aperf(int mindex, int core);
     public static native long JNI_krun_get_mperf(int mindex, int core);

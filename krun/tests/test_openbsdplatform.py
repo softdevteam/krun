@@ -3,7 +3,6 @@ import krun.platform
 import sys
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import run_shell_cmd, FatalKrunError
-from krun import EntryPoint
 from krun.vm_defs import PythonVMDef
 
 
@@ -37,7 +36,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         def fake__raw_read_temperature_sensor(self, sensor):
             if sensor == "hw.sensors.cpu0.temp0":
                 return "hw.sensors.cpu0.temp0=64.00 degC"
-            elif sensor== "hw.sensors.acpitz0.temp0":
+            elif sensor == "hw.sensors.acpitz0.temp0":
                 return "hw.sensors.acpitz0.temp0=65.58 degC (zone temperature)"
             else:
                 assert False
@@ -104,6 +103,10 @@ class TestOpenBSDPlatform(BaseKrunTest):
         run_shell_cmd("apm -C")  # cool mode; forces krun to change this.
 
         platform._check_apm_state()
+
+        if "hw.setperf is not available" in caplog.text():
+            pytest.skip()
+
         assert "performance mode is not manual" in caplog.text()
         # Hard to check hw.setperf, as it may well be temproarily 100
         assert "adjusting performance mode" in caplog.text()
@@ -151,24 +154,24 @@ class TestOpenBSDPlatform(BaseKrunTest):
         assert args == expect
 
     def test_wrapper_args0001(self, platform):
-        ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
-        got = vm_def._wrapper_args()
+        wrapper_filename = "/tmp/abcdefg.dash"
+        got = vm_def._wrapper_args(wrapper_filename)
         expect = ['/usr/local/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
                   '/usr/local/bin/sudo', '-u', 'krun', '/usr/local/bin/dash',
-                  '/tmp/krun_wrapper.dash']
+                  wrapper_filename]
         assert got == expect
 
     def test_wrapper_args0002(self, platform):
         # Pinning isn't supported on OpenBSD, so it should make no difference
         platform.config.ENABLE_PINNING = False
 
-        ep = EntryPoint("test")
         vm_def = PythonVMDef('/dummy/bin/python')
         vm_def.set_platform(platform)
-        got = vm_def._wrapper_args()
+        wrapper_filename = "/tmp/abcdefg.dash"
+        got = vm_def._wrapper_args(wrapper_filename)
         expect = ['/usr/local/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
                   '/usr/local/bin/sudo', '-u', 'krun', '/usr/local/bin/dash',
-                  '/tmp/krun_wrapper.dash']
+                  wrapper_filename]
         assert got == expect

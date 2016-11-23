@@ -2,8 +2,10 @@ import json
 import os
 import re
 import select
+import shutil
 from subprocess import Popen, PIPE
 from logging import error, debug, info
+from bz2 import BZ2File
 
 FLOAT_FORMAT = ".6f"
 
@@ -27,6 +29,7 @@ SANITY_CHECK_STACK_KB = 8192
 PLATFORM_SANITY_CHECK_DIR = os.path.join(DIR, "..", "platform_sanity_checks")
 VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
 
+
 # Keys we expect in each iteration runner's output
 EXPECT_JSON_KEYS = set(["wallclock_times", "core_cycle_counts",
                         "aperf_counts", "mperf_counts"])
@@ -47,9 +50,10 @@ def fatal(msg):
     raise FatalKrunError(msg)
 
 
-def log_and_mail(mailer, log_fn, subject, msg, exit=False, bypass_limiter=False):
+def log_and_mail(mailer, log_fn, subject, msg, exit=False,
+                 bypass_limiter=False, manifest=None):
     log_fn(msg)
-    mailer.send(subject, msg, bypass_limiter)
+    mailer.send(subject, msg, bypass_limiter=bypass_limiter, manifest=manifest)
     if exit:
         raise FatalKrunError()  # causes post-session commands to run
 
@@ -194,7 +198,7 @@ def check_and_parse_execution_results(stdout, stderr, rc):
     # cset(1) on Linux prints to stdout information about which cpuset a pinned
     # process went to. If this line is present, filter it out.
     stdout = re.sub('^cset: --> last message, executed args into cpuset "/user",'
-           ' new pid is: [0-9]+\n', '', stdout)
+                    ' new pid is: [0-9]+\n', '', stdout)
 
     try:
         json_data = json.loads(stdout)  # expect a list of floats
@@ -241,10 +245,11 @@ def spawn_sanity_check(platform, entry_point, vm_def,
     iterations = 1
     param = 666
 
-    stdout, stderr, rc = \
+    stdout, stderr, rc, envlog_filename = \
         vm_def.run_exec(entry_point, check_name, iterations,
                         param, SANITY_CHECK_HEAP_KB, SANITY_CHECK_STACK_KB,
                         force_dir=force_dir, sync_disks=False)
+    del_envlog_tempfile(envlog_filename, platform)
 
     try:
         _ = check_and_parse_execution_results(stdout, stderr, rc)
@@ -259,32 +264,18 @@ def assign_platform(config, platform):
 def get_session_info(config):
     """Gets information about the session (for --info)
 
+    Overwrites any existing manifest file.
+
     Separated from print_session_info for ease of testing"""
 
-    from krun.scheduler import ScheduleEmpty, ExecutionScheduler
-    from krun.platform import detect_platform
-
-    platform = detect_platform(None, config)
-    sched = ExecutionScheduler(config, None, platform)
-    non_skipped_keys, skipped_keys = sched.build_schedule()
-
-    n_proc_execs = 0
-    n_in_proc_iters = 0
-
-    while True:
-        try:
-            job = sched.next_job()
-        except ScheduleEmpty:
-            break
-
-        n_proc_execs += 1
-        n_in_proc_iters += job.vm_info["n_iterations"]
+    from krun.scheduler import ManifestManager
+    manifest = ManifestManager(config, new_file=True)
 
     return {
-        "n_proc_execs": n_proc_execs,
-        "n_in_proc_iters": n_in_proc_iters,
-        "skipped_keys": skipped_keys,
-        "non_skipped_keys": non_skipped_keys,
+        "n_proc_execs": manifest.total_num_execs,
+        "n_in_proc_iters": manifest.get_total_in_proc_iters(config),
+        "skipped_keys": manifest.skipped_keys,
+        "non_skipped_keys": manifest.non_skipped_keys,
     }
 
 
@@ -347,14 +338,63 @@ def get_git_version():
     return out.strip()  # returns the hash
 
 
-def strip_results(config, key_spec):
-    from krun.platform import detect_platform
-    from krun.results import Results
+def get_instr_json_dir(config):
+    assert config.filename.endswith(".krun")
+    config_base = config.filename[:-5]
+    return os.path.join(os.getcwd(), "%s_instr_data" % config_base)
 
-    platform = detect_platform(None)
-    results = Results(config, platform,
-                      results_file=config.results_filename())
-    n_removed = results.strip_results(key_spec)
-    if n_removed > 0:
-        results.write_to_file()
-    info("Removed %d result keys" % n_removed)
+
+def dump_instr_json(key, exec_num, config, instr_data):
+    """Write per-execution instrumentation data to a separate JSON file"""
+
+    instr_json_dir = get_instr_json_dir(config)
+    if not os.path.exists(instr_json_dir):
+        os.mkdir(instr_json_dir)
+
+    filename = "%s__%s.json.bz2" % (key.replace(":", "__"), exec_num)
+    path = os.path.join(instr_json_dir, filename)
+
+    # The directory was checked to be non-existant when the benchmark session
+    # started, so it follows that the instrumentation JSON file (each of which
+    # is written at most once) should not exist either. If it does, the user
+    # did something strange.
+    assert not os.path.exists(path)
+    with BZ2File(path, "w") as fh:
+        fh.write(json.dumps(instr_data))
+
+
+def get_envlog_dir(config):
+    assert config.filename.endswith(".krun")
+    config_base = config.filename[:-5]
+    return os.path.join(os.getcwd(), "%s_envlogs" % config_base)
+
+
+def stash_envlog(tmp_filename, config, platform, key, exec_num):
+    """Move the environment log file out of /tmp into the experiment dir"""
+
+    envlog_dir = get_envlog_dir(config)
+    if not os.path.exists(envlog_dir):
+        os.mkdir(envlog_dir)
+
+    new_filename = "%s__%s.env" % (key.replace(":", "__"), exec_num)
+    new_path = os.path.join(envlog_dir, new_filename)
+
+    # Similarly to dump_instr_json(), the file cannot exist at this point
+    assert not os.path.exists(new_path)
+    shutil.copyfile(tmp_filename, new_path)
+    del_envlog_tempfile(tmp_filename, platform)
+
+
+def del_envlog_tempfile(filename, platform):
+    """Clear away the old file"""
+
+    if not os.path.exists(filename):  # some tests skip creation
+        return
+
+    if platform.no_user_change:
+        os.unlink(filename)
+    else:
+        # Is owned by BENCHMARK_USER so we can't directly remove the file
+        from krun.vm_defs import BENCHMARK_USER
+        args = platform.change_user_args(BENCHMARK_USER) + ["rm", filename]
+        run_shell_cmd(" ".join(args))

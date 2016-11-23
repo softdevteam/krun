@@ -22,6 +22,7 @@ from krun.vm_defs import BENCHMARK_USER
 NICE_PRIORITY = -20
 DIR = os.path.abspath(os.path.dirname(__file__))
 LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkrun")
+RMSR_DIR = os.path.join(DIR, "..", "rmsr")
 SYNC_SLEEP_SECS = 30  # time to wait for sync() to finish
 
 
@@ -40,7 +41,7 @@ class BasePlatform(object):
         self.no_user_change = False
         self.no_pstate_check = False
         self.no_tickless_check = False
-        self.fake_reboots = False
+        self.hardware_reboots = False
         self.mailer = mailer
         self.audit = OrderedDict()
         self.config = config
@@ -141,16 +142,18 @@ class BasePlatform(object):
                 return True  # allowed change of dmesg
         return False
 
-    def check_dmesg_for_changes(self):
+    def check_dmesg_for_changes(self, manifest):
         new_dmesg = self._collect_dmesg_lines()
         patterns = self.get_allowed_dmesg_patterns()
 
-        rv = self._check_dmesg_for_changes(patterns, self.last_dmesg, new_dmesg)
+        rv = self._check_dmesg_for_changes(patterns, self.last_dmesg,
+                                           new_dmesg, manifest)
         self.last_dmesg = new_dmesg
 
         return rv
 
-    def _check_dmesg_for_changes(self, patterns, last_dmesg, new_dmesg):
+    def _check_dmesg_for_changes(self, patterns, last_dmesg, new_dmesg,
+                                 manifest):
         differ = difflib.Differ()
         delta = list(differ.compare(last_dmesg, new_dmesg))
         delta_len = len(delta)
@@ -202,7 +205,8 @@ class BasePlatform(object):
         if new_lines:
             # dmesg changed!
             warn_s = ("New dmesg lines:\n%s" % "\n  ".join(new_lines))
-            log_and_mail(self.mailer, warn, "dmesg changed", warn_s)
+            log_and_mail(self.mailer, warn, "dmesg changed", warn_s,
+                         manifest=manifest)
             rv = True  # i.e. a (potential) error occurred
 
         return rv
@@ -471,16 +475,20 @@ class OpenBSDPlatform(UnixLikePlatform):
     def __init__(self, mailer, config):
         UnixLikePlatform.__init__(self, mailer, config)
 
+        # per-core measurements not supported yet
+        self.num_per_core_measurements = 0
+
     def find_temperature_sensors(self):
         lines = self._get_sysctl_sensor_lines()
         sensors = []
-        for line in lines.split("\n"):
-            elems = line.split("=")
+        if lines is not None:
+            for line in lines.split("\n"):
+                elems = line.split("=")
 
-            if len(elems) != 2:
-                fatal("Malformed sysctl line: '%s'" % line)
+                if len(elems) != 2:
+                    fatal("Malformed sysctl line: '%s'" % line)
 
-            sensors.append(elems[0].strip())
+                sensors.append(elems[0].strip())
         self.temp_sensors = sensors
 
     def bench_env_changes(self):
@@ -520,9 +528,20 @@ class OpenBSDPlatform(UnixLikePlatform):
             adjust = True
 
         # Second, the CPU should be running as fast as possible
-        out, _, _ = run_shell_cmd(self.GET_SETPERF_CMD)
+        out, err, _ = run_shell_cmd(self.GET_SETPERF_CMD)
         elems = out.split("=")
-        if len(elems) != 2 or elems[1].strip() != "100":
+        if len(elems) != 2:
+            if "value is not available" in err:
+                # sysctl returns 0 even on error. OpenBSD bug?
+                warn("hw.setperf is not available -- can't check apm state")
+
+                # Try anyway
+                out, _, _ = run_shell_cmd("apm -H")
+                return
+            else:
+                fatal("Can't run: %s" % self.GET_SETPERF_CMD)
+
+        if elems[1].strip() != "100":
             debug("hw.setperf is '%s' not '100'" % elems[1])
             adjust = True
 
@@ -533,7 +552,14 @@ class OpenBSDPlatform(UnixLikePlatform):
 
     def _get_sysctl_sensor_lines(self):
         # separate for test mocking
-        return run_shell_cmd(self.FIND_TEMP_SENSORS_CMD)[0]
+        out, err, rc = run_shell_cmd(self.FIND_TEMP_SENSORS_CMD, failure_fatal=False)
+        if rc == 0:
+            return out
+        elif rc == 1:
+            # not really an error. Actually no lines matched, thus no sensors.
+            warn("System does not appear to have temperature sensors.")
+        else:
+            fatal("Failed to run: %s" % self.FIND_TEMP_SENSORS_CMD)
 
     def _raw_read_temperature_sensor(self, sensor):
         # mocked in tests
@@ -654,8 +680,16 @@ class LinuxPlatform(UnixLikePlatform):
         self.temp_sensor_map = None
         UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
+        self.num_per_core_measurements = self._get_num_per_core_measurements()
+
         self.virt_what_cmd = None  # set later
 
+    def _get_num_per_core_measurements(self):
+        # For all systems apart from travis we expect per-core measurements
+        if os.environ.get("TRAVIS") == "true":
+            return 0
+        else:
+            return self.num_cpus
 
     def _fatal_kernel_arg(self, arg, prefix, suffix):
         """Bail out and inform user how to add a kernel argument"""
@@ -756,6 +790,7 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
+        self._check_rmsr_loaded()
         if not self.no_tickless_check:
             self._check_tickless_kernel()
         self._check_aslr_disabled()
@@ -765,7 +800,7 @@ class LinuxPlatform(UnixLikePlatform):
 
         # the tool may not be in the path for an unpriveleged user
         ec = EnvChangeAppend("PATH", "/usr/sbin")
-        env = ec.apply(os.environ)
+        ec.apply(os.environ)
 
         from distutils.spawn import find_executable
         exe = find_executable("virt-what")
@@ -792,7 +827,7 @@ class LinuxPlatform(UnixLikePlatform):
             # destroy shield (if existing)
             if os.path.exists(LinuxPlatform.USER_CSET_DIR):
                 return [self.change_user_args("root") + \
-                    [LinuxPlatform.CSET_CMD, "shield", "-r"]]
+                        [LinuxPlatform.CSET_CMD, "shield", "-r"]]
             else:
                 return []  # no commands
 
@@ -972,7 +1007,7 @@ class LinuxPlatform(UnixLikePlatform):
                         warn("Ignoring enabled P-states (--no-pstate-check)")
                         return
 
-                    scaler_files = [ "  * " + LinuxPlatform.CPU_SCALER_FMT % x for
+                    scaler_files = ["  * " + LinuxPlatform.CPU_SCALER_FMT % x for
                                     x in xrange(self.num_cpus)]
                     self._fatal_kernel_arg(
                         "intel_pstate=disable",
@@ -997,6 +1032,24 @@ class LinuxPlatform(UnixLikePlatform):
                       "This should not happen, as this feature only applies to "
                       "pstate CPU scaling and Krun just determined that "
                       "the system is not!")
+
+    def _check_rmsr_loaded(self):
+        debug("Checking 'rmsr' module is loaded")
+        cmd = "lsmod"
+        stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=True)
+        if 'rmsr' in  stdout:
+            return
+        if (os.environ.get("TRAVIS", None) == "true"):
+            debug("Running on Travis-CI so not calling insmod.")
+            return
+        # rmsr git repo should have been cloned and compiled by 'make all'.
+        debug("Auto-loading 'rmsr' module.")
+        cmd = "%s rmmod msr" % self.change_user_cmd
+        stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+        module = os.path.join(RMSR_DIR, "rmsr.ko")
+        cmd = "%s insmod %s" % (self.change_user_cmd, module)
+        stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=True)
+        debug("rmsr loaded successfully.")
 
     def _check_aslr_disabled(self):
         debug("Checking ASLR is off")
@@ -1111,6 +1164,18 @@ class LinuxPlatform(UnixLikePlatform):
             self._fatal_kernel_arg(
                 "isolcpus", "isolcpus should not be in the kernel command line"
             )
+
+    def get_allowed_dmesg_patterns(self):
+        return UnixLikePlatform.get_allowed_dmesg_patterns(self) + \
+            [
+                # Bringing the network up and down on Linux (which some
+                # experiments may wish to do) makes some noise. Ignore.
+                re.compile("^.*ADDRCONF\(NETDEV_UP\)"),
+                re.compile("^.*ADDRCONF\(NETDEV_CHANGE\)"),
+                re.compile("^.*NIC Link is (Up|Down)"),
+                re.compile("^.*irq.* for MSI/MSI-X"),
+                re.compile("^.*eth[0-9]: link (down|up)"),
+            ]
 
     def _sched_get_priority_max(self):
         # If we later support other operating systems which too support static

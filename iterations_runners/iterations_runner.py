@@ -108,7 +108,7 @@ if __name__ == "__main__":
             jit_time = (end_snap.counter_times["TRACING"] -
                         start_snap.counter_times["TRACING"])
             jit_time += (end_snap.counter_times["BACKEND"] -
-                        start_snap.counter_times["BACKEND"])
+                         start_snap.counter_times["BACKEND"])
             sys.stderr.write("@@@ JIT_TIME: %s\n" % jit_time)
             sys.stderr.flush()
 

@@ -40,4 +40,3 @@ class BaseKrunTest(object):
     @pytest.fixture
     def platform(self):
         return detect_platform(MockMailer(), Config())
-

@@ -1,18 +1,20 @@
-from krun.util import (format_raw_exec_results,
-                       log_and_mail, fatal,
-                       check_and_parse_execution_results,
-                       run_shell_cmd, run_shell_cmd_bench,
-                       get_git_version,
-                       ExecutionFailed, get_session_info,
-                       run_shell_cmd_list, FatalKrunError, strip_results)
+from krun.util import (format_raw_exec_results, log_and_mail, fatal,
+                       check_and_parse_execution_results, run_shell_cmd,
+                       run_shell_cmd_bench, get_git_version, ExecutionFailed,
+                       get_session_info, run_shell_cmd_list, FatalKrunError,
+                       stash_envlog, dump_instr_json)
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
+from krun.scheduler import ManifestManager
+from krun.tests.mocks import mock_platform, mock_manifest, mock_mailer
+from bz2 import BZ2File
 
 import json
 import logging
 import pytest
 import os
+from tempfile import NamedTemporaryFile
 
 
 def test_fatal(capsys, caplog):
@@ -25,13 +27,13 @@ def test_fatal(capsys, caplog):
     assert msg in caplog.text()
 
 
-def test_log_and_mail():
+def test_log_and_mail(mock_manifest, mock_mailer):
     log_fn = lambda s: None
-    log_and_mail(MockMailer(), log_fn, "subject", "msg", exit=False,
-                 bypass_limiter=False)
+    log_and_mail(mock_mailer, log_fn, "subject", "msg", exit=False,
+                 bypass_limiter=False, manifest=mock_manifest)
     with pytest.raises(FatalKrunError):
         log_and_mail(MockMailer(), log_fn, "", "", exit=True,
-                     bypass_limiter=False)
+                     bypass_limiter=False, manifest=mock_manifest)
     assert True
 
 
@@ -162,6 +164,7 @@ def test_get_session_info0001():
         "nbody:CPython:default-python",
     ])
     assert info["non_skipped_keys"] == expect_non_skipped_keys
+    os.unlink(ManifestManager.get_filename(config))
 
 
 def test_get_session_info0002():
@@ -241,6 +244,7 @@ def test_get_session_info0002():
 
     # There should be no overlap in the used and skipped keys
     assert info["skipped_keys"].intersection(info["non_skipped_keys"]) == set()
+    os.unlink(ManifestManager.get_filename(config))
 
 
 def test_run_shell_cmd_list0001():
@@ -277,10 +281,11 @@ def test_run_shell_cmd_list0002(caplog):
     os.unlink(path)
     assert got == "1\n"
 
-    expect = "Shell command failed: '/flibblebop"
+    expect = "Command failed: '/flibblebop"
     assert expect in caplog.text()
 
-def test_run_shell_cmd_list0002():
+
+def test_run_shell_cmd_list0003():
     path = os.path.join(TEST_DIR, "shell-out")
     cmds = [
         "echo ${TESTVAR}  > %s" % path,
@@ -296,7 +301,8 @@ def test_run_shell_cmd_list0002():
     os.unlink(path)
     assert got == "test123\ntest456\n"
 
-def test_run_shell_cmd_list0003(caplog):
+
+def test_run_shell_cmd_list0004(caplog):
     path = os.path.join(TEST_DIR, "shell-out")
     cmds = [
         "echo ${TESTVAR}  > %s" % path,
@@ -312,54 +318,44 @@ def test_run_shell_cmd_list0003(caplog):
 
 def test_get_git_version0001():
     vers = get_git_version()
-    num = int(vers, 16)
+    int(vers, 16)
     # should not crash
 
 
-@pytest.fixture
-def to_strip():
-    from krun.platform import detect_platform
-    from krun.results import Results
-
-    path = os.path.join(TEST_DIR, "quick.krun")
+def test_stash_envlog0001(mock_platform):
+    path = os.path.join(TEST_DIR, "example.krun")
     config = Config(path)
 
-    platform = detect_platform(None, config)
-    results = Results(config, platform,
-                      results_file=config.results_filename())
-    return results
+    env = "A=1\nB=2\nC=3\n"
+    with NamedTemporaryFile(prefix="kruntest-", delete=False) as fh:
+        fh.write(env)
+        filename = fh.name
+
+    stash_envlog(filename, config, mock_platform, "bench:vm:variant", 1337)
+    stashed_logdir = os.path.join(TEST_DIR, "example_envlogs")
+    stashed_logfile = os.path.join(stashed_logdir,
+                                   "bench__vm__variant__1337.env")
+    with open(stashed_logfile) as fh:
+        got = fh.read()
+
+    os.unlink(stashed_logfile)
+    os.rmdir(stashed_logdir)
+    assert got == env
 
 
-def test_strip_results0001(to_strip):
-    key_spec = "dummy:CPython:default-python"
-    n_removed = to_strip.strip_results(key_spec)
-    assert n_removed == 1
-    assert to_strip.reboots == 3
+def test_dump_instr_json0001():
+    path = os.path.join(TEST_DIR, "example.krun")
+    config = Config(path)
 
+    instr_data = {k: ord(k) for k in "abcdef"}
+    dump_instr_json("bench:vm:variant", 666, config, instr_data)
 
-def test_strip_results0002(to_strip):
-    key_spec = "dummy:*:*"
-    n_removed = to_strip.strip_results(key_spec)
-    assert n_removed == 2
-    assert to_strip.reboots == 2
+    dump_dir = os.path.join(TEST_DIR, "example_instr_data")
+    dump_file = os.path.join(dump_dir, "bench__vm__variant__666.json.bz2")
+    with BZ2File(dump_file) as fh:
+        js = json.load(fh)
 
+    os.unlink(dump_file)
+    os.rmdir(dump_dir)
 
-def test_strip_results0003(to_strip):
-    key_spec = "*:*:*"
-    n_removed = to_strip.strip_results(key_spec)
-    assert n_removed == 4
-    assert to_strip.reboots == 0
-
-
-def test_strip_results0004(to_strip):
-    key_spec = "j:k:l"  # nonexistent key
-    n_removed = to_strip.strip_results(key_spec)
-    assert n_removed == 0
-    assert to_strip.reboots == 4
-
-
-def test_strip_results0005(to_strip, caplog):
-    key_spec = "jkl"  # malformed key
-    with pytest.raises(FatalKrunError):
-        to_strip.strip_results(key_spec)
-    assert "malformed key" in caplog.text()
+    assert js == instr_data

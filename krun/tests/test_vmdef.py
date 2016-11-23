@@ -1,39 +1,47 @@
 import sys
 import os
-import tempfile
+from tempfile import NamedTemporaryFile
 import pytest
 import json
 from StringIO import StringIO
-from krun.vm_defs import BaseVMDef, PythonVMDef, PyPyVMDef, JavaVMDef
+from krun.vm_defs import (PythonVMDef, PyPyVMDef, JavaVMDef)
 from krun.config import Config
 from distutils.spawn import find_executable
 from krun.env import EnvChange
 from krun.tests.mocks import MockPlatform
+from krun.tests import BaseKrunTest
 from krun import EntryPoint
 from krun import util
 
-PYPY_JIT_SUMMARY_EVENT = ["[fffffffffffe] {jit-summary",
-                          "[ffffffffffff] jit-summary}"]
 
-class TestVMDef(object):
+class TestVMDef(BaseKrunTest):
     """Test stuff in VM definitions"""
 
-    def test_make_wrapper_script0001(self):
+    def test_make_wrapper_script0001(self, mock_platform):
         args = ["arg1", "arg2", "arg3"]
         heap_lim_k = 1024 * 1024 * 1024  # 1GiB
         stack_lim_k = 8192
         dash = find_executable("dash")
         assert dash is not None
+        vmdef = PythonVMDef("python2.7")
+        vmdef.set_platform(mock_platform)
 
+        wrapper_filename, envlog_filename = vmdef.make_wrapper_script(
+            args, heap_lim_k, stack_lim_k)
         expect = [
             '#!%s' % dash,
+            'ENVLOG=`env`',
             'ulimit -d %s || exit $?' % heap_lim_k,
             'ulimit -s %s || exit $?' % stack_lim_k,
             'arg1 arg2 arg3',
+            'echo "${ENVLOG}" > %s' % envlog_filename,
             'exit $?'
         ]
 
-        got = BaseVMDef.make_wrapper_script(args, heap_lim_k, stack_lim_k)
+        with open(wrapper_filename) as fh:
+            got = fh.read().splitlines()
+
+        util.del_envlog_tempfile(envlog_filename, mock_platform)
         assert expect == got
 
     def test_env_ctor0001(self):
@@ -50,7 +58,7 @@ class TestVMDef(object):
 
         assert len(vm.common_env_changes) == 2
 
-        ec1= vm.common_env_changes[0]
+        ec1 = vm.common_env_changes[0]
         assert ec1.var == "LD_LIBRARY_PATH"
         assert ec1.val == "/path/to/happiness"
 
@@ -139,7 +147,7 @@ class TestVMDef(object):
         args = [sys.executable, "-c",
                 "import sys; sys.stdout.write('STDOUT'); sys.stderr.write('STDERR')"]
 
-        with tempfile.NamedTemporaryFile(delete=False, prefix="kruntest") as fh:
+        with NamedTemporaryFile(delete=False, prefix="kruntest") as fh:
             filename = fh.name
             out, err, rv = vm_def._run_exec_popen(args, fh)
 
@@ -162,7 +170,7 @@ class TestVMDef(object):
             "[41720a9455be] gc-minor}",
             "@@@ END_IN_PROC_ITER: 0",
             "@@@ JIT_TIME: 0.001",
-        ] + PYPY_JIT_SUMMARY_EVENT))
+        ]))
 
         expect = {'raw_vm_events': [
             ['root', None, None, [
@@ -188,7 +196,7 @@ class TestVMDef(object):
             "[41720a9455be] gc-minor}",
             "@@@ END_IN_PROC_ITER: 1",
             "@@@ JIT_TIME: 0.002",
-        ] + PYPY_JIT_SUMMARY_EVENT))
+        ]))
 
         expect_one_iter = ['root', None, None, [
             ['gc-minor', 71958059544423, 71958059570622, [
@@ -208,7 +216,7 @@ class TestVMDef(object):
             "[41720a900000] gc-minor}",  # stop time invalid
             "@@@ END_IN_PROC_ITER: 0",
             "@@@ JIT_TIME: 0.001",
-        ] + PYPY_JIT_SUMMARY_EVENT))
+        ]))
 
         vmd = PyPyVMDef("/pretend/pypy")
         with pytest.raises(AssertionError):
@@ -222,7 +230,7 @@ class TestVMDef(object):
             "[000000000004] gc-step}",
             "@@@ END_IN_PROC_ITER: 0",
             "@@@ JIT_TIME: 0.001",
-        ] + PYPY_JIT_SUMMARY_EVENT))
+        ]))
 
         vmd = PyPyVMDef("/pretend/pypy")
         with pytest.raises(AssertionError):
@@ -233,29 +241,11 @@ class TestVMDef(object):
             "[000000000001] {gc-minor",  # unfinished event
             "@@@ END_IN_PROC_ITER: 0",
             "@@@ JIT_TIME: 0.001",
-        ] + PYPY_JIT_SUMMARY_EVENT))
+        ]))
 
         vmd = PyPyVMDef("/pretend/pypy")
         with pytest.raises(AssertionError):
             vmd.parse_instr_stderr_file(pypylog_file)
-
-    def test_pypy_instrumentation0006(self):
-        pypylog_file = StringIO("\n".join([
-            "[41720a93ef67] {gc-minor",
-            "[41720a941224] {gc-minor-walkroots",
-            "[41720a942814] gc-minor-walkroots}",
-            "[41720a9455be] gc-minor}",
-            "@@@ END_IN_PROC_ITER: 0",
-            "@@@ JIT_TIME: 0.001",
-        ]))
-
-        vmd = PyPyVMDef("/pretend/pypy")
-        try:
-            vmd.parse_instr_stderr_file(pypylog_file)
-        except AssertionError:
-            pass  # OK!
-        else:
-            assert False
 
     def test_jdk_instrumentation0001(self):
         """Check the json passes through correctly"""
@@ -285,4 +275,4 @@ class TestVMDef(object):
 
         vmd = JavaVMDef("/pretend/java")
         with pytest.raises(AssertionError):
-            got = vmd.parse_instr_stderr_file(stderr_file)
+            vmd.parse_instr_stderr_file(stderr_file)

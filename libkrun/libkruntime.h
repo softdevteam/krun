@@ -42,6 +42,7 @@ JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1krun_1init(JNIEnv *e, jclass c
 JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1krun_1done(JNIEnv *e, jclass c);
 JNIEXPORT void JNICALL Java_IterationsRunner_JNI_1krun_1measure(JNIEnv *e, jclass c, jint mindex);
 JNIEXPORT jdouble JNICALLJava_IterationsRunner_JNI_1krun_1get_1wallclock(JNIEnv *e, jclass c, jint mindex);
+JNIEXPORT jdouble JNICALLJava_IterationsRunner_JNI_1krun_1clock_1gettime_1monotonic(JNIEnv *e, jclass c);
 JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1krun_1get_1core_1cycles(JNIEnv *e, jclass c, jint mindex, jint core);
 JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1krun_1get_1aperf(JNIEnv *e, jclass c, jint mindex, jint core);
 JNIEXPORT jlong JNICALL Java_IterationsRunner_JNI_1krun_1get_1mperf(JNIEnv *e, jclass c, jint mindex, jint core);

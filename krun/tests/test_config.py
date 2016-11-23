@@ -108,7 +108,7 @@ def test_skip0001():
                 "*:HHVM:*",
                 "*:JRubyTruffle:*",
                 "*:V8:*",
-    ]
+                ]
     for triplet in expected:
         assert config.should_skip(triplet)
     assert config.should_skip("nbody:HHVM:default-php")
