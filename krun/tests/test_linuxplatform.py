@@ -265,6 +265,8 @@ class TestLinuxPlatform(BaseKrunTest):
             "[  190.178748] r8169 0000:06:00.0 eth0: link down",
             "[  190.178780] r8169 0000:06:00.0 eth0: link down",
             "[  193.276415] r8169 0000:06:00.0 eth0: link up",
+            # the graphics card going into powersave
+            "[    3.793646] [drm] Enabling RC6 states: RC6 on, RC6p off, RC6pp off",
         ]
         assert not platform._check_dmesg_for_changes(
             platform.get_allowed_dmesg_patterns(), old_lines, new_lines, mock_manifest)

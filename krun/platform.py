@@ -1175,6 +1175,9 @@ class LinuxPlatform(UnixLikePlatform):
                 re.compile("^.*NIC Link is (Up|Down)"),
                 re.compile("^.*irq.* for MSI/MSI-X"),
                 re.compile("^.*eth[0-9]: link (down|up)"),
+
+                # Graphics card goes into powersave
+                re.compile("^.*\[drm\] Enabling RC6 states"),
             ]
 
     def _sched_get_priority_max(self):
