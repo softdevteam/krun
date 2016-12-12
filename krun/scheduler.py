@@ -151,7 +151,7 @@ class ManifestManager(object):
         fh.seek(self.num_mails_sent_offset)
         new_val = self.num_mails_sent + 1
         assert 0 <= new_val <= self.num_mails_maxout
-        fh.write(ManifestManager.NUM_MAILS_FMT % (self.num_mails_sent + 1))
+        fh.write(ManifestManager.NUM_MAILS_FMT % (new_val))
         fh.close()
 
         self._reset()
