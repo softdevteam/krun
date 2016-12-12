@@ -25,7 +25,6 @@ def type_check_results(results):
         assert all([type(x) is float for x in execs])
 
     assert type(results.starting_temperatures) is dict
-    assert type(results.reboots) is int
     assert type(results.audit) is type(Audit(dict()))
     assert type(results.config) is type(Config())
     assert type(results.error_flag) is bool
@@ -286,8 +285,8 @@ class TestScheduler(BaseKrunTest):
             assert False
 
         # Simulate a boot loop
-        sched.results.reboots = 9999  # way too many
-        sched.results.write_to_file()
+        sched.manifest.num_reboots = 9998  # way too many
+        sched.manifest.update_num_reboots() # increments and writes out file
 
         # Run the first process execution
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
