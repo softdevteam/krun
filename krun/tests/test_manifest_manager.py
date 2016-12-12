@@ -452,6 +452,15 @@ def test_update_num_mails_sent0001():
     assert manifest.num_mails_sent == 3
     _tear_down(manifest.path)
 
+def test_update_num_mails_sent0002():
+    """Tests the overflow case"""
+
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
+    manifest.num_mails_sent = manifest.num_mails_maxout
+    with pytest.raises(AssertionError):
+        manifest.update_num_mails_sent()
+    _tear_down(manifest.path)
+
 
 def test_update_num_reboots0001():
     manifest = _setup(BLANK_EXAMPLE_MANIFEST)
