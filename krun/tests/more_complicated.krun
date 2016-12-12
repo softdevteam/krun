@@ -69,7 +69,10 @@ VMS = {
         'n_iterations': ITERATIONS_ALL_VMS,
     },
     'JRubyTruffle' : {
-        'vm_def': JRubyTruffleVMDef('work/jruby/bin/jruby', java_path="dummy"),
+        'vm_def': JRubyTruffleVMDef(jruby_dir='work/jruby',
+                                    graal_home='work/graal',
+                                    mx_dir='work/mx',
+                                    jvmci_home='work/graal-jvmci-8/jdk1.8.0/product'),
         'variants': ['default-ruby'],
         'n_iterations': ITERATIONS_ALL_VMS,
     },
