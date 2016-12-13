@@ -25,6 +25,8 @@ class ManifestManager(object):
     NUM_REBOOTS_BYTES = 8
     NUM_REBOOTS_FMT = "%%0%dd" % NUM_REBOOTS_BYTES
 
+    HEADER_FIELDS = set(["num_reboots", "eta_avail_idx", "num_mails_sent"])
+
     def __init__(self, config, new_file=False):
         """If new_file is True, write a new manifest file to disk based on the
         contents of the config file, otherwise parse the (existing) manifest
@@ -84,6 +86,7 @@ class ManifestManager(object):
         self._reset()
         fh = self._open()
         offset = 0
+        seen_headers = set()
 
         # Parse manifest header
         for line in fh:
@@ -103,9 +106,13 @@ class ManifestManager(object):
                     self.num_reboots_offset = offset + len(key) + 1
                 else:
                     util.fatal("bad key in the manifest header: %s" % key)
+                seen_headers.add(key)
                 offset += len(line)
         else:
             assert False
+
+        # Check we saw all the necessary header fields
+        assert seen_headers == ManifestManager.HEADER_FIELDS
 
         # Get info from the rest of the file
         exec_idx = 0

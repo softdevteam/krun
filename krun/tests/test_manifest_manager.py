@@ -92,6 +92,19 @@ O dummy:CPython:default-python
 E nbody:CPython:default-python
 """
 
+# num_mails_sent is missing
+MISSING_HEADER_EXAMPLE_MANIFEST = """eta_avail_idx=4
+num_reboots=00000000
+keys
+E dummy:Java:default-java
+C nbody:Java:default-java
+C dummy:CPython:default-python
+S nbody:CPython:default-python
+C dummy:Java:default-java
+S nbody:Java:default-java
+O dummy:CPython:default-python
+E nbody:CPython:default-python
+"""
 
 def _setup(contents):
     class FakeConfig(object):
@@ -481,3 +494,7 @@ def test_update_num_reboots0002():
     with pytest.raises(AssertionError):
         manifest.update_num_reboots()
     _tear_down(manifest.path)
+
+def test_missing_header_manifest0001():
+    with pytest.raises(AssertionError):
+        manifest = _setup(MISSING_HEADER_EXAMPLE_MANIFEST)
