@@ -22,13 +22,17 @@ class ManifestManager(object):
     NUM_MAILS_BYTES = 4  # number of bytes used for the (ASCII) field
     NUM_MAILS_FMT = "%%0%dd" % NUM_MAILS_BYTES
 
+    NUM_REBOOTS_BYTES = 8
+    NUM_REBOOTS_FMT = "%%0%dd" % NUM_REBOOTS_BYTES
+
     def __init__(self, config, new_file=False):
         """If new_file is True, write a new manifest file to disk based on the
         contents of the config file, otherwise parse the (existing) manifest
         file corresponding with the config file."""
 
-        # The max number the field can accommodate
+        # Maximum values for mutible header fields
         self.num_mails_maxout = 10 ** ManifestManager.NUM_MAILS_BYTES - 1
+        self.num_reboots_maxout = 10 ** ManifestManager.NUM_REBOOTS_BYTES - 1
 
         self.path = ManifestManager.get_filename(config)
         if new_file:
@@ -59,6 +63,8 @@ class ManifestManager(object):
         self.completed_exec_counts = {}  # including errors
         self.skipped_keys = set()
         self.non_skipped_keys = set()
+        self.num_reboots = -1
+        self.num_reboots_offset = None
 
     def _open(self):
         debug("Reading status cookie from %s" % self.path)
@@ -92,6 +98,9 @@ class ManifestManager(object):
                 elif key == "num_mails_sent":
                     self.num_mails_sent = int(val)
                     self.num_mails_sent_offset = offset + len(key) + 1  # +1 to skip '='
+                elif key == "num_reboots":
+                    self.num_reboots = int(val)
+                    self.num_reboots_offset = offset + len(key) + 1
                 else:
                     util.fatal("bad key in the manifest header: %s" % key)
                 offset += len(line)
@@ -142,7 +151,21 @@ class ManifestManager(object):
         fh.seek(self.num_mails_sent_offset)
         new_val = self.num_mails_sent + 1
         assert 0 <= new_val <= self.num_mails_maxout
-        fh.write(ManifestManager.NUM_MAILS_FMT % (self.num_mails_sent + 1))
+        fh.write(ManifestManager.NUM_MAILS_FMT % (new_val))
+        fh.close()
+
+        self._reset()
+        self._parse()  # update stats
+
+    def update_num_reboots(self):
+        """Updates the reboot count header in the manifest file."""
+
+        debug("Increment reboot count in manifest")
+        fh = self._open()
+        fh.seek(self.num_reboots_offset)
+        new_val = self.num_reboots + 1
+        assert 0 <= new_val <= self.num_reboots_maxout
+        fh.write(ManifestManager.NUM_REBOOTS_FMT % (new_val))
         fh.close()
 
         self._reset()
@@ -200,9 +223,11 @@ class ManifestManager(object):
         debug("Writing manifest to %s" % self.path)
 
         num_mails_str = ManifestManager.NUM_MAILS_FMT % 0
+        num_reboots_str = ManifestManager.NUM_REBOOTS_FMT % 0
         with open(self.path, "w") as fh:
             fh.write("eta_avail_idx=%s\n" % eta_avail_idx)
             fh.write("num_mails_sent=%s\n" % num_mails_str)
+            fh.write("num_reboots=%s\n" % num_reboots_str)
             fh.write("keys\n")
             for item in manifest:
                 fh.write("%s\n" % item)
@@ -403,6 +428,7 @@ class ExecutionScheduler(object):
         self.platform.wait_for_temperature_sensors()
 
         if self.on_first_invocation:
+            self.results.write_to_file()
             info("Reboot prior to first execution")
             self._reboot()
 
@@ -478,6 +504,8 @@ class ExecutionScheduler(object):
             if self.results is None:
                 self.results = Results(self.config, self.platform,
                                        results_file=self.config.results_filename())
+
+            self.results.write_to_file()
             util.run_shell_cmd_list(
                 self.config.POST_EXECUTION_CMDS,
                 extra_env=self._make_post_cmd_env()
@@ -524,7 +552,6 @@ class ExecutionScheduler(object):
             info("Reboot in preparation for next execution")
             self._reboot()  # also deals with dumping results file
         elif self.manifest.num_execs_left == 0:
-            self.results.write_to_file()
             self.platform.save_power()
 
             info("Done: Results dumped to %s" % self.config.results_filename())
@@ -546,21 +573,17 @@ class ExecutionScheduler(object):
         """Dump results to disk and reboot"""
 
         expected_reboots = self.manifest.total_num_execs
-        self.results.reboots += 1
+        self.manifest.update_num_reboots()
         debug("About to execute reboot: %g, expecting %g in total." %
-              (self.results.reboots, expected_reboots))
-
-        # Dump the results file.
-        assert self.results is not None
-        self.results.write_to_file()
+              (self.manifest.num_reboots, expected_reboots))
 
         # Check for a boot loop
-        if self.results.reboots > expected_reboots:
+        if self.manifest.num_reboots > expected_reboots:
             util.fatal(("HALTING now to prevent an infinite reboot loop: " +
                         "INVARIANT num_reboots <= num_jobs violated. " +
                         "Krun was about to execute reboot number: %g. " +
                         "%g jobs have been completed, %g are left to go.") %
-                       (self.results.reboots, self.manifest.next_exec_idx,
+                       (self.manifest.num_reboots, self.manifest.next_exec_idx,
                         self.manifest.num_execs_left))
         self._do_reboot()
 

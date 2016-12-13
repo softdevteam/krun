@@ -25,8 +25,6 @@ class Results(object):
         self.aperf_counts = dict()
         self.mperf_counts = dict()
 
-        self.reboots = 0
-
         # Record how long execs are taking so we can give the user a rough ETA.
         # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
         self.eta_estimates = dict()
@@ -161,7 +159,6 @@ class Results(object):
             "aperf_counts": self.aperf_counts,
             "mperf_counts": self.mperf_counts,
             "audit": self.audit.audit,
-            "reboots": self.reboots,
             "starting_temperatures": self.starting_temperatures,
             "eta_estimates": self.eta_estimates,
             "error_flag": self.error_flag,
@@ -185,7 +182,6 @@ class Results(object):
                 self.aperf_counts == other.aperf_counts and
                 self.mperf_counts == other.mperf_counts and
                 self.audit == other.audit and
-                self.reboots == other.reboots and
                 self.starting_temperatures == other.starting_temperatures and
                 self.eta_estimates == other.eta_estimates and
                 self.error_flag == other.error_flag)

@@ -10,6 +10,7 @@ TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 
 BLANK_EXAMPLE_MANIFEST = """eta_avail_idx=4
 num_mails_sent=0000
+num_reboots=00000000
 keys
 O dummy:Java:default-java
 O nbody:Java:default-java
@@ -23,6 +24,7 @@ O nbody:CPython:default-python
 
 SKIPS_EXAMPLE_MANIFEST = """eta_avail_idx=4
 num_mails_sent=0000
+num_reboots=00000000
 keys
 S dummy:Java:default-java
 S nbody:Java:default-java
@@ -36,6 +38,7 @@ O nbody:CPython:default-python
 
 SKIPS_END_EXAMPLE_MANIFEST = """eta_avail_idx=4
 num_mails_sent=0000
+num_reboots=00000000
 keys
 O dummy:Java:default-java
 O nbody:Java:default-java
@@ -49,6 +52,7 @@ S nbody:CPython:default-python
 
 SKIPS_ALL_EXAMPLE_MANIFEST = """eta_avail_idx=4
 num_mails_sent=0000
+num_reboots=00000000
 keys
 S dummy:Java:default-java
 S nbody:Java:default-java
@@ -62,6 +66,7 @@ S nbody:CPython:default-python
 
 ERRORS_ALL_EXAMPLE_MANIFEST = """eta_avail_idx=4
 num_mails_sent=0000
+num_reboots=00000000
 keys
 E dummy:Java:default-java
 E nbody:Java:default-java
@@ -75,6 +80,7 @@ E nbody:CPython:default-python
 
 IRREGULAR_EXAMPLE_MANIFEST = """eta_avail_idx=4
 num_mails_sent=0000
+num_reboots=00000000
 keys
 E dummy:Java:default-java
 C nbody:Java:default-java
@@ -109,7 +115,7 @@ def test_parse_manifest():
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "dummy:Java:default-java"
     assert manifest.next_exec_idx == 0
-    assert manifest.next_exec_flag_offset == 41
+    assert manifest.next_exec_flag_offset == 62
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 2,
         "nbody:Java:default-java": 2,
@@ -127,6 +133,10 @@ def test_parse_manifest():
         "nbody:Java:default-java", "dummy:CPython:default-python",
         "nbody:CPython:default-python",]
     )
+    assert manifest.num_reboots == 0
+    assert manifest.num_reboots_offset == 48
+    assert manifest.num_mails_sent == 0
+    assert manifest.num_mails_sent_offset == 31
     _tear_down(manifest.path)
 
 
@@ -177,7 +187,7 @@ def test_parse_with_skips():
     assert manifest.total_num_execs == 6
     assert manifest.next_exec_key == "dummy:CPython:default-python"
     assert manifest.next_exec_idx == 2
-    assert manifest.next_exec_flag_offset == 93
+    assert manifest.next_exec_flag_offset == 114
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 1,
         "nbody:Java:default-java": 1,
@@ -260,7 +270,7 @@ def test_parse_with_skips_at_end():
     assert manifest.total_num_execs == 6
     assert manifest.next_exec_key == "dummy:Java:default-java"
     assert manifest.next_exec_idx == 0
-    assert manifest.next_exec_flag_offset == 41
+    assert manifest.next_exec_flag_offset == 62
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 2,
         "nbody:Java:default-java": 2,
@@ -313,7 +323,7 @@ def test_update_blank():
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "dummy:Java:default-java"
     assert manifest.next_exec_idx == 0
-    assert manifest.next_exec_flag_offset == 41
+    assert manifest.next_exec_flag_offset == 62
     assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 2,
@@ -333,7 +343,7 @@ def test_update_blank():
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "nbody:Java:default-java"
     assert manifest.next_exec_idx == 1
-    assert manifest.next_exec_flag_offset == 67
+    assert manifest.next_exec_flag_offset == 88
     assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 1,
@@ -353,7 +363,7 @@ def test_update_blank():
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "dummy:CPython:default-python"
     assert manifest.next_exec_idx == 2
-    assert manifest.next_exec_flag_offset == 93
+    assert manifest.next_exec_flag_offset == 114
     assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 1,
@@ -376,7 +386,7 @@ def test_update_to_completion():
     assert manifest.total_num_execs == 8
     assert manifest.next_exec_key == "dummy:Java:default-java"
     assert manifest.next_exec_idx == 0
-    assert manifest.next_exec_flag_offset == 41
+    assert manifest.next_exec_flag_offset == 62
     assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 2,
@@ -416,7 +426,7 @@ def test_irregular_manifest():
     assert manifest.total_num_execs == 6
     assert manifest.next_exec_key == "dummy:CPython:default-python"
     assert manifest.next_exec_idx == 6
-    assert manifest.next_exec_flag_offset == 207
+    assert manifest.next_exec_flag_offset == 228
     assert manifest.num_mails_sent_offset == 31
     assert manifest.outstanding_exec_counts == {
         "dummy:Java:default-java": 0,
@@ -440,4 +450,34 @@ def test_update_num_mails_sent0001():
     manifest.update_num_mails_sent()
     manifest.update_num_mails_sent()
     assert manifest.num_mails_sent == 3
+    _tear_down(manifest.path)
+
+def test_update_num_mails_sent0002():
+    """Tests the overflow case"""
+
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
+    manifest.num_mails_sent = manifest.num_mails_maxout
+    with pytest.raises(AssertionError):
+        manifest.update_num_mails_sent()
+    _tear_down(manifest.path)
+
+
+def test_update_num_reboots0001():
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
+    assert manifest.num_reboots == 0
+    manifest.update_num_reboots()
+    assert manifest.num_reboots == 1
+    manifest.update_num_reboots()
+    manifest.update_num_reboots()
+    assert manifest.num_reboots == 3
+    _tear_down(manifest.path)
+
+
+def test_update_num_reboots0002():
+    """Tests the overflow case"""
+
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
+    manifest.num_reboots = manifest.num_reboots_maxout
+    with pytest.raises(AssertionError):
+        manifest.update_num_reboots()
     _tear_down(manifest.path)
