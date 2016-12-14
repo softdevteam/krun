@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define EXPECT_OPTS     "sfghjpru"
+#define EXPECT_OPTS     "cfgrux"
 
 void
 run_iter(int param)

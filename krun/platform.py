@@ -467,10 +467,12 @@ class OpenBSDPlatform(UnixLikePlatform):
     GET_SETPERF_CMD = "sysctl hw.setperf"
 
     # flags to set OpenBSD MALLOC_OPTIONS to. We disable anything that could
-    # possibly introduce non-determinism.
-    # 's' first acts to reset free page cache to default.
+    # possibly introduce non-determinism or extra computation.
     # See malloc.conf(5) and src/lib/libc/stdlib/malloc.c for more info.
-    MALLOC_OPTS = "sfghjpru"
+    # Although 'F' would improve determinism, it seems to impact performance
+    # (enough for us to care).
+    MALLOC_OPTS = "cfgrux"
+    MALLOC_CONF = "/etc/malloc.conf"
 
     def __init__(self, mailer, config):
         UnixLikePlatform.__init__(self, mailer, config)
@@ -613,6 +615,10 @@ class OpenBSDPlatform(UnixLikePlatform):
 
     def _malloc_options_sanity_check(self):
         """Checks MALLOC_OPTIONS are set"""
+
+        if os.path.lexists(OpenBSDPlatform.MALLOC_CONF):
+            fatal("%s exists. Please remove it" %
+                  OpenBSDPlatform.MALLOC_CONF)
 
         from krun import EntryPoint
         ep = EntryPoint("check_openbsd_malloc_options.so")
