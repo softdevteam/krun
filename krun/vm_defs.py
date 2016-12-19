@@ -166,8 +166,8 @@ class BaseVMDef(object):
             bench_env_changes = []
 
         # Environment *after* user change.
-        # Starts empty, but user change command (i.e. sudo) may introduce some.
-        new_user_env = {}
+        # Starts minimal, but user change command (i.e. sudo) may introduce more.
+        new_user_env = {"PATH": "/bin:/usr/bin"}
 
         # Apply envs
         self.apply_env_changes(bench_env_changes, new_user_env)
@@ -439,7 +439,7 @@ class GraalVMDef(JavaVMDef):
         # This is for the JDK8 targetted version of graal.  Once JDK9 is
         # available it will include Graal and running the VM should be much
         # simpler. Hopefully just invoking 'java' with some flag.
-        self.extra_vm_args += ['-p', graal_dir, '-Mjit', 'vm']
+        self.extra_vm_args += ['-p', graal_dir, 'vm', '-XX:+UseJVMCICompiler']
 
         if java_home is not None:
             self.add_env_change(EnvChangeSet("JAVA_HOME", java_home))
@@ -641,11 +641,30 @@ class JRubyVMDef(RubyVMDef):
                                                 sync_disks=sync_disks)
 
 class JRubyTruffleVMDef(JRubyVMDef):
-    def __init__(self, vm_path, java_path, env=None):
-        JRubyVMDef.__init__(self, vm_path, env=env)
-        self.add_env_change(EnvChangeAppend("JAVACMD", java_path))
+    def __init__(self, jruby_dir=None, graal_home=None, mx_dir=None,
+                 jvmci_home=None, env=None):
+        """
+        Args:
+            jruby_dir: path to a (built) jruby src dir
+            graal_home: path to the built graal-core directory
+            mx_dir: path to mx directory
 
-        self.extra_vm_args += ['-J-Djvmci.Compiler=graal', '-X+T']
+        Note that this is for the open-source graal-core powered JRbuy, not
+        for the proprietary graalvm binaries found on Oracle Technology Network.
+        """
+
+        jtrb_path = os.path.join(jruby_dir, 'tool', 'jt.rb')
+        jruby_bin_dir = os.path.join(jruby_dir, 'bin')
+        mx_bin_dir = os.path.join(mx_dir, "bin")
+
+        JRubyVMDef.__init__(self, jtrb_path, env=env)
+        self.add_env_change(EnvChangeAppend("GRAAL_HOME", graal_home))
+        self.add_env_change(EnvChangeAppend("PATH", mx_dir))
+        self.add_env_change(EnvChangeAppend("PATH", jruby_bin_dir))
+        self.extra_vm_args += ['ruby', '--graal']
+
+        if jvmci_home is not None:
+            self.add_env_change(EnvChangeSet("JAVA_HOME", jvmci_home))
 
     def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
                  stack_lim_k, force_dir=None, sync_disks=True):
