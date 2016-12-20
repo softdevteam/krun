@@ -1,6 +1,6 @@
 import os
 import pytest
-from krun.tests.mocks import mock_mailer
+from krun.tests.mocks import mock_mailer, mock_platform
 from krun.scheduler import ManifestManager
 from krun.tests import TEST_DIR
 from krun.config import Config
@@ -8,10 +8,10 @@ from contextlib import contextmanager
 
 
 @pytest.yield_fixture
-def example_manifest():
+def example_manifest(mock_platform):
     # setup
     config = Config(os.path.join(TEST_DIR, "example.krun"))
-    manifest = ManifestManager(config, new_file=True)
+    manifest = ManifestManager(config, mock_platform, new_file=True)
 
     yield manifest
 

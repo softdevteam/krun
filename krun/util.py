@@ -261,7 +261,7 @@ def assign_platform(config, platform):
         vm_info["vm_def"].set_platform(platform)
 
 
-def get_session_info(config):
+def get_session_info(config, platform):
     """Gets information about the session (for --info)
 
     Overwrites any existing manifest file.
@@ -269,7 +269,7 @@ def get_session_info(config):
     Separated from print_session_info for ease of testing"""
 
     from krun.scheduler import ManifestManager
-    manifest = ManifestManager(config, new_file=True)
+    manifest = ManifestManager(config, platform, new_file=True)
 
     return {
         "n_proc_execs": manifest.total_num_execs,

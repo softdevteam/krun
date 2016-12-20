@@ -499,6 +499,12 @@ class ExecutionScheduler(object):
                 results = Results(self.config, self.platform)
                 results.write_to_file()
 
+                # We still need to run the post-execution commands
+                util.run_shell_cmd_list(
+                    self.config.POST_EXECUTION_CMDS,
+                    extra_env=self._make_post_cmd_env(results)
+                )
+
                 info("Reboot prior to first execution")
                 self._reboot()
             else:

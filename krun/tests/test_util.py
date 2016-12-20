@@ -3,7 +3,7 @@ from krun.util import (format_raw_exec_results, log_and_mail, fatal,
                        run_shell_cmd_bench, get_git_version, ExecutionFailed,
                        get_session_info, run_shell_cmd_list, FatalKrunError,
                        stash_envlog, dump_instr_json)
-from krun.tests.mocks import MockMailer
+from krun.tests.mocks import MockMailer, mock_platform
 from krun.tests import TEST_DIR
 from krun.config import Config
 from krun.scheduler import ManifestManager
@@ -148,10 +148,10 @@ stderr:
     assert excinfo.value.message == expected
 
 
-def test_get_session_info0001():
+def test_get_session_info0001(mock_platform):
     path = os.path.join(TEST_DIR, "example.krun")
     config = Config(path)
-    info = get_session_info(config)
+    info = get_session_info(config, mock_platform)
 
     assert info["n_proc_execs"] == 8
     assert info["n_in_proc_iters"] == 40
@@ -167,10 +167,10 @@ def test_get_session_info0001():
     os.unlink(ManifestManager.get_filename(config))
 
 
-def test_get_session_info0002():
+def test_get_session_info0002(mock_platform):
     path = os.path.join(TEST_DIR, "more_complicated.krun")
     config = Config(path)
-    info = get_session_info(config)
+    info = get_session_info(config, mock_platform)
 
     # 6 benchmarks, 9 VMs, skipped 3 exact keys, and all 6 CPython keys
     # Then two repetitions (process executions) of all of the above.

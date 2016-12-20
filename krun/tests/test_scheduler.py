@@ -8,6 +8,7 @@ import krun.util
 import os, pytest
 import re
 from krun.tests import TEST_DIR
+from krun.results import Results
 
 
 class TestReboot(Exception):
@@ -85,7 +86,8 @@ class TestScheduler(BaseKrunTest):
         assert sched.manifest.num_execs_left == 0
         assert n_reboots == 1
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 1  # 1 benchmark, 1 vm
@@ -103,7 +105,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 8  # 2 benchmarks, 2 vms, 2 execs
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms
@@ -128,7 +131,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 4  # 2 benchmarks, 2 vms, 2 execs, one VM skipped
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms
@@ -155,7 +159,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 8  # 2 benchmarks, 2 vms, 2 execs
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms
@@ -215,7 +220,20 @@ class TestScheduler(BaseKrunTest):
         os.unlink(sched.manifest.path)
 
         assert n_reboots == 1
-        expect = ["cmd1", "cmd2", "cmd3", "cmd4"]
+
+        # pre/post commands prior to first reboot (for collecting sensor data)
+        expect = ['cmd1', 'cmd2', 'cmd3', 'cmd4']
+
+        # Spurious commands introduced due to the way the test suite works. To
+        # emulate reboots, a special exception is raised, whereas krun would
+        # really either reboot or execv(), thus killing the current process.
+        # The exception used in tests, however, allows the `finally' block to
+        # run, which in turn causes the post-exec commands to run (again).
+        expect += ['cmd3', 'cmd4']
+
+        # commands for the process execution itself
+        expect += ['cmd1', 'cmd2', 'cmd3', 'cmd4']
+
         assert cap_cmds == expect
 
     def test_pre_and_post_exec_cmds0002(self, monkeypatch, mock_platform):

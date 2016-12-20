@@ -32,6 +32,7 @@ class MockPlatform(BasePlatform):
         self.num_cpus = 0
         self.num_per_core_measurements = 0
         self.no_user_change = True
+        self.temp_sensors = []
 
     def pin_process_args(self):
         return []
