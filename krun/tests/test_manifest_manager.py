@@ -120,6 +120,8 @@ def _setup(contents):
 def _tear_down(filename):
     if os.path.exists(filename):
         os.unlink(filename)
+    else:
+        assert(False)
 
 
 def test_parse_manifest():
@@ -157,7 +159,7 @@ def test_parse_manifest():
 def test_parse_empty_manifest():
     with pytest.raises(AssertionError):
         _setup("")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_erroneous_manifest_001():
@@ -165,7 +167,7 @@ def test_parse_erroneous_manifest_001():
         _setup("""eta_avail_idx=4
 keys
 X dummy:Java:default-java""")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_erroneous_manifest_002():
@@ -173,7 +175,7 @@ def test_parse_erroneous_manifest_002():
         _setup("""bob=4
 keys
 O dummy:Java:default-java""")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_erroneous_manifest_003():
@@ -182,7 +184,7 @@ def test_parse_erroneous_manifest_003():
 num_mails_sent=0000
 keyz
 O dummy:Java:default-java""")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_erroneous_manifest_004():
@@ -191,7 +193,7 @@ def test_parse_erroneous_manifest_004():
 num_mails_sent=0000
 keys
 O dummy:Java:default-java""")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_with_skips():
@@ -499,3 +501,4 @@ def test_update_num_reboots0002():
 def test_missing_header_manifest0001():
     with pytest.raises(AssertionError):
         manifest = _setup(MISSING_HEADER_EXAMPLE_MANIFEST)
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
