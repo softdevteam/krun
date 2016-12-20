@@ -265,7 +265,6 @@ def inner_main(mailer, on_first_invocation, config, args):
             util.fatal(error_msg)
 
         debug("Using pre-recorded initial temperature readings")
-        platform.starting_temperatures = current.starting_temperatures
     else:
         # Touch the config file to update its mtime. This is required
         # by when resuming a partially complete benchmark session, in which
@@ -273,14 +272,6 @@ def inner_main(mailer, on_first_invocation, config, args):
         _, _, rc = util.run_shell_cmd("touch " + args.filename)
         if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)
-
-        info(("Wait %s secs to allow system to cool prior to "
-             "collecting initial temperature readings") %
-             config.TEMP_READ_PAUSE)
-        platform.sleep(config.TEMP_READ_PAUSE)
-
-        debug("Taking fresh initial temperature readings")
-        platform.starting_temperatures = platform.take_temperature_readings()
 
     # Assign platform to VM defs -- needs to happen early for sanity checks
     util.assign_platform(config, platform)
