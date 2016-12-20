@@ -25,12 +25,19 @@ class ManifestManager(object):
     NUM_REBOOTS_BYTES = 8
     NUM_REBOOTS_FMT = "%%0%dd" % NUM_REBOOTS_BYTES
 
+    # Start temperature stored in-manifest as YYYYY.ZZ
+    START_TEMPERATURE_BYTES = 8
+    START_TEMPERATURE_FMT = "%08.2f"
+
+    # Mandatory manifest header fields (others exist, e.g. start temperatures)
     HEADER_FIELDS = set(["num_reboots", "eta_avail_idx", "num_mails_sent"])
 
-    def __init__(self, config, new_file=False):
+    def __init__(self, config, platform, new_file=False):
         """If new_file is True, write a new manifest file to disk based on the
         contents of the config file, otherwise parse the (existing) manifest
         file corresponding with the config file."""
+
+        self.platform = platform
 
         # Maximum values for mutible header fields
         self.num_mails_maxout = 10 ** ManifestManager.NUM_MAILS_BYTES - 1
@@ -67,6 +74,7 @@ class ManifestManager(object):
         self.non_skipped_keys = set()
         self.num_reboots = -1
         self.num_reboots_offset = None
+        self.starting_temperatures = {} # name -> (offset, degrees C floats)
 
     def _open(self):
         debug("Reading status cookie from %s" % self.path)
@@ -104,6 +112,11 @@ class ManifestManager(object):
                 elif key == "num_reboots":
                     self.num_reboots = int(val)
                     self.num_reboots_offset = offset + len(key) + 1
+                elif key.startswith("start_temp_"):
+                    sensor_name = key[len("start_temp_"):]
+                    assert sensor_name in self.platform.temp_sensors
+                    self.starting_temperatures[sensor_name] = \
+                        offset + len(key) + 1, float(val)
                 else:
                     util.fatal("bad key in the manifest header: %s" % key)
                 seen_headers.add(key)
@@ -112,7 +125,9 @@ class ManifestManager(object):
             assert False
 
         # Check we saw all the necessary header fields
-        assert seen_headers == ManifestManager.HEADER_FIELDS
+        expect_extra_headers = \
+            set(["start_temp_%s" % x for x in self.platform.temp_sensors])
+        assert ManifestManager.HEADER_FIELDS | expect_extra_headers == seen_headers
 
         # Get info from the rest of the file
         exec_idx = 0
@@ -193,6 +208,17 @@ class ManifestManager(object):
         self._reset()
         self._parse()  # update stats
 
+    def set_starting_temperatures(self, dct):
+        """Set starting temperatures in manifest header"""
+
+        fh = self._open()
+        for sensor, val in dct.iteritems():
+            offset, cur_tmp = self.starting_temperatures[sensor]
+            assert cur_tmp == 0.0  # shouldn't have been written yet
+            fh.seek(offset)
+            fh.write(ManifestManager.START_TEMPERATURE_FMT % val)
+        fh.close()
+
     def __eq__(self, other):
         return (self.next_exec_key == other.next_exec_key and
                 self.next_exec_idx == other.next_exec_idx and
@@ -202,7 +228,8 @@ class ManifestManager(object):
                 self.eta_avail_idx == other.eta_avail_idx and
                 self.outstanding_exec_counts == other.outstanding_exec_counts and
                 self.skipped_keys == other.skipped_keys and
-                self.non_skipped_keys == other.non_skipped_keys)
+                self.non_skipped_keys == other.non_skipped_keys and
+                self.starting_temperatures == other.starting_temperatures)
 
     def _write_new_manifest(self, config):
         """Makes the initial manifest file from the config"""
@@ -229,12 +256,17 @@ class ManifestManager(object):
             one_exec_scheduled = True
         debug("Writing manifest to %s" % self.path)
 
+        # These fields are strictly fixed size, as they are mutated in-place
         num_mails_str = ManifestManager.NUM_MAILS_FMT % 0
         num_reboots_str = ManifestManager.NUM_REBOOTS_FMT % 0
+        start_temperature_str = ManifestManager.START_TEMPERATURE_FMT % 0
+
         with open(self.path, "w") as fh:
             fh.write("eta_avail_idx=%s\n" % eta_avail_idx)
             fh.write("num_mails_sent=%s\n" % num_mails_str)
             fh.write("num_reboots=%s\n" % num_reboots_str)
+            for sensor in self.platform.temp_sensors:
+                fh.write("start_temp_%s=%s\n" % (sensor, start_temperature_str))
             fh.write("keys\n")
             for item in manifest:
                 fh.write("%s\n" % item)
@@ -348,23 +380,15 @@ class ExecutionJob(object):
 class ExecutionScheduler(object):
     """Represents our entire benchmarking session"""
 
-    def __init__(self, config, mailer, platform, dry_run=False,
-                 on_first_invocation=False):
+    def __init__(self, config, mailer, platform, dry_run=False):
         self.mailer = mailer
-
         self.config = config
         self.eta_avail = 0
         self.platform = platform
-        self.on_first_invocation = on_first_invocation
         self.dry_run = dry_run
-        self.log_path = self.config.log_filename(not self.on_first_invocation)
-
-        if on_first_invocation:
-            self.manifest = ManifestManager(config, new_file=True)
-            self.results = Results(self.config, self.platform)
-        else:
-            self.manifest = ManifestManager(self.config)
-            self.results = None
+        self.log_path = self.config.log_filename(resume=True)
+        self.manifest = ManifestManager(config, platform)
+        self.results = None
 
     def get_estimated_exec_duration(self, key):
         previous_exec_times = self.results.eta_estimates.get(key)
@@ -416,28 +440,12 @@ class ExecutionScheduler(object):
     def run(self):
         """Benchmark execution starts here"""
 
-        if self.on_first_invocation:
-            util.log_and_mail(self.mailer, debug,
-                              "Benchmarking started",
-                              "Benchmarking started.\nLogging to %s" %
-                              self.log_path,
-                              bypass_limiter=True)
-
         # Important that the dmesg is collected after the above startup wait.
         # Otherwise we get spurious dmesg changes.
         self.platform.collect_starting_dmesg()
 
-        # No executions, or all skipped
-        if self.manifest.num_execs_left == 0:
-            info("Empty schedule!")
-            return
-
+        assert self.manifest.num_execs_left > 0
         self.platform.wait_for_temperature_sensors()
-
-        if self.on_first_invocation:
-            self.results.write_to_file()
-            info("Reboot prior to first execution")
-            self._reboot()
 
         # If we get here, this is a real run, with a benchmark about to
         # run. Results should never be in memory at this point (as they
@@ -479,8 +487,7 @@ class ExecutionScheduler(object):
             measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
-            # Store new measurements in memory. They will be written to disk
-            # later at reboot time.
+            # Store new result.
             self.results = Results(self.config, self.platform,
                                    results_file=self.config.results_filename())
             self.results.append_exec_measurements(job.key, measurements)
@@ -498,6 +505,7 @@ class ExecutionScheduler(object):
             self.add_eta_info(job.key, eta_info)
             self.manifest.update(flag)
         except Exception:
+            flag = 'E'
             raise
         finally:
             # Run the user's post-process-execution commands with updated
@@ -511,6 +519,11 @@ class ExecutionScheduler(object):
             if self.results is None:
                 self.results = Results(self.config, self.platform,
                                        results_file=self.config.results_filename())
+
+            # If errors occured, set error flag in results file
+            if self.platform.check_dmesg_for_changes(self.manifest) or \
+                    flag == 'E':
+                self.results.error_flag = True
 
             self.results.write_to_file()
             util.run_shell_cmd_list(
@@ -539,9 +552,6 @@ class ExecutionScheduler(object):
                  (self.manifest.eta_avail_idx -
                   self.manifest.next_exec_idx))
 
-        if self.platform.check_dmesg_for_changes(self.manifest):
-            self.results.error_flag = True
-
         assert self.manifest.num_execs_left >= 0
         if self.manifest.num_execs_left > 0:
             # print info about the next job
@@ -557,7 +567,7 @@ class ExecutionScheduler(object):
                 tfmt.delta_str))
 
             info("Reboot in preparation for next execution")
-            self._reboot()  # also deals with dumping results file
+            util.reboot(self.manifest, self.platform)
         elif self.manifest.num_execs_left == 0:
             self.platform.save_power()
 
@@ -575,33 +585,3 @@ class ExecutionScheduler(object):
 
             util.log_and_mail(self.mailer, info, "Benchmarks Complete", msg,
                               bypass_limiter=True)
-
-    def _reboot(self):
-        """Dump results to disk and reboot"""
-
-        expected_reboots = self.manifest.total_num_execs
-        self.manifest.update_num_reboots()
-        debug("About to execute reboot: %g, expecting %g in total." %
-              (self.manifest.num_reboots, expected_reboots))
-
-        # Check for a boot loop
-        if self.manifest.num_reboots > expected_reboots:
-            util.fatal(("HALTING now to prevent an infinite reboot loop: " +
-                        "INVARIANT num_reboots <= num_jobs violated. " +
-                        "Krun was about to execute reboot number: %g. " +
-                        "%g jobs have been completed, %g are left to go.") %
-                       (self.manifest.num_reboots, self.manifest.next_exec_idx,
-                        self.manifest.num_execs_left))
-        self._do_reboot()
-
-    def _do_reboot(self):
-        """Really do the reboot, separate for testing"""
-
-        if not self.platform.hardware_reboots:
-            warn("SIMULATED: reboot (--hardware-reboots is OFF)")
-            args = sys.argv
-            debug("Simulated reboot with args: " + " ".join(args))
-            os.execv(args[0], args)  # replace myself
-            assert False  # unreachable
-        else:
-            subprocess.call(self.platform.get_reboot_cmd())

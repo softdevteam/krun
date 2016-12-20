@@ -265,7 +265,12 @@ def inner_main(mailer, on_first_invocation, config, args):
             util.fatal(error_msg)
 
         debug("Using pre-recorded initial temperature readings")
-        platform.starting_temperatures = current.starting_temperatures
+        manifest = ManifestManager(config, platform)
+
+        platform_temps = {}
+        for sensor, tup in manifest.starting_temperatures.iteritems():
+            platform_temps[sensor] = tup[1]
+        platform.starting_temperatures = platform_temps
     else:
         # Touch the config file to update its mtime. This is required
         # by when resuming a partially complete benchmark session, in which
@@ -274,13 +279,42 @@ def inner_main(mailer, on_first_invocation, config, args):
         if rc != 0:
             util.fatal("Could not touch config file: " + args.filename)
 
-        info(("Wait %s secs to allow system to cool prior to "
-             "collecting initial temperature readings") %
-             config.TEMP_READ_PAUSE)
-        platform.sleep(config.TEMP_READ_PAUSE)
+        manifest = ManifestManager(config, platform, new_file=True)
+        if manifest.num_execs_left == 0:
+            # No executions, or all skipped
+            fatal("Empty schedule!")
 
-        debug("Taking fresh initial temperature readings")
-        platform.starting_temperatures = platform.take_temperature_readings()
+        try:
+            info(("Wait %s secs to allow system to cool prior to "
+                 "collecting initial temperature readings") %
+                 config.TEMP_READ_PAUSE)
+
+            # This part is wrapped in hooks, so that if daemons or networking are
+            # taken down for process executions, then the initial temperature
+            # reading gets the same treatment.
+            util.run_shell_cmd_list(config.PRE_EXECUTION_CMDS,)
+            platform.sleep(config.TEMP_READ_PAUSE)
+
+            debug("Taking fresh initial temperature readings")
+            platform.starting_temperatures = platform.take_temperature_readings()
+            manifest.set_starting_temperatures(platform.starting_temperatures)
+
+            # Write out an empty results file. After the initial reboot Krun
+            # will expect this to exist.
+            results = Results(config, platform)
+            results.write_to_file()
+        except:
+            raise
+        finally:
+            util.run_shell_cmd_list(config.POST_EXECUTION_CMDS,)
+
+        log_path = config.log_filename(resume=False)
+        util.log_and_mail(mailer, debug,
+                          "Benchmarking started",
+                          "Benchmarking started.\nLogging to %s" %
+                          log_path, bypass_limiter=True)
+
+        util.reboot(manifest, platform)
 
     # Assign platform to VM defs -- needs to happen early for sanity checks
     util.assign_platform(config, platform)
@@ -291,8 +325,7 @@ def inner_main(mailer, on_first_invocation, config, args):
     sched = ExecutionScheduler(config,
                                mailer,
                                platform,
-                               dry_run=args.dry_run,
-                               on_first_invocation=on_first_invocation)
+                               dry_run=args.dry_run)
     sched.run()
 
 
