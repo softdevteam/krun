@@ -311,10 +311,6 @@ class ExecutionJob(object):
                 self.key == other.key and
                 self.parameter == other.parameter)
 
-    def add_exec_time(self, exec_time):
-        """Feed back a rough execution time for ETA usage"""
-        self.sched.add_eta_info(self.key, exec_time)
-
     def run(self, mailer, dry_run=False):
         """Runs this job (execution)"""
 
