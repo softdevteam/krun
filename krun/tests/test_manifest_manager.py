@@ -4,6 +4,7 @@ import pytest
 from krun.config import Config
 from krun.scheduler import ManifestManager
 from krun.util import FatalKrunError
+from krun.tests.mocks import MockPlatform
 
 DEFAULT_MANIFEST = "krun.manifest"
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -113,7 +114,7 @@ def _setup(contents):
 
     with open(ManifestManager.get_filename(config), "w") as fh:
         fh.write(contents)
-    return ManifestManager(config)
+    return ManifestManager(config, MockPlatform(None, config))
 
 
 def _tear_down(filename):
@@ -313,10 +314,11 @@ def test_get_total_in_proc_iters():
 
 
 def test_write_new_manifest0001():
-    _setup(BLANK_EXAMPLE_MANIFEST)
+    tmp_manifest = _setup(BLANK_EXAMPLE_MANIFEST)
     config = Config(os.path.join(TEST_DIR, "example.krun"))
-    manifest1 = ManifestManager(config, new_file=True)
-    manifest2 = ManifestManager(config)  # reads the file in from the last line
+    manifest1 = ManifestManager(config, tmp_manifest.platform, new_file=True)
+    # reads the file in from the last line
+    manifest2 = ManifestManager(config, tmp_manifest.platform)
     assert manifest1 == manifest2
     _tear_down(manifest2.path)
 
@@ -325,7 +327,8 @@ def test_write_new_manifest0002():
     manifest_path = "example_000.manifest"
     config_path = os.path.join(TEST_DIR, "more_complicated.krun")
     config = Config(config_path)
-    manifest = ManifestManager(config, new_file=True)
+    platform = MockPlatform(None, config)
+    manifest = ManifestManager(config, platform, new_file=True)
     assert manifest.total_num_execs == 90  # taking into account skips
     _tear_down(manifest.path)
 

@@ -25,12 +25,19 @@ class ManifestManager(object):
     NUM_REBOOTS_BYTES = 8
     NUM_REBOOTS_FMT = "%%0%dd" % NUM_REBOOTS_BYTES
 
+    # Start temperature stored in-manifest as YYYYY.ZZ
+    START_TEMPERATURE_BYTES = 8
+    START_TEMPERATURE_FMT = "%08.2f"
+
+    # Mandatory manifest header fields (others exist, e.g. start temperatures)
     HEADER_FIELDS = set(["num_reboots", "eta_avail_idx", "num_mails_sent"])
 
-    def __init__(self, config, new_file=False):
+    def __init__(self, config, platform, new_file=False):
         """If new_file is True, write a new manifest file to disk based on the
         contents of the config file, otherwise parse the (existing) manifest
         file corresponding with the config file."""
+
+        self.platform = platform
 
         # Maximum values for mutible header fields
         self.num_mails_maxout = 10 ** ManifestManager.NUM_MAILS_BYTES - 1
@@ -67,6 +74,7 @@ class ManifestManager(object):
         self.non_skipped_keys = set()
         self.num_reboots = -1
         self.num_reboots_offset = None
+        self.starting_temperatures = {} # name -> (offset, degrees C floats)
 
     def _open(self):
         debug("Reading status cookie from %s" % self.path)
@@ -104,6 +112,11 @@ class ManifestManager(object):
                 elif key == "num_reboots":
                     self.num_reboots = int(val)
                     self.num_reboots_offset = offset + len(key) + 1
+                elif key.startswith("start_temp_"):
+                    sensor_name = key[len("start_temp_"):]
+                    assert sensor_name in self.platform.temp_sensors
+                    self.starting_temperatures[sensor_name] = \
+                        offset + len(key) + 1, float(val)
                 else:
                     util.fatal("bad key in the manifest header: %s" % key)
                 seen_headers.add(key)
@@ -112,7 +125,7 @@ class ManifestManager(object):
             assert False
 
         # Check we saw all the necessary header fields
-        assert seen_headers == ManifestManager.HEADER_FIELDS
+        assert ManifestManager.HEADER_FIELDS.issubset(seen_headers)
 
         # Get info from the rest of the file
         exec_idx = 0
@@ -193,6 +206,17 @@ class ManifestManager(object):
         self._reset()
         self._parse()  # update stats
 
+    def set_starting_temperatures(self, dct):
+        """Set starting temperatures in manifest header"""
+
+        fh = self._open()
+        for sensor, val in dct.iteritems():
+            offset, cur_tmp = self.starting_temperatures[sensor]
+            assert cur_tmp == 0.0  # shouldn't have been written yet
+            fh.seek(offset)
+            fh.write(ManifestManager.START_TEMPERATURE_FMT % val)
+        fh.close()
+
     def __eq__(self, other):
         return (self.next_exec_key == other.next_exec_key and
                 self.next_exec_idx == other.next_exec_idx and
@@ -202,7 +226,8 @@ class ManifestManager(object):
                 self.eta_avail_idx == other.eta_avail_idx and
                 self.outstanding_exec_counts == other.outstanding_exec_counts and
                 self.skipped_keys == other.skipped_keys and
-                self.non_skipped_keys == other.non_skipped_keys)
+                self.non_skipped_keys == other.non_skipped_keys and
+                self.starting_temperatures == other.starting_temperatures)
 
     def _write_new_manifest(self, config):
         """Makes the initial manifest file from the config"""
@@ -229,12 +254,17 @@ class ManifestManager(object):
             one_exec_scheduled = True
         debug("Writing manifest to %s" % self.path)
 
+        # These fields are strictly fixed size, as they are mutated in-place
         num_mails_str = ManifestManager.NUM_MAILS_FMT % 0
         num_reboots_str = ManifestManager.NUM_REBOOTS_FMT % 0
+        start_temperature_str = ManifestManager.START_TEMPERATURE_FMT % 0
+
         with open(self.path, "w") as fh:
             fh.write("eta_avail_idx=%s\n" % eta_avail_idx)
             fh.write("num_mails_sent=%s\n" % num_mails_str)
             fh.write("num_reboots=%s\n" % num_reboots_str)
+            for sensor in self.platform.temp_sensors:
+                fh.write("start_temp_%s=%s\n" % (sensor, start_temperature_str))
             fh.write("keys\n")
             for item in manifest:
                 fh.write("%s\n" % item)
@@ -278,10 +308,6 @@ class ExecutionJob(object):
         return (self.sched == other.sched and
                 self.key == other.key and
                 self.parameter == other.parameter)
-
-    def add_exec_time(self, exec_time):
-        """Feed back a rough execution time for ETA usage"""
-        self.sched.add_eta_info(self.key, exec_time)
 
     def run(self, mailer, dry_run=False):
         """Runs this job (execution)"""
@@ -360,41 +386,39 @@ class ExecutionScheduler(object):
         self.log_path = self.config.log_filename(not self.on_first_invocation)
 
         if on_first_invocation:
-            self.manifest = ManifestManager(config, new_file=True)
-            self.results = Results(self.config, self.platform)
+            self.manifest = ManifestManager(config, platform, new_file=True)
         else:
-            self.manifest = ManifestManager(self.config)
-            self.results = None
+            self.manifest = ManifestManager(self.config, platform)
 
-    def get_estimated_exec_duration(self, key):
-        previous_exec_times = self.results.eta_estimates.get(key)
+    def get_estimated_exec_duration(self, results, key):
+        previous_exec_times = results.eta_estimates.get(key)
         if previous_exec_times:
             return mean(previous_exec_times)
         else:
             return None # we don't know
 
-    def get_estimated_overall_duration(self):
+    def get_estimated_overall_duration(self, results):
         secs = 0
         for key, num_execs in self.manifest.outstanding_exec_counts.iteritems():
-            per_exec = self.get_estimated_exec_duration(key)
+            per_exec = self.get_estimated_exec_duration(results, key)
             if per_exec is not None:
-                secs += self.get_estimated_exec_duration(key) * num_execs
+                secs += self.get_estimated_exec_duration(results, key) * num_execs
             elif key in self.manifest.skipped_keys:
                 continue
             else:
                 return None  # Unknown time for a key which is not skipped.
         return secs
 
-    def get_exec_estimate_time_formatter(self, key):
-        return TimeEstimateFormatter(self.get_estimated_exec_duration(key))
+    def get_exec_estimate_time_formatter(self, results, key):
+        return TimeEstimateFormatter(self.get_estimated_exec_duration(results, key))
 
-    def get_overall_time_estimate_formatter(self):
-        return TimeEstimateFormatter(self.get_estimated_overall_duration())
+    def get_overall_time_estimate_formatter(self, results):
+        return TimeEstimateFormatter(self.get_estimated_overall_duration(results))
 
-    def add_eta_info(self, key, exec_time):
-        self.results.eta_estimates[key].append(exec_time)
+    def add_eta_info(self, results, key, exec_time):
+        results.eta_estimates[key].append(exec_time)
 
-    def _make_post_cmd_env(self):
+    def _make_post_cmd_env(self, results):
         """Prepare an environment dict for post execution hooks"""
 
         jobs_until_eta_known = self.manifest.eta_avail_idx - \
@@ -403,7 +427,7 @@ class ExecutionScheduler(object):
             eta_val = "Unknown. Known in %d process executions." % \
                 jobs_until_eta_known
         else:
-            eta_val = self.get_overall_time_estimate_formatter().finish_str
+            eta_val = self.get_overall_time_estimate_formatter(results).finish_str
 
         return {
             "KRUN_RESULTS_FILE": self.config.results_filename(),
@@ -432,22 +456,10 @@ class ExecutionScheduler(object):
             info("Empty schedule!")
             return
 
-        self.platform.wait_for_temperature_sensors()
-
-        if self.on_first_invocation:
-            self.results.write_to_file()
-            info("Reboot prior to first execution")
-            self._reboot()
-
-        # If we get here, this is a real run, with a benchmark about to
-        # run. Results should never be in memory at this point (as they
-        # grow over time, and can get very large, thus potentially
-        # influencing the benchmark)
-        assert self.results is None
-
         bench, vm, variant = self.manifest.next_exec_key.split(":")
         job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
                            self.config.BENCHMARKS[bench])
+        results = None  # loaded later
 
         # Run the pre-exec commands, the benchmark and the post-exec commands.
         # These are wrapped in a try/except, so that the post-exec commands
@@ -468,7 +480,40 @@ class ExecutionScheduler(object):
             # their size (which gets large) increases over the course of the
             # benchmark session. If results were loaded, then each benchmark
             # would be subject to a different memory layout, which is not fair.
-            assert self.results is None
+            #assert self.results is None
+
+            # Deal with temperature sensors
+            if self.on_first_invocation:
+                info(("Wait %s secs to allow system to cool prior to "
+                     "collecting initial temperature readings") %
+                     self.config.TEMP_READ_PAUSE)
+                self.platform.sleep(self.config.TEMP_READ_PAUSE)
+
+                debug("Taking fresh initial temperature readings")
+                self.platform.starting_temperatures = \
+                    self.platform.take_temperature_readings()
+                self.manifest.set_starting_temperatures(
+                    self.platform.starting_temperatures)
+
+                # Scaffold the results file
+                results = Results(self.config, self.platform)
+                results.write_to_file()
+
+                # We still need to run the post-execution commands
+                util.run_shell_cmd_list(
+                    self.config.POST_EXECUTION_CMDS,
+                    extra_env=self._make_post_cmd_env(results)
+                )
+
+                info("Reboot prior to first execution")
+                self._reboot()
+            else:
+                self.platform.starting_temperatures = \
+                    {sensor: tup[1] for sensor, tup in
+                     self.manifest.starting_temperatures.iteritems()}
+                self.platform.wait_for_temperature_sensors()
+
+            assert results is None
 
             # We collect rough execution times separate from real results. The
             # reason for this is that, even if a benchmark crashes it takes
@@ -481,9 +526,9 @@ class ExecutionScheduler(object):
 
             # Store new measurements in memory. They will be written to disk
             # later at reboot time.
-            self.results = Results(self.config, self.platform,
+            results = Results(self.config, self.platform,
                                    results_file=self.config.results_filename())
-            self.results.append_exec_measurements(job.key, measurements)
+            results.append_exec_measurements(job.key, measurements)
 
             # Store instrumentation data in a separate file
             if job.vm_info["vm_def"].instrument:
@@ -495,7 +540,7 @@ class ExecutionScheduler(object):
                 # Add time taken to wait for system to come up if we are in
                 # hardware-reboot mode.
                 eta_info += STARTUP_WAIT_SECONDS
-            self.add_eta_info(job.key, eta_info)
+            self.add_eta_info(results, job.key, eta_info)
             self.manifest.update(flag)
         except Exception:
             raise
@@ -508,17 +553,18 @@ class ExecutionScheduler(object):
             # _make_post_cmd_env() needs the results to make an ETA. If an
             # exception occurred in the above try block, there's a chance that
             # they have not have been loaded.
-            if self.results is None:
-                self.results = Results(self.config, self.platform,
+            if results is None:
+                results = Results(self.config, self.platform,
                                        results_file=self.config.results_filename())
 
-            self.results.write_to_file()
+            results.write_to_file()
             util.run_shell_cmd_list(
                 self.config.POST_EXECUTION_CMDS,
-                extra_env=self._make_post_cmd_env()
+                extra_env=self._make_post_cmd_env(results)
             )
 
-        tfmt = self.get_overall_time_estimate_formatter()
+        assert results is not None
+        tfmt = self.get_overall_time_estimate_formatter(results)
 
         if self.manifest.eta_avail_idx == self.manifest.next_exec_idx:
             # We just found out roughly how long the session has left, mail out.
@@ -540,7 +586,7 @@ class ExecutionScheduler(object):
                   self.manifest.next_exec_idx))
 
         if self.platform.check_dmesg_for_changes(self.manifest):
-            self.results.error_flag = True
+            results.error_flag = True
 
         assert self.manifest.num_execs_left >= 0
         if self.manifest.num_execs_left > 0:
@@ -550,7 +596,7 @@ class ExecutionScheduler(object):
             info("Next execution is '%s(%d)' (%s variant) under '%s'" %
                  (benchmark, self.config.BENCHMARKS[benchmark], variant, vm_name))
 
-            tfmt = self.get_exec_estimate_time_formatter(job.key)
+            tfmt = self.get_exec_estimate_time_formatter(results, job.key)
             info("{:<35s}: {} ({} from now)".format(
                 "Estimated completion (next execution)",
                 tfmt.finish_str,
@@ -563,12 +609,12 @@ class ExecutionScheduler(object):
 
             info("Done: Results dumped to %s" % self.config.results_filename())
             err_msg = "Errors/warnings occurred -- read the log!"
-            if self.results.error_flag:
+            if results.error_flag:
                 warn(err_msg)
 
             msg = "Session completed. Log file at: '%s'" % (self.log_path)
 
-            if self.results.error_flag:
+            if results.error_flag:
                 msg += "\n\n%s" % err_msg
 
             msg += "\n\nDon't forget to disable Krun at boot."
