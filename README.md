@@ -209,23 +209,21 @@ The structure of the JSON results is as follows:
 {
     'audit': '',  # A dict containing platform information
     'config': '', # A unicode object containing your Krun configuration
-    'data': {     # A dict object containing timing results
-        u'bmark:VM:variant': [  # A list of lists of in-process iteration times
+    'wallclock_times': {        # A dict object containing timing results
+        'bmark:VM:variant': [   # A list of lists of in-process iteration times
             [ ... ], ...        # One list per process execution
         ]
     },
-    'reboots': N, # An int containing the number of reboots that have
-                  # already taken place. Only used when Krun is started
-                  # with --hardware-reboots. This field used to check that the
-                  # benchmarking machine has rebooted the correct number
-                  # of times. It can be safely ignored by users.
-    'starting_temperatures': [ ... ], # Temperatures recorded at the beginning
-                  # of the experiment. Used before each process execution to decide if
-                  # the system is running much hotter than before. In this
-                  # case we wait to allow the system to cool. The ordering
-                  # and meanings of the temperatures in the list are platform
-                  # and system specific. This information can be safely
-                  # ignored by users.
+    'core_cycle_counts': {      # Per-core core cycle counter deltas
+        'bmark:VM:variant': [
+            [                   # One list per process execution
+                [...], ...      # One list per core
+            ]
+    },
+    'aperf_counts': {...}       # Per-core APERF deltas
+                                # (structure same as 'core_cycle_counts')
+    'mperf_counts': {...}       # Per-core MPERF deltas
+                                # (structure same as 'core_cycle_counts')
     'eta_estimates': {u"bmark:VM:variant": [t_0, t_1, ...], ...} # A dict mapping
                   # benchmark keys to rough process execution times. Used internally,
                   # users can ignore this.
