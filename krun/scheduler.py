@@ -477,6 +477,7 @@ class ExecutionScheduler(object):
             exec_end_time = time.time()
 
             # Store new result.
+            Results.ok_to_instantiate = True
             results = Results(self.config, self.platform,
                                    results_file=self.config.results_filename())
             results.append_exec_measurements(job.key, measurements)

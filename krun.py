@@ -148,6 +148,7 @@ def main(parser):
         if not args.filename.endswith(".json.bz2"):
             usage(parser)
         else:
+            Results.ok_to_instantiate = True
             results = Results(None, None, results_file=args.filename)
             text = results.dump(args.dump)
             # String data read in from JSON are unicode objects. This matters
@@ -290,6 +291,7 @@ def inner_main(mailer, on_first_invocation, config, args):
 
             # Write out an empty results file. After the initial reboot Krun
             # will expect this to exist.
+            Results.ok_to_instantiate = True
             results = Results(config, platform)
             results.write_to_file()
         except:

@@ -11,6 +11,7 @@ import pytest
 import krun.util as util
 import re
 from krun.tests import TEST_DIR
+from krun.tests.test_results import no_results_instantiation_check
 
 
 class TestReboot(Exception):
@@ -46,7 +47,9 @@ def no_envlogs(monkeypatch):
     monkeypatch.setattr(util, 'stash_envlog', dummy_stash_envlog)
 
 
-def emulate_first_reboot(platform, config):
+def emulate_first_reboot(platform, config, monkeypatch):
+    no_results_instantiation_check(monkeypatch)
+
     platform.starting_temperatures = platform.take_temperature_readings()
     manifest = ManifestManager(config, platform, new_file=True)
     manifest.set_starting_temperatures(platform.starting_temperatures)
@@ -64,7 +67,7 @@ def run_with_captured_reboots(config, platform, monkeypatch):
     krun.util.assign_platform(config, platform)
     reboots = 0
 
-    manifest = emulate_first_reboot(platform, config)
+    manifest = emulate_first_reboot(platform, config, monkeypatch)
     if manifest.num_execs_left == 0:
         sched = ExecutionScheduler(config, platform.mailer, platform,
                                    dry_run=True)
@@ -200,7 +203,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
                                    dry_run=True)
         sched.mailer.recipients = ["noone@localhost"]
@@ -239,7 +242,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
         results_path = config.results_filename()
 
         # To start, the error flag is not set
@@ -277,7 +280,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
         results_path = config.results_filename()
 
         # To start, the error flag is not set
@@ -378,7 +381,7 @@ class TestScheduler(BaseKrunTest):
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
 
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
 
         # Simulate a boot loop
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
@@ -406,7 +409,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
         results_path = config.results_filename()
 
         # mutate the audit, so it won't match later
