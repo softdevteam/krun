@@ -106,7 +106,8 @@ class TestScheduler(BaseKrunTest):
         assert sched.manifest.num_execs_left == 0
         assert n_reboots == 1
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 1  # 1 benchmark, 1 vm
@@ -124,7 +125,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 8  # 2 benchmarks, 2 vms, 2 execs
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms
@@ -150,7 +152,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 4  # 2 benchmarks, 2 vms, 2 execs, one VM skipped
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms
@@ -177,7 +180,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 8  # 2 benchmarks, 2 vms, 2 execs
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms

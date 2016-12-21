@@ -384,37 +384,40 @@ class ExecutionScheduler(object):
         self.dry_run = dry_run
         self.log_path = self.config.log_filename(resume=True)
         self.manifest = ManifestManager(config, platform)
-        self.results = None
 
-    def get_estimated_exec_duration(self, key):
-        previous_exec_times = self.results.eta_estimates.get(key)
+        # Please refrain from adding a results attribute. The results should
+        # never be in memory before a process execution runs. Results grow over
+        # time, and can get very large, thus potentially influencing the
+        # benchmarks.
+
+    def get_estimated_exec_duration(self, key, results):
+        previous_exec_times = results.eta_estimates.get(key)
         if previous_exec_times:
             return mean(previous_exec_times)
         else:
             return None # we don't know
 
-    def get_estimated_overall_duration(self):
+    def get_estimated_overall_duration(self, results):
         secs = 0
         for key, num_execs in self.manifest.outstanding_exec_counts.iteritems():
-            per_exec = self.get_estimated_exec_duration(key)
+            per_exec = self.get_estimated_exec_duration(key, results)
             if per_exec is not None:
-                secs += self.get_estimated_exec_duration(key) * num_execs
+                secs += self.get_estimated_exec_duration(key, results) * num_execs
             elif key in self.manifest.skipped_keys:
                 continue
             else:
                 return None  # Unknown time for a key which is not skipped.
         return secs
 
-    def get_exec_estimate_time_formatter(self, key):
-        return TimeEstimateFormatter(self.get_estimated_exec_duration(key))
+    def get_exec_estimate_time_formatter(self, key, results):
+        return TimeEstimateFormatter(
+            self.get_estimated_exec_duration(key, results))
 
-    def get_overall_time_estimate_formatter(self):
-        return TimeEstimateFormatter(self.get_estimated_overall_duration())
+    def get_overall_time_estimate_formatter(self, results):
+        return TimeEstimateFormatter(
+            self.get_estimated_overall_duration(results))
 
-    def add_eta_info(self, key, exec_time):
-        self.results.eta_estimates[key].append(exec_time)
-
-    def _make_post_cmd_env(self):
+    def _make_post_cmd_env(self, results):
         """Prepare an environment dict for post execution hooks"""
 
         jobs_until_eta_known = self.manifest.eta_avail_idx - \
@@ -423,7 +426,7 @@ class ExecutionScheduler(object):
             eta_val = "Unknown. Known in %d process executions." % \
                 jobs_until_eta_known
         else:
-            eta_val = self.get_overall_time_estimate_formatter().finish_str
+            eta_val = self.get_overall_time_estimate_formatter(results).finish_str
 
         return {
             "KRUN_RESULTS_FILE": self.config.results_filename(),
@@ -443,12 +446,6 @@ class ExecutionScheduler(object):
         assert self.manifest.num_execs_left > 0
         self.platform.wait_for_temperature_sensors()
 
-        # If we get here, this is a real run, with a benchmark about to
-        # run. Results should never be in memory at this point (as they
-        # grow over time, and can get very large, thus potentially
-        # influencing the benchmark)
-        assert self.results is None
-
         bench, vm, variant = self.manifest.next_exec_key.split(":")
         job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
                            self.config.BENCHMARKS[bench])
@@ -457,6 +454,7 @@ class ExecutionScheduler(object):
         # These are wrapped in a try/except, so that the post-exec commands
         # are always executed, even if an exception has occurred. We only
         # reboot /after/ the post-exec commands have completed.
+        results = None
         try:
             # Run the user's pre-process-execution commands. We can't put an
             # ETA estimate in the environment for the pre-commands as we have
@@ -468,12 +466,6 @@ class ExecutionScheduler(object):
             # but the post-hooks then don't run.
             util.run_shell_cmd_list(self.config.PRE_EXECUTION_CMDS,)
 
-            # Results should never be in memory while a benchmark runs because
-            # their size (which gets large) increases over the course of the
-            # benchmark session. If results were loaded, then each benchmark
-            # would be subject to a different memory layout, which is not fair.
-            assert self.results is None
-
             # We collect rough execution times separate from real results. The
             # reason for this is that, even if a benchmark crashes it takes
             # time and we need to account for this when making estimates. A
@@ -484,9 +476,9 @@ class ExecutionScheduler(object):
             exec_end_time = time.time()
 
             # Store new result.
-            self.results = Results(self.config, self.platform,
+            results = Results(self.config, self.platform,
                                    results_file=self.config.results_filename())
-            self.results.append_exec_measurements(job.key, measurements)
+            results.append_exec_measurements(job.key, measurements)
 
             # Store instrumentation data in a separate file
             if job.vm_info["vm_def"].instrument:
@@ -498,7 +490,7 @@ class ExecutionScheduler(object):
                 # Add time taken to wait for system to come up if we are in
                 # hardware-reboot mode.
                 eta_info += STARTUP_WAIT_SECONDS
-            self.add_eta_info(job.key, eta_info)
+            results.eta_estimates[job.key].append(eta_info)
             self.manifest.update(flag)
         except Exception:
             flag = 'E'
@@ -512,22 +504,22 @@ class ExecutionScheduler(object):
             # _make_post_cmd_env() needs the results to make an ETA. If an
             # exception occurred in the above try block, there's a chance that
             # they have not have been loaded.
-            if self.results is None:
-                self.results = Results(self.config, self.platform,
+            if results is None:
+                results = Results(self.config, self.platform,
                                        results_file=self.config.results_filename())
 
             # If errors occured, set error flag in results file
             if self.platform.check_dmesg_for_changes(self.manifest) or \
                     flag == 'E':
-                self.results.error_flag = True
+                results.error_flag = True
 
-            self.results.write_to_file()
+            results.write_to_file()
             util.run_shell_cmd_list(
                 self.config.POST_EXECUTION_CMDS,
-                extra_env=self._make_post_cmd_env()
+                extra_env=self._make_post_cmd_env(results)
             )
 
-        tfmt = self.get_overall_time_estimate_formatter()
+        tfmt = self.get_overall_time_estimate_formatter(results)
 
         if self.manifest.eta_avail_idx == self.manifest.next_exec_idx:
             # We just found out roughly how long the session has left, mail out.
@@ -556,7 +548,7 @@ class ExecutionScheduler(object):
             info("Next execution is '%s(%d)' (%s variant) under '%s'" %
                  (benchmark, self.config.BENCHMARKS[benchmark], variant, vm_name))
 
-            tfmt = self.get_exec_estimate_time_formatter(job.key)
+            tfmt = self.get_exec_estimate_time_formatter(job.key, results)
             info("{:<35s}: {} ({} from now)".format(
                 "Estimated completion (next execution)",
                 tfmt.finish_str,
@@ -569,12 +561,12 @@ class ExecutionScheduler(object):
 
             info("Done: Results dumped to %s" % self.config.results_filename())
             err_msg = "Errors/warnings occurred -- read the log!"
-            if self.results.error_flag:
+            if results.error_flag:
                 warn(err_msg)
 
             msg = "Session completed. Log file at: '%s'" % (self.log_path)
 
-            if self.results.error_flag:
+            if results.error_flag:
                 msg += "\n\n%s" % err_msg
 
             msg += "\n\nDon't forget to disable Krun at boot."
