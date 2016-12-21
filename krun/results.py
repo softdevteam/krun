@@ -11,7 +11,14 @@ class Results(object):
     Can be serialised to disk.
     """
 
+    # We use this to detect times where a results instance is loaded prior to a
+    # process execution. This wouuld be bad, as the results can be big and
+    # cause memory to fragment.
+    ok_to_instantiate = False
+
     def __init__(self, config, platform, results_file=None):
+        self.instantiation_check()
+
         self.config = config
         self.platform = platform
 
@@ -47,6 +54,10 @@ class Results(object):
         # Import data from a Results object serialised on disk.
         if results_file is not None:
             self.read_from_file(results_file)
+
+    def instantiation_check(self):
+        if not Results.ok_to_instantiate:
+            fatal("Results instance loaded prior to a process execution")
 
     @property
     def audit(self):

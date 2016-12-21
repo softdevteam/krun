@@ -38,6 +38,9 @@ class Audit(object):
     def audit(self, audit_dict):
         self._audit = audit_dict
 
+    def __ne__(self, other):
+        return not self == other
+
     def __eq__(self, other):
         if ((not isinstance(other, self.__class__)) or
                 (not len(self) == len(other))):

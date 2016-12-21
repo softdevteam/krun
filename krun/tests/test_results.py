@@ -8,8 +8,14 @@ import pytest
 
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
 
+
 @pytest.fixture
-def fake_results(mock_platform):
+def no_results_instantiation_check(monkeypatch):
+    monkeypatch.setattr(Results, 'instantiation_check', lambda self: None)
+
+
+@pytest.fixture
+def fake_results(mock_platform, no_results_instantiation_check):
     results = Results(None, mock_platform)
     mock_platform.num_cpus = 2
     mock_platform.num_per_core_measurements = 2
@@ -28,7 +34,7 @@ def fake_results(mock_platform):
 class TestResults(BaseKrunTest):
     """Test the results data structure and file."""
 
-    def test_eq(self, mock_platform):
+    def test_eq(self, mock_platform, no_results_instantiation_check):
         results = Results(None, None,
                           results_file="krun/tests/quick_results.json.bz2")
         assert results == results
@@ -37,7 +43,7 @@ class TestResults(BaseKrunTest):
             Results(Config("krun/tests/example.krun"), mock_platform)
 
 
-    def test_dump_config(self):
+    def test_dump_config(self, no_results_instantiation_check):
         """Simulates krun.py --dump-config RESULTS_FILE.json.bz2
         """
 
@@ -49,7 +55,7 @@ class TestResults(BaseKrunTest):
             assert config == results.dump("config")
 
 
-    def test_read_results_from_disk(self):
+    def test_read_results_from_disk(self, no_results_instantiation_check):
         config = Config("krun/tests/quick.krun")
         results = Results(config, None,
                           results_file="krun/tests/quick_results.json.bz2")
@@ -71,7 +77,8 @@ class TestResults(BaseKrunTest):
             }
 
 
-    def test_write_results_to_disk(self, mock_platform):
+    def test_write_results_to_disk(self, mock_platform,
+                                   no_results_instantiation_check):
         config = Config("krun/tests/example.krun")
         mock_platform.num_cpus = 4
         mock_platform.num_per_core_measurements = mock_platform.num_cpus
@@ -97,7 +104,8 @@ class TestResults(BaseKrunTest):
 
         fake_results.integrity_check()
 
-    def test_integrity_check_results0002(self, fake_results, caplog):
+    def test_integrity_check_results0002(self, fake_results, caplog,
+                                         no_results_instantiation_check):
         # remove some eta info
         fake_results.eta_estimates["bench:vm:variant"].pop()
         with pytest.raises(FatalKrunError):

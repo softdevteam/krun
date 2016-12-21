@@ -11,6 +11,7 @@ import pytest
 import krun.util as util
 import re
 from krun.tests import TEST_DIR
+from krun.tests.test_results import no_results_instantiation_check
 
 
 class TestReboot(Exception):
@@ -46,7 +47,9 @@ def no_envlogs(monkeypatch):
     monkeypatch.setattr(util, 'stash_envlog', dummy_stash_envlog)
 
 
-def emulate_first_reboot(platform, config):
+def emulate_first_reboot(platform, config, monkeypatch):
+    no_results_instantiation_check(monkeypatch)
+
     platform.starting_temperatures = platform.take_temperature_readings()
     manifest = ManifestManager(config, platform, new_file=True)
     manifest.set_starting_temperatures(platform.starting_temperatures)
@@ -64,7 +67,7 @@ def run_with_captured_reboots(config, platform, monkeypatch):
     krun.util.assign_platform(config, platform)
     reboots = 0
 
-    manifest = emulate_first_reboot(platform, config)
+    manifest = emulate_first_reboot(platform, config, monkeypatch)
     if manifest.num_execs_left == 0:
         sched = ExecutionScheduler(config, platform.mailer, platform,
                                    dry_run=True)
@@ -106,7 +109,8 @@ class TestScheduler(BaseKrunTest):
         assert sched.manifest.num_execs_left == 0
         assert n_reboots == 1
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 1  # 1 benchmark, 1 vm
@@ -124,7 +128,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 8  # 2 benchmarks, 2 vms, 2 execs
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms
@@ -150,7 +155,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 4  # 2 benchmarks, 2 vms, 2 execs, one VM skipped
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms
@@ -177,7 +183,8 @@ class TestScheduler(BaseKrunTest):
                                                      monkeypatch)
         assert n_reboots == 8  # 2 benchmarks, 2 vms, 2 execs
 
-        results = sched.results
+        results = Results(config, mock_platform,
+                          results_file=config.results_filename())
         type_check_results(results)
 
         assert len(results.wallclock_times) == 4  # 2 benchmarks, 2 vms
@@ -196,7 +203,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
                                    dry_run=True)
         sched.mailer.recipients = ["noone@localhost"]
@@ -235,7 +242,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
         results_path = config.results_filename()
 
         # To start, the error flag is not set
@@ -273,7 +280,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
         results_path = config.results_filename()
 
         # To start, the error flag is not set
@@ -374,7 +381,7 @@ class TestScheduler(BaseKrunTest):
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
 
-        emulate_first_reboot(mock_platform, config)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
 
         # Simulate a boot loop
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
@@ -393,3 +400,30 @@ class TestScheduler(BaseKrunTest):
 
         os.unlink(config.results_filename())
         os.unlink(sched.manifest.path)
+
+    def test_audit_differs0001(self, monkeypatch, mock_platform, caplog):
+        """Check that if the audit differs, a crash occurs"""
+
+        make_reboot_raise(monkeypatch)
+        no_envlogs(monkeypatch)
+
+        config = Config(os.path.join(TEST_DIR, "example.krun"))
+        krun.util.assign_platform(config, mock_platform)
+        emulate_first_reboot(mock_platform, config, monkeypatch)
+        results_path = config.results_filename()
+
+        # mutate the audit, so it won't match later
+        results = Results(config, mock_platform, results_file=results_path)
+        results.audit._audit["wibble"] = "wut"
+        results.write_to_file()
+
+        sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
+                                   dry_run=True)
+        with pytest.raises(krun.util.FatalKrunError):
+            sched.run()
+
+        expect = "This is only valid if the machine you are using is identical"
+        assert expect in caplog.text()
+
+        os.unlink(sched.manifest.path)
+        os.unlink(results_path)
