@@ -32,6 +32,7 @@ class MockPlatform(BasePlatform):
         self.num_cpus = 0
         self.num_per_core_measurements = 0
         self.no_user_change = True
+        self.temp_sensors = []
 
     def pin_process_args(self):
         return []
@@ -39,7 +40,7 @@ class MockPlatform(BasePlatform):
     def change_scheduler_args(self):
         return []
 
-    def check_dmesg_for_changes(self, mock_platform):
+    def check_dmesg_for_changes(self, manifest):
         pass
 
     def CHANGE_USER_CMD(self):

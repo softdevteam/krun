@@ -40,10 +40,8 @@ class Results(object):
             self.init_from_config()
             self.config_text = self.config.text
         if platform is not None:
-            self.starting_temperatures = platform.starting_temperatures
             self._audit = Audit(platform.audit)
         else:
-            self.starting_temperatures = list()
             self.audit = dict()
 
         # Import data from a Results object serialised on disk.
@@ -159,7 +157,6 @@ class Results(object):
             "aperf_counts": self.aperf_counts,
             "mperf_counts": self.mperf_counts,
             "audit": self.audit.audit,
-            "starting_temperatures": self.starting_temperatures,
             "eta_estimates": self.eta_estimates,
             "error_flag": self.error_flag,
         }
@@ -182,7 +179,6 @@ class Results(object):
                 self.aperf_counts == other.aperf_counts and
                 self.mperf_counts == other.mperf_counts and
                 self.audit == other.audit and
-                self.starting_temperatures == other.starting_temperatures and
                 self.eta_estimates == other.eta_estimates and
                 self.error_flag == other.error_flag)
 

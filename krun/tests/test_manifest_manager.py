@@ -4,6 +4,7 @@ import pytest
 from krun.config import Config
 from krun.scheduler import ManifestManager
 from krun.util import FatalKrunError
+from krun.tests.mocks import MockPlatform, mock_platform
 
 DEFAULT_MANIFEST = "krun.manifest"
 TEST_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -113,12 +114,14 @@ def _setup(contents):
 
     with open(ManifestManager.get_filename(config), "w") as fh:
         fh.write(contents)
-    return ManifestManager(config)
+    return ManifestManager(config, MockPlatform(None, config))
 
 
 def _tear_down(filename):
     if os.path.exists(filename):
         os.unlink(filename)
+    else:
+        assert(False)
 
 
 def test_parse_manifest():
@@ -156,7 +159,7 @@ def test_parse_manifest():
 def test_parse_empty_manifest():
     with pytest.raises(AssertionError):
         _setup("")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_erroneous_manifest_001():
@@ -164,7 +167,7 @@ def test_parse_erroneous_manifest_001():
         _setup("""eta_avail_idx=4
 keys
 X dummy:Java:default-java""")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_erroneous_manifest_002():
@@ -172,7 +175,7 @@ def test_parse_erroneous_manifest_002():
         _setup("""bob=4
 keys
 O dummy:Java:default-java""")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_erroneous_manifest_003():
@@ -181,7 +184,7 @@ def test_parse_erroneous_manifest_003():
 num_mails_sent=0000
 keyz
 O dummy:Java:default-java""")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_erroneous_manifest_004():
@@ -190,7 +193,7 @@ def test_parse_erroneous_manifest_004():
 num_mails_sent=0000
 keys
 O dummy:Java:default-java""")
-    _tear_down("example_000.manifest")
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
 
 
 def test_parse_with_skips():
@@ -312,20 +315,20 @@ def test_get_total_in_proc_iters():
     _tear_down(manifest.path)
 
 
-def test_write_new_manifest0001():
+def test_write_new_manifest0001(mock_platform):
     _setup(BLANK_EXAMPLE_MANIFEST)
     config = Config(os.path.join(TEST_DIR, "example.krun"))
-    manifest1 = ManifestManager(config, new_file=True)
-    manifest2 = ManifestManager(config)  # reads the file in from the last line
+    manifest1 = ManifestManager(config, mock_platform, new_file=True)
+    manifest2 = ManifestManager(config, mock_platform)  # reads the file in from the last line
     assert manifest1 == manifest2
     _tear_down(manifest2.path)
 
 
-def test_write_new_manifest0002():
+def test_write_new_manifest0002(mock_platform):
     manifest_path = "example_000.manifest"
     config_path = os.path.join(TEST_DIR, "more_complicated.krun")
     config = Config(config_path)
-    manifest = ManifestManager(config, new_file=True)
+    manifest = ManifestManager(config, mock_platform, new_file=True)
     assert manifest.total_num_execs == 90  # taking into account skips
     _tear_down(manifest.path)
 
@@ -498,3 +501,4 @@ def test_update_num_reboots0002():
 def test_missing_header_manifest0001():
     with pytest.raises(AssertionError):
         manifest = _setup(MISSING_HEADER_EXAMPLE_MANIFEST)
+    _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))

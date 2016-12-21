@@ -3,8 +3,10 @@ import os
 import re
 import select
 import shutil
+import sys
+import subprocess
 from subprocess import Popen, PIPE
-from logging import error, debug, info
+from logging import error, debug, info, warn
 from bz2 import BZ2File
 
 FLOAT_FORMAT = ".6f"
@@ -269,7 +271,9 @@ def get_session_info(config):
     Separated from print_session_info for ease of testing"""
 
     from krun.scheduler import ManifestManager
-    manifest = ManifestManager(config, new_file=True)
+    from krun.platform import detect_platform
+    platform = detect_platform(None, config)
+    manifest = ManifestManager(config, platform, new_file=True)
 
     return {
         "n_proc_execs": manifest.total_num_execs,
@@ -398,3 +402,34 @@ def del_envlog_tempfile(filename, platform):
         from krun.vm_defs import BENCHMARK_USER
         args = platform.change_user_args(BENCHMARK_USER) + ["rm", filename]
         run_shell_cmd(" ".join(args))
+
+def _do_reboot(platform):
+    """Really do the reboot, separate for testing"""
+
+    if not platform.hardware_reboots:
+        warn("SIMULATED: reboot (--hardware-reboots is OFF)")
+        args = sys.argv
+        debug("Simulated reboot with args: " + " ".join(args))
+        os.execv(args[0], args)  # replace myself
+        assert False  # unreachable
+    else:
+        subprocess.call(platform.get_reboot_cmd())
+
+
+def reboot(manifest, platform):
+    """Check reboot count and reboot"""
+
+    expected_reboots = manifest.total_num_execs
+    manifest.update_num_reboots()
+    debug("About to execute reboot: %g, expecting %g in total." %
+          (manifest.num_reboots, expected_reboots))
+
+    # Check for a boot loop
+    if manifest.num_reboots > expected_reboots:
+        fatal(("HALTING now to prevent an infinite reboot loop: " +
+                    "INVARIANT num_reboots <= num_jobs violated. " +
+                    "Krun was about to execute reboot number: %g. " +
+                    "%g jobs have been completed, %g are left to go.") %
+                   (manifest.num_reboots, manifest.next_exec_idx,
+                    manifest.num_execs_left))
+    _do_reboot(platform)
