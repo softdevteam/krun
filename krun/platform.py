@@ -1181,6 +1181,9 @@ class LinuxPlatform(UnixLikePlatform):
                 re.compile("^.*NIC Link is (Up|Down)"),
                 re.compile("^.*irq.* for MSI/MSI-X"),
                 re.compile("^.*eth[0-9]: link (down|up)"),
+                re.compile("^.*eth[0-9]: Link is (up|down).*"),
+                re.compile("^.*eth[0-9]: Flow control is (on|off).*"),
+                re.compile("^.*eth[0-9]: EEE is (enabled|disabled).*"),
 
                 # Graphics card goes into powersave
                 re.compile("^.*\[drm\] Enabling RC6 states"),
