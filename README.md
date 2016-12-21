@@ -176,7 +176,62 @@ $ pwd
 $ make java-bench
 ```
 
-## Step 5: Run the example experiment
+## Step 5: Audit system services
+
+You should take some time to review the services running on your benchmarking
+machine. Debian especially has a habit of starting daemons which get pulled in
+by dependencies.
+
+Some services you can disable at boot. Others you may want disabled only for
+the duration of the benchmarking (e.g. mail servers, crond, atd, ntpd). For the
+latter kind, you can use `PRE_EXECUTION_CMDS` and `POST_EXECUTION_CMDS` in your
+Krun config file to stop and start the services.
+
+Note that by default Debian machines do not use a service like ntpd to set the
+system time. Instead the time is set using `ntpdate` when a network interface
+comes up.
+
+### Linux
+
+On Linux, list services with:
+
+```
+# systemctl | grep running
+```
+
+Disable services (now and at boot) with:
+
+```
+# systemctl stop <service>
+# systemctl disable <service>
+```
+
+Commonly enabled services you probably don't want include:
+
+ * apache2
+ * memcached
+ * nfs-common
+
+### OpenBSD
+
+On OpenBSD, list at services with:
+
+```
+# rcctl ls started
+```
+
+Disable services (now and at boot) with:
+```
+# rcctl stop <service>
+# rcctl disable <service>
+```
+
+Commonly enabled services you probably don't want include:
+
+ * pflogd
+ * sndiod
+
+## Step 6: Run the example experiment
 
 ```bash
 $ cd ../
