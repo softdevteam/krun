@@ -267,6 +267,10 @@ class TestLinuxPlatform(BaseKrunTest):
             "[  193.276415] r8169 0000:06:00.0 eth0: link up",
             # the graphics card going into powersave
             "[    3.793646] [drm] Enabling RC6 states: RC6 on, RC6p off, RC6pp off",
+            # Dell poweredge R330 network coming up
+            "[   75.007580] tg3 0000:04:00.0 eth0: Link is up at 1000 Mbps, full duplex",
+            "[   75.007582] tg3 0000:04:00.0 eth0: Flow control is off for TX and off for RX",
+            "[   75.007583] tg3 0000:04:00.0 eth0: EEE is disabled",
         ]
         assert not platform._check_dmesg_for_changes(
             platform.get_allowed_dmesg_patterns(), old_lines, new_lines, mock_manifest)
