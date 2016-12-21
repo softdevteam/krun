@@ -5,6 +5,7 @@ from krun import util
 from logging import warn, info, error, debug
 
 import os, subprocess, sys, time
+import krun.util as util
 
 # Wait this many seconds for the init system to finish bringing up services.
 STARTUP_WAIT_SECONDS = 2 * 60
@@ -539,6 +540,11 @@ class ExecutionScheduler(object):
             info("Executions until ETA known: %s" %
                  (self.manifest.eta_avail_idx -
                   self.manifest.next_exec_idx))
+
+        # Although it would have been nice to have checked this prior to
+        # running the execution, it depends on the results file, which we
+        # should not load prior to the process execution.
+        util.check_audit_unchanged(results, self.platform)
 
         assert self.manifest.num_execs_left >= 0
         if self.manifest.num_execs_left > 0:

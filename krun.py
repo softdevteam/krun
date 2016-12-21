@@ -249,20 +249,9 @@ def inner_main(mailer, on_first_invocation, config, args):
 
     platform.collect_audit()
 
-    # If the user has asked for resume-mode, the current platform must
-    # be an identical machine to the current one.
-    error_msg = ("You have asked Krun to resume an interrupted benchmark. " +
-                 "This is only valid if the machine you are using is " +
-                 "identical to the one on which the last results were " +
-                 "gathered, which is not the case.")
-    current = None
     if not on_first_invocation:
         # output file must exist, due to check above
         assert(out_file_exists)
-        current = Results(config, platform, results_file=out_file)
-        from krun.audit import Audit
-        if not Audit(platform.audit) == current.audit:
-            util.fatal(error_msg)
 
         debug("Using pre-recorded initial temperature readings")
         manifest = ManifestManager(config, platform)

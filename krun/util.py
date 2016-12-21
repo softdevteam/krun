@@ -433,3 +433,17 @@ def reboot(manifest, platform):
                    (manifest.num_reboots, manifest.next_exec_idx,
                     manifest.num_execs_left))
     _do_reboot(platform)
+
+
+def check_audit_unchanged(results, platform):
+    """Crash out if the audit in the result doesn't match the one in the
+    platform"""
+
+    from krun.audit import Audit
+    if Audit(platform.audit) != results.audit:
+        error_msg = (
+            "You have asked Krun to resume an interrupted benchmark. "
+            "This is only valid if the machine you are using is "
+            "identical to the one on which the last results were "
+            "gathered, which is not the case.")
+        fatal(error_msg)
