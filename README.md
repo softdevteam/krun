@@ -118,8 +118,8 @@ For more information on tickless mode, see
 
 You will need to create a new user called `krun`, with minimal permissions:
 
-```bash
-sudo useradd krun
+```
+# useradd krun
 ```
 
 You will want to add this user to the `sudoers` group and make sure that
