@@ -118,8 +118,8 @@ For more information on tickless mode, see
 
 You will need to create a new user called `krun`, with minimal permissions:
 
-```bash
-sudo useradd krun
+```
+# useradd krun
 ```
 
 You will want to add this user to the `sudoers` group and make sure that
@@ -176,7 +176,62 @@ $ pwd
 $ make java-bench
 ```
 
-## Step 5: Run the example experiment
+## Step 5: Audit system services
+
+You should take some time to review the services running on your benchmarking
+machine. Debian especially has a habit of starting daemons which get pulled in
+by dependencies.
+
+Some services you can disable at boot. Others you may want disabled only for
+the duration of the benchmarking (e.g. mail servers, crond, atd, ntpd). For the
+latter kind, you can use `PRE_EXECUTION_CMDS` and `POST_EXECUTION_CMDS` in your
+Krun config file to stop and start the services.
+
+Note that by default Debian machines do not use a service like ntpd to set the
+system time. Instead the time is set using `ntpdate` when a network interface
+comes up.
+
+### Linux
+
+On Linux, list services with:
+
+```
+# systemctl | grep running
+```
+
+Disable services (now and at boot) with:
+
+```
+# systemctl stop <service>
+# systemctl disable <service>
+```
+
+Commonly enabled services you probably don't want include:
+
+ * apache2
+ * memcached
+ * nfs-common
+
+### OpenBSD
+
+On OpenBSD, list at services with:
+
+```
+# rcctl ls started
+```
+
+Disable services (now and at boot) with:
+```
+# rcctl stop <service>
+# rcctl disable <service>
+```
+
+Commonly enabled services you probably don't want include:
+
+ * pflogd
+ * sndiod
+
+## Step 6: Run the example experiment
 
 ```bash
 $ cd ../
@@ -209,23 +264,21 @@ The structure of the JSON results is as follows:
 {
     'audit': '',  # A dict containing platform information
     'config': '', # A unicode object containing your Krun configuration
-    'data': {     # A dict object containing timing results
-        u'bmark:VM:variant': [  # A list of lists of in-process iteration times
+    'wallclock_times': {        # A dict object containing timing results
+        'bmark:VM:variant': [   # A list of lists of in-process iteration times
             [ ... ], ...        # One list per process execution
         ]
     },
-    'reboots': N, # An int containing the number of reboots that have
-                  # already taken place. Only used when Krun is started
-                  # with --hardware-reboots. This field used to check that the
-                  # benchmarking machine has rebooted the correct number
-                  # of times. It can be safely ignored by users.
-    'starting_temperatures': [ ... ], # Temperatures recorded at the beginning
-                  # of the experiment. Used before each process execution to decide if
-                  # the system is running much hotter than before. In this
-                  # case we wait to allow the system to cool. The ordering
-                  # and meanings of the temperatures in the list are platform
-                  # and system specific. This information can be safely
-                  # ignored by users.
+    'core_cycle_counts': {      # Per-core core cycle counter deltas
+        'bmark:VM:variant': [
+            [                   # One list per process execution
+                [...], ...      # One list per core
+            ]
+    },
+    'aperf_counts': {...}       # Per-core APERF deltas
+                                # (structure same as 'core_cycle_counts')
+    'mperf_counts': {...}       # Per-core MPERF deltas
+                                # (structure same as 'core_cycle_counts')
     'eta_estimates': {u"bmark:VM:variant": [t_0, t_1, ...], ...} # A dict mapping
                   # benchmark keys to rough process execution times. Used internally,
                   # users can ignore this.
