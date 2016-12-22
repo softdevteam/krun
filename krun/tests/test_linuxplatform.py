@@ -1,7 +1,8 @@
 import pytest
 import krun.platform
+from krun.platform import LinuxPlatform
 from krun.tests import BaseKrunTest, subst_env_arg
-from krun.util import FatalKrunError
+from krun.util import FatalKrunError, run_shell_cmd
 from krun.vm_defs import  PythonVMDef
 from krun.tests.mocks import mock_manifest
 import sys
@@ -274,3 +275,25 @@ class TestLinuxPlatform(BaseKrunTest):
         ]
         assert not platform._check_dmesg_for_changes(
             platform.get_allowed_dmesg_patterns(), old_lines, new_lines, mock_manifest)
+
+    def test_aslr0001(self, platform, caplog):
+        # get current ASLR value
+        with open(LinuxPlatform.ASLR_FILE, "r") as fh:
+            old_val = fh.read().strip()
+
+        # First turn off ASLR
+        cmd = "%s sh -c 'echo 0 > %s'" % \
+            (platform.change_user_cmd, LinuxPlatform.ASLR_FILE)
+        run_shell_cmd(cmd)
+
+        # This should flip it to mode 2
+        platform._check_aslr_enabled()
+        with open(LinuxPlatform.ASLR_FILE, "r") as fh:
+            new_val = fh.read().strip()
+        assert new_val == '2'
+        assert "Adjust ASLR" in caplog.text()
+
+        # Restore old value
+        cmd = "%s sh -c 'echo %s > %s'" % \
+            (platform.change_user_cmd, old_val,  LinuxPlatform.ASLR_FILE)
+        run_shell_cmd(cmd)
