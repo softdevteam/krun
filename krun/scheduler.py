@@ -511,6 +511,7 @@ class ExecutionScheduler(object):
             # exception occurred in the above try block, there's a chance that
             # they have not have been loaded.
             if results is None:
+                Results.ok_to_instantiate = True
                 results = Results(self.config, self.platform,
                                        results_file=self.config.results_filename())
 
