@@ -654,6 +654,7 @@ class LinuxPlatform(UnixLikePlatform):
     CPU_SCALER_FMT = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_driver"
     KERNEL_ARGS_FILE = "/proc/cmdline"
     ASLR_FILE = "/proc/sys/kernel/randomize_va_space"
+    ASLR_MODE = 2
     CSET_CMD = "/usr/bin/cset"
     USER_CSET_DIR = "/cpusets/user"
 
@@ -799,7 +800,7 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_rmsr_loaded()
         if not self.no_tickless_check:
             self._check_tickless_kernel()
-        self._check_aslr_disabled()
+        self._check_aslr_enabled()
 
     def _check_virt_what_installed(self):
         debug("Check virt-what is installed")
@@ -1057,26 +1058,34 @@ class LinuxPlatform(UnixLikePlatform):
         stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=True)
         debug("rmsr loaded successfully.")
 
-    def _check_aslr_disabled(self):
-        debug("Checking ASLR is off")
-        with open(self.ASLR_FILE, "r") as fh:
-                enabled = fh.read().strip()
-        if enabled == "0":
-            return  # OK!
-        else:
-            # ASLR is off, but we can try to enable it
-            debug("Turning ASLR off")
-            cmd = "%s sh -c 'echo 0 > %s'" % \
-                (self.change_user_cmd, self.ASLR_FILE)
-            stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=False)
+    def _check_aslr_enabled(self):
+        """Check ASLR is cranked to level 2
 
-            if rc != 0:
-                msg = "ASLR disabled (%s, expect '0' got '%s').\n" % \
-                    (self.ASLR_FILE, enabled)
-                msg += "Krun tried to turn it off, but failed."
-                fatal(msg)
+        For info on ASLR modes, see randomize_va_space in:
+        https://www.kernel.org/doc/Documentation/sysctl/kernel.txt
+
+        Note that turning on ASLR does nothing for PIE (position independent
+        executable -- randomisation of the .text section) unless the binary is
+        also compiled with a special flag.
+        """
+
+        debug("Checking ASLR is on")
+        for rep in 1, 2:
+            with open(LinuxPlatform.ASLR_FILE, "r") as fh:
+                val = fh.read().strip()
+            if val == str(LinuxPlatform.ASLR_MODE):
+                return  # OK!
             else:
-                self._check_aslr_disabled()  # should work this time
+                if rep == 2:
+                    fatal("Failed to adjust ASLR setting")
+                else:
+                    # setting is wrong, adjust.
+                    debug("Adjust ASLR")
+                    cmd = "%s sh -c 'echo %s > %s'" % \
+                        (self.change_user_cmd, LinuxPlatform.ASLR_MODE,
+                         LinuxPlatform.ASLR_FILE)
+                    stdout, stderr, rc = run_shell_cmd(cmd)
+        assert False  # unreachable
 
     def collect_audit(self):
         BasePlatform.collect_audit(self)
