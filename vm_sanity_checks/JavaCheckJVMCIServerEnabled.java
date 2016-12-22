@@ -24,7 +24,6 @@ class JavaCheckJVMCIServerEnabled implements BaseKrunEntry {
 
         /* A) The JVM was built with JVMCI support */
         String vmVers = System.getProperty("java.vm.version");
-        System.err.println("java.vm.version=" + vmVers);
         if (!vmVers.contains("jvmci")) {
             String msg = "JVM was not built with JVMCI support: java.vm.version=" + vmVers;
             throw new java.lang.IllegalStateException(msg);
@@ -32,7 +31,6 @@ class JavaCheckJVMCIServerEnabled implements BaseKrunEntry {
 
         /* B) That JVMCI is enabled */
         String enableJVMCI = diagBean.getVMOption("EnableJVMCI").getValue();
-        System.err.println("EnableJVMCI=" + enableJVMCI);
         if (!enableJVMCI.equals("true")) {
             String msg = "JVMCI is not enabled: EnableJVMCI=" + enableJVMCI;
             throw new java.lang.IllegalStateException(msg);
@@ -40,7 +38,6 @@ class JavaCheckJVMCIServerEnabled implements BaseKrunEntry {
 
         /* C) The Graal compiler is selected */
         String useJVMCI = diagBean.getVMOption("UseJVMCICompiler").getValue();
-        System.err.println("UseJVMCICompiler=" + useJVMCI);
         if (!useJVMCI.equals("true")) {
             String msg = "JVMCI compiler not selected: UseJVMCICompiler=" + useJVMCI;
             throw new java.lang.IllegalStateException(msg);
