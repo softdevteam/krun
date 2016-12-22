@@ -451,6 +451,11 @@ class ExecutionScheduler(object):
         job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
                            self.config.BENCHMARKS[bench])
 
+        # Default to error state. This is the value the finally block will see
+        # if an exception is raised inside the try block, otherwise it is
+        # re-assigned based on the result of running the benchmark.
+        flag = 'E'
+
         # Run the pre-exec commands, the benchmark and the post-exec commands.
         # These are wrapped in a try/except, so that the post-exec commands
         # are always executed, even if an exception has occurred. We only
@@ -495,7 +500,6 @@ class ExecutionScheduler(object):
             results.eta_estimates[job.key].append(eta_info)
             self.manifest.update(flag)
         except Exception:
-            flag = 'E'
             raise
         finally:
             # Run the user's post-process-execution commands with updated
@@ -507,6 +511,7 @@ class ExecutionScheduler(object):
             # exception occurred in the above try block, there's a chance that
             # they have not have been loaded.
             if results is None:
+                Results.ok_to_instantiate = True
                 results = Results(self.config, self.platform,
                                        results_file=self.config.results_filename())
 
