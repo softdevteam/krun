@@ -128,7 +128,7 @@ the user does not need a password for `sudo` as root.
 ## Step 2: Fetch the Krun source
 
 ```bash
-$ git clone https://github.com/softdevteam/krun.git
+$ git clone --recursive https://github.com/softdevteam/krun.git
 $ cd krun
 ```
 
