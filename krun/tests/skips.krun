@@ -49,7 +49,7 @@ SKIP=[
     "*:Graal:*",
     "*:LuaJIT:*",
     "*:HHVM:*",
-    "*:JRubyTruffle:*",
+    "*:TruffleRuby:*",
     "*:V8:*",
 ]
 
