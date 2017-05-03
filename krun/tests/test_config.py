@@ -106,7 +106,7 @@ def test_skip0001():
                 "*:Graal:*",
                 "*:LuaJIT:*",
                 "*:HHVM:*",
-                "*:JRubyTruffle:*",
+                "*:TruffleRuby:*",
                 "*:V8:*",
                 ]
     for triplet in expected:
@@ -174,21 +174,21 @@ def test_skip0007():
 
 def test_skip0008():
     config = Config()
-    config.SKIP = ["*:SomeVM:*", "fasta:JRubyTruffle:default-ruby"]
+    config.SKIP = ["*:SomeVM:*", "fasta:TruffleRuby:default-ruby"]
 
-    assert config.should_skip("fasta:JRubyTruffle:default-ruby")
+    assert config.should_skip("fasta:TruffleRuby:default-ruby")
 
 def test_skip0009():
     config = Config()
     config.SKIP = ["*:SomeVM:*",
-                   "fasta:JRubyTruffle:default-ruby",
+                   "fasta:TruffleRuby:default-ruby",
                    "bench:*:*",
                    "bench:vm:skipvariant",
                    "*:*:skipvariant",
                    ]
 
-    assert config.should_skip("fasta:JRubyTruffle:default-ruby")
-    assert not config.should_skip("fasta:JRubyTruffle:default-ruby2")
+    assert config.should_skip("fasta:TruffleRuby:default-ruby")
+    assert not config.should_skip("fasta:TruffleRuby:default-ruby2")
     assert config.should_skip("bench:lala:hihi")
     assert config.should_skip("bench:lala:hihi2")
     assert not config.should_skip("bench1:lala:hihi")
@@ -198,7 +198,7 @@ def test_skip0009():
 def test_skip0010():
     config = Config()
     config.SKIP = ["*:SomeVM:*",
-                   "fasta:JRubyTruffle:default-ruby",
+                   "fasta:TruffleRuby:default-ruby",
                    "bench:*:*",
                    "bench:vm:skipvariant",
                    "*:*:skipvariant",

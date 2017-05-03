@@ -1,7 +1,7 @@
 import os
 import sys
 from krun.vm_defs import (PythonVMDef, LuaVMDef, JavaVMDef, GraalVMDef,
-		          PHPVMDef, JRubyTruffleVMDef, V8VMDef, NativeCodeVMDef,
+		          PHPVMDef, TruffleRubyVMDef, V8VMDef, NativeCodeVMDef,
 			  find_internal_jvmci_java_bin, PyPyVMDef)
 from krun import EntryPoint
 
@@ -68,11 +68,11 @@ VMS = {
         'variants': ['default-php'],
         'n_iterations': ITERATIONS_ALL_VMS,
     },
-    'JRubyTruffle' : {
-        'vm_def': JRubyTruffleVMDef(jruby_dir='work/jruby',
-                                    graal_home='work/graal',
-                                    mx_dir='work/mx',
-                                    jvmci_home='work/graal-jvmci-8/jdk1.8.0/product'),
+    'TruffleRuby' : {
+        'vm_def': TruffleRubyVMDef(truffleruby_dir='work/truffleruby',
+                                   graal_home='work/graal',
+                                   mx_dir='work/mx',
+                                   jvmci_home='work/graal-jvmci-8/jdk1.8.0/product'),
         'variants': ['default-ruby'],
         'n_iterations': ITERATIONS_ALL_VMS,
     },
@@ -89,9 +89,9 @@ BENCHMARKS = {
 }
 
 SKIP= [
-    "fasta:JRubyTruffle:default-ruby",
+    "fasta:TruffleRuby:default-ruby",
     "richards:HHVM:default-php",
-    "spectralnorm:JRubyTruffle:default-ruby",
+    "spectralnorm:TruffleRuby:default-ruby",
     "*:CPython:*",
 ]
 

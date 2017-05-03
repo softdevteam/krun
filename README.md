@@ -114,17 +114,6 @@ CONFIG_NO_HZ_FULL_ALL=y
 For more information on tickless mode, see
 [the kernel docs](https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt).
 
-### Create a user called krun
-
-You will need to create a new user called `krun`, with minimal permissions:
-
-```
-# useradd krun
-```
-
-You will want to add this user to the `sudoers` group and make sure that
-the user does not need a password for `sudo` as root.
-
 ## Step 2: Fetch the Krun source
 
 ```bash
@@ -366,8 +355,7 @@ The following VMs are currently supported:
   * Lua
   * PHP
   * Ruby
-  * JRuby
-  * Truffle-JRuby
+  * TruffleRuby
   * Javascript V8
 
 To add a new VM definition, add a new class to `krun/vm_defs.py` and a
@@ -414,6 +402,12 @@ easier.
 
 Note that you should not collect results intended for publication with
 development switches turned on.
+
+## Unit Tests
+
+Krun has a pytest suite which can be run by executing `py.test` in the
+top-level source directory. The user running the tests should be in the `root`
+group so as to allow access to `/dev/cpu/*/rmsr`.
 
 ## Security Notes
 

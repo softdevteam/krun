@@ -1,3 +1,4 @@
+# Crash if Graal is not enabled.
 def run_iter(param)
 	begin
 		if (not Truffle::Graal.graal?) then

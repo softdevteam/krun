@@ -52,7 +52,7 @@ if __FILE__ == $0
     for iter_num in 0..iters - 1 do
         if debug then
             STDERR.write "[iterations_runner.rb] iteration #{iter_num + 1}/#{iters}\n"
-            STDERR.flush  # JRuby doesn't flush on newline.
+            STDERR.flush
         end
 
         # Start timed section

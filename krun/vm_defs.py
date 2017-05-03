@@ -631,37 +631,27 @@ class RubyVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.rb",
                                        env=env)
 
-class JRubyVMDef(RubyVMDef):
-    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
-                 stack_lim_k, force_dir=None, sync_disks=True):
-        return self._generic_scripting_run_exec(interpreter, benchmark,
-                                                iterations, param, heap_lim_k,
-                                                stack_lim_k,
-                                                force_dir=force_dir,
-                                                sync_disks=sync_disks)
-
-class JRubyTruffleVMDef(JRubyVMDef):
-    def __init__(self, jruby_dir=None, graal_home=None, mx_dir=None,
+class TruffleRubyVMDef(RubyVMDef):
+    def __init__(self, truffleruby_dir=None, graal_home=None, mx_dir=None,
                  jvmci_home=None, env=None):
         """
         Args:
-            jruby_dir: path to a (built) jruby src dir
+            truffleruby_dir: path to a (built) truffleruby src dir
             graal_home: path to the built graal-core directory
             mx_dir: path to mx directory
 
-        Note that this is for the open-source graal-core powered JRbuy, not
-        for the proprietary graalvm binaries found on Oracle Technology Network.
+        Note that this is for the open-source graal-core powered TruffleRuby,
+        not for the proprietary graalvm binaries found on Oracle Technology
+        Network.
         """
 
-        jtrb_path = os.path.join(jruby_dir, 'tool', 'jt.rb')
-        jruby_bin_dir = os.path.join(jruby_dir, 'bin')
+        jtrb_path = os.path.join(truffleruby_dir, 'tool', 'jt.rb')
         mx_bin_dir = os.path.join(mx_dir, "bin")
 
-        JRubyVMDef.__init__(self, jtrb_path, env=env)
+        RubyVMDef.__init__(self, jtrb_path, env=env)
         self.add_env_change(EnvChangeAppend("GRAAL_HOME", graal_home))
         self.add_env_change(EnvChangeAppend("PATH", mx_dir))
-        self.add_env_change(EnvChangeAppend("PATH", jruby_bin_dir))
-        self.extra_vm_args += ['ruby', '--graal']
+        self.extra_vm_args += ['run', '--graal']
 
         if jvmci_home is not None:
             self.add_env_change(EnvChangeSet("JAVA_HOME", jvmci_home))
@@ -673,15 +663,17 @@ class JRubyTruffleVMDef(JRubyVMDef):
             stack_lim_k, force_dir=force_dir, sync_disks=sync_disks)
 
     def _check_truffle_enabled(self):
-        """Runs fake benchmark crashing if the Truffle is disabled in JRuby"""
+        """Runs fake benchmark crashing if the Truffle is disabled in
+        TruffleRuby"""
 
-        debug("Running jruby_check_truffle_enabled sanity check")
-        ep = EntryPoint("jruby_check_graal_enabled.rb")
+        debug("Running truffleruby_check_truffle_enabled sanity check")
+        ep = EntryPoint("truffleruby_check_graal_enabled.rb")
         spawn_sanity_check(self.platform, ep, self,
-                           "jruby_check_graal_enabled.rb", force_dir=VM_SANITY_CHECKS_DIR)
+                           "truffleruby_check_graal_enabled.rb",
+                           force_dir=VM_SANITY_CHECKS_DIR)
 
     def sanity_checks(self):
-        JRubyVMDef.sanity_checks(self)
+        RubyVMDef.sanity_checks(self)
         self._check_truffle_enabled()
 
 class JavascriptVMDef(GenericScriptingVMDef):
