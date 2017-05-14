@@ -123,7 +123,7 @@ class KrunJDKInstrumentation {
 
 // All entry points must implement this
 interface BaseKrunEntry {
-    public abstract void run_iter(int param);
+    public abstract long run_iter(int param, long checksum);
 }
 
 class IterationsRunner {
@@ -224,6 +224,7 @@ class IterationsRunner {
             Arrays.fill(mperfCounts[core], 0);
         }
 
+        long checksum = 0;
         for (int i = 0; i < iterations; i++) {
             if (debug) {
                 System.err.println("[iterations_runner.java] iteration: " + (i + 1) + "/" + iterations);
@@ -231,7 +232,7 @@ class IterationsRunner {
 
             // Start timed section
             IterationsRunner.JNI_krun_measure(0);
-            ke.run_iter(param);
+            checksum = ke.run_iter(param, checksum);
             IterationsRunner.JNI_krun_measure(1);
             // End timed section
 

@@ -10,14 +10,14 @@ class JavaCheckJVMCIServerEnabled implements BaseKrunEntry {
     HotSpotDiagnosticMXBean diagBean;
 
     public static void main(String[] args) {
-        new JavaCheckJVMCIServerEnabled().run_iter(666);
+        new JavaCheckJVMCIServerEnabled().run_iter(666, 0);
     }
 
     public JavaCheckJVMCIServerEnabled() {
         diagBean = ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class);
     }
 
-    public void run_iter(int param) {
+    public long run_iter(int param, long unused) {
         /*
          * We want to know that:
          */
@@ -42,5 +42,7 @@ class JavaCheckJVMCIServerEnabled implements BaseKrunEntry {
             String msg = "JVMCI compiler not selected: UseJVMCICompiler=" + useJVMCI;
             throw new java.lang.IllegalStateException(msg);
         }
+
+       return 0;
     }
 }

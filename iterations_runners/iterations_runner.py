@@ -72,6 +72,7 @@ if __name__ == "__main__":
         mperf_counts[core] = [0] * iters
 
     # Main loop
+    checksum = 0
     for i in xrange(iters):
         if instrument:
             start_snap = pypyjit.get_stats_snapshot()
@@ -81,7 +82,7 @@ if __name__ == "__main__":
 
         # Start timed section
         krun_measure(0)
-        bench_func(param)
+        checksum = bench_func(param, checksum)
         krun_measure(1)
         # End timed section
 
