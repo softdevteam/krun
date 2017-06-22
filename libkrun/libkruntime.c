@@ -50,7 +50,7 @@ static int krun_num_cores = 0;
 #ifdef __linux__
 static void     krun_core_bounds_check(int core);
 static void     krun_mdata_bounds_check(int mdata_idx);
-#ifndef TRAVIS
+#ifndef NO_MSRS
 static int      krun_get_fixed_pctr1_width(void);
 static int      krun_open_msr_node(int cpu);
 static void     krun_config_fixed_ctr1(int cpu, int enable);
@@ -59,7 +59,7 @@ static void     krun_write_msr(int cpu, long addr, uint64_t msr_val);
 static void     krun_close_fd(int fd);
 static uint64_t krun_read_aperf(int core);
 static uint64_t krun_read_mperf(int core);
-#endif // TRAVIS
+#endif // NO_MSRS
 #endif // __linux__
 void            krun_check_mdata(void);
 
@@ -95,7 +95,7 @@ krun_mdata_bounds_check(int mdata_idx)
     }
 }
 
-#if defined(__linux__) && !defined(TRAVIS)
+#if defined(__linux__) && !defined(NO_MSRS)
 /*
  * Rather than open and close the MSR device nodes all the time, we hold them
  * open over multiple in-process iterations, thus minimising the amount of work
@@ -130,13 +130,12 @@ int *krun_msr_nodes = NULL;
 
 static uint64_t krun_pctr_val_mask = 0; // configured in initialisation
 
-#elif defined(__linux__) && defined(TRAVIS)
-// Travis has no performance counters.
+#elif defined(__linux__) && defined(NO_MSRS)
 #elif defined(__OpenBSD__)
 // We do not yet support performance counters on OpenBSD
 #else
 #error "Unsupported platform"
-#endif // __linux__ && !TRAVIS
+#endif // __linux__ && !NO_MSRS
 
 double
 krun_clock_gettime_monotonic()
@@ -217,7 +216,7 @@ Java_IterationsRunner_JNI_1krun_1get_1num_1cores(JNIEnv *e, jclass c)
 }
 #endif
 
-#if defined(__linux__) && !defined(TRAVIS)
+#if defined(__linux__) && !defined(NO_MSRS)
 static int
 krun_open_msr_node(int core)
 {
@@ -354,18 +353,17 @@ krun_get_fixed_pctr1_width()
 
     return fixed_ctr_width;
 }
-#elif defined(__linux__) && defined(TRAVIS)
-// Travis has no performance counters
+#elif defined(__linux__) && defined(NO_MSRS)
 #elif defined(__OpenBSD__)
 // We do not yet support performance counters on OpenBSD
 #else
 #error "Unsupported platform"
-#endif // linux && !TRAVIS
+#endif // linux && !NO_MSRS
 
 void
 krun_init(void)
 {
-#if defined(__linux__) && !defined(TRAVIS)
+#if defined(__linux__) && !defined(NO_MSRS)
     int core, i;
 
     /* See how wide the counter values are and make an appropriate mask */
@@ -397,19 +395,18 @@ krun_init(void)
         krun_write_msr(core, IA32_APERF, 0);
     }
 
-#elif defined(__linux__) && defined(TRAVIS)
-    // Travis has no performance counters
+#elif defined(__linux__) && defined(NO_MSRS)
 #elif defined(__OpenBSD__)
     // We do not yet support performance counters on OpenBSD
 #else
 #   error "Unsupported platform"
-#endif  // __linux__ && !TRAVIS
+#endif  // __linux__ && !NO_MSRS
 }
 
 void
 krun_done(void)
 {
-#if defined(__linux__) && !defined(TRAVIS)
+#if defined(__linux__) && !defined(NO_MSRS)
     int core, i;
 
     /* Close MSR device nodes */
@@ -424,24 +421,23 @@ krun_done(void)
         free(krun_mdata[i].aperf);
         free(krun_mdata[i].mperf);
     }
-#elif defined(__linux__) && defined(TRAVIS)
-    // Travis has no performance counters
+#elif defined(__linux__) && defined(NO_MSRS)
 #elif defined(__OpenBSD__)
     // We do not yet support performance counters on OpenBSD
 #else
 #error "Unsupported platform"
-#endif  // __linux__ && !TRAVIS
+#endif  // __linux__ && !NO_MSRS
 }
 
 /* Not static as this is exposed for testing */
 uint64_t
 krun_read_core_cycles(int core)
 {
-#if defined(__linux__) && !defined(TRAVIS)
+#if defined(__linux__) && !defined(NO_MSRS)
     return krun_read_msr(core, MSR_IA32_PERF_FIXED_CTR1) & krun_pctr_val_mask;
-#elif defined(__linux__) && defined(TRAVIS)
+#elif defined(__linux__) && defined(NO_MSRS)
     // Ideally this function would not be exposed at all, but a test uses it.
-    fprintf(stderr, "%s should not be used on Travis\n", __func__);
+    fprintf(stderr, "%s should not be used on virtualised hosts\n", __func__);
     exit(EXIT_FAILURE);
 #elif defined(__OpenBSD__)
     fprintf(stderr, "%s should not be used on OpenBSD\n", __func__);
@@ -451,7 +447,7 @@ krun_read_core_cycles(int core)
 #endif
 }
 
-#if defined(__linux__) && !defined(TRAVIS)
+#if defined(__linux__) && !defined(NO_MSRS)
 static uint64_t
 krun_read_aperf(int core)
 {
@@ -463,7 +459,7 @@ krun_read_mperf(int core)
 {
     return krun_read_msr(core, IA32_MPERF) & IA32_MPERF_MASK;
 }
-#endif // __linux__ && !TRAVIS
+#endif // __linux__ && !NO_MSRS
 
 /*
  * Since some languages cannot represent a uint64_t, we sometimes have to pass
@@ -496,7 +492,7 @@ krun_measure(int mdata_idx)
 
     krun_mdata_bounds_check(mdata_idx);
 
-#if defined(__linux__) && !defined(TRAVIS)
+#if defined(__linux__) && !defined(NO_MSRS)
     // We support per-core readings
 
     /*
@@ -526,7 +522,7 @@ krun_measure(int mdata_idx)
             data->mperf[core] = krun_read_mperf(core);
         }
     }
-#elif defined(__linux__) && defined(TRAVIS)
+#elif defined(__linux__) && defined(NO_MSRS)
     data->wallclock = krun_clock_gettime_monotonic();
 #elif defined(__OpenBSD__)
     data->wallclock = krun_clock_gettime_monotonic();

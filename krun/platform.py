@@ -687,13 +687,12 @@ class LinuxPlatform(UnixLikePlatform):
         self.temp_sensor_map = None
         UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
+        self.virt_what_cmd = self._find_virt_what()
         self.num_per_core_measurements = self._get_num_per_core_measurements()
 
-        self.virt_what_cmd = None  # set later
-
     def _get_num_per_core_measurements(self):
-        # For all systems apart from travis we expect per-core measurements
-        if os.environ.get("TRAVIS") == "true":
+        # For all systems apart from virtualised hosts we expect per-core measurements
+        if self.is_virtual():
             return 0
         else:
             return self.num_cpus
@@ -793,7 +792,6 @@ class LinuxPlatform(UnixLikePlatform):
             self._check_cset_installed()
         self._check_isolcpus()
         self._check_cset_shield()
-        self._check_virt_what_installed()
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
@@ -802,7 +800,7 @@ class LinuxPlatform(UnixLikePlatform):
             self._check_tickless_kernel()
         self._check_aslr_enabled()
 
-    def _check_virt_what_installed(self):
+    def _find_virt_what(self):
         debug("Check virt-what is installed")
 
         # the tool may not be in the path for an unpriveleged user
@@ -813,8 +811,7 @@ class LinuxPlatform(UnixLikePlatform):
         exe = find_executable("virt-what")
         if exe is None:
             fatal("virt-what is not installed")
-
-        self.virt_what_cmd = exe
+        return exe
 
     # separate for testing
     def _configure_cset_shield_args(self):
@@ -1046,8 +1043,8 @@ class LinuxPlatform(UnixLikePlatform):
         stdout, stderr, rc = run_shell_cmd(cmd, failure_fatal=True)
         if 'rmsr' in  stdout:
             return
-        if (os.environ.get("TRAVIS", None) == "true"):
-            debug("Running on Travis-CI so not calling insmod.")
+        if self.is_virtual():
+            debug("Running on virtual host, so not calling insmod.")
             return
         # rmsr git repo should have been cloned and compiled by 'make all'.
         debug("Auto-loading 'rmsr' module.")
@@ -1205,6 +1202,9 @@ class LinuxPlatform(UnixLikePlatform):
         return 99  # Linux specific maximum
 
     def is_virtual(self):
+        if os.environ.get("TRAVIS") == "true":
+            return True
+
         # Needs to be run as root
         args = self.change_user_args("root") + [self.virt_what_cmd]
 

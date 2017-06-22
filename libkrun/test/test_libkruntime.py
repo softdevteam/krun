@@ -15,10 +15,10 @@ from krun.platform import detect_platform
 PLATFORM = detect_platform(None, None)
 
 CORECYCLES_SUPPORT = sys.platform.startswith("linux") and \
-    not (os.environ.get("TRAVIS", None) == "true")
+    not PLATFORM.is_virtual()
 
 APERF_MPERF_SUPPORT = sys.platform.startswith("linux") and \
-    not (os.environ.get("TRAVIS", None) == "true")
+    not PLATFORM.is_virtual()
 
 def invoke_c_prog(mode):
     assert os.path.exists(TEST_PROG_PATH)

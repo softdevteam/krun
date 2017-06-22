@@ -248,7 +248,6 @@ class TestLinuxPlatform(BaseKrunTest):
     def test_is_virtual0001(self, platform):
         """check that virtualisation check doesn't crash"""
 
-        platform._check_virt_what_installed()  # needed to set the command path
         platform.is_virtual()
 
     def test_check_dmesg_filter0001(self, platform, mock_manifest):
