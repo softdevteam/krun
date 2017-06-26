@@ -1,8 +1,28 @@
 LIBKRUNTIME_CFLAGS =	-Wall -shared -fPIC
 COMMON_CFLAGS = -Wall -pedantic -std=gnu99
+SUDO = sudo
 
-ifeq ("${TRAVIS}", "true")
-	COMMON_CFLAGS += -DTRAVIS
+# Sadly this tool requires root
+VIRT_WHAT = ${SUDO} /usr/sbin/virt-what
+
+# Detect if we are virtualised (Linux only for now XXX)
+ifeq ($(shell uname -s),Linux)
+	VIRTUALISED = 0  # default off
+
+	VIRT_FACTS = $(shell ${VIRT_WHAT})
+	ifneq ("${VIRT_FACTS}","")
+		VIRTUALISED = 1
+	endif
+
+	ifeq ("${TRAVIS}","true")
+		VIRTUALISED = 1
+	endif
+
+	# Under virtualised conditions, we have no performance counters.
+	# MSR-centric code is also guarded on a per-OS basis in libkruntime.c
+	ifeq (${VIRTUALISED},1)
+		COMMON_CFLAGS += -DNO_MSRS
+	endif
 endif
 
 ifeq ($(shell uname -s),Linux)
