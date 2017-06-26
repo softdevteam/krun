@@ -412,7 +412,9 @@ group so as to allow access to `/dev/cpu/*/rmsr`.
 ## Security Notes
 
 Krun is not intended to be run on a secure multi-user system, as it uses sudo
-to elevate privileges.
+to elevate privileges. It also uses files with fixed names in /tmp/ which means
+that only one instance of Krun should be run at any one time (running more
+than one leads to undefined behaviour).
 
 Sudo is used to:
 
