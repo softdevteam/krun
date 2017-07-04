@@ -433,7 +433,7 @@ Please make sure you understand the implications of this.
 
 ## Licenses
 
-The *nbody* benchmark comes from the Computer Language Benchmarks Game, which
-are published under a revised BSD license:
+Krun is licensed under the UPL license.
 
-  http://shootout.alioth.debian.org/license.php
+The nbody benchmark is licensed under a revised BSD license:
+http://shootout.alioth.debian.org/license.php
