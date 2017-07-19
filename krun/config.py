@@ -65,6 +65,8 @@ class Config(object):
         self.STACK_LIMIT = None
         self.TEMP_READ_PAUSE = 60
         self.ENABLE_PINNING = False
+        self.AMPERF_BUSY_THRESHOLD = None
+        self.AMPERF_RATIO_BOUNDS = None
 
         self.PRE_EXECUTION_CMDS = []
         self.POST_EXECUTION_CMDS = []
@@ -105,6 +107,11 @@ class Config(object):
         self.filename = config_file
         with open(config_file, "r") as fp:
             self.text = fp.read()
+
+        if self.AMPERF_RATIO_BOUNDS and not self.AMPERF_BUSY_THRESHOLD or \
+                not self.AMPERF_RATIO_BOUNDS and self.AMPERF_BUSY_THRESHOLD:
+                fatal("AMPERF_RATIO_BOUNDS and AMPERF_BUSY_THRESHOLD must either "
+                      "both be defined in the config file, or neither")
 
     def log_filename(self, resume=False):
         assert self.filename.endswith(".krun")

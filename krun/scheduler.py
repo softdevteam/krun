@@ -370,8 +370,16 @@ class ExecutionJob(object):
         if not dry_run:
             try:
                 measurements = util.check_and_parse_execution_results(
-                    stdout, stderr, rc)
+                    stdout, stderr, rc, self.sched.config)
                 flag = "C"
+            except util.RerunExecution as e:
+                subject = ("Benchmark needs to be re-run: %s (exec_idx=%s)" %
+                           (self.key, self.sched.manifest.next_exec_idx))
+                util.log_and_mail(mailer, warn, subject,
+                                  e.message, manifest=self.sched.manifest,
+                                  bypass_limiter=True)
+                measurements = self.empty_measurements
+                flag = "O"  # i.e. still outstanding
             except util.ExecutionFailed as e:
                 util.log_and_mail(mailer, error, "Benchmark failure: %s" %
                                   self.key, e.message,
@@ -379,16 +387,14 @@ class ExecutionJob(object):
                 measurements = self.empty_measurements
                 flag = "E"
 
-            if vm_def.instrument:
-                if flag != "E":
-                    instr_data = vm_def.get_instr_data()
-                    for k, v in instr_data.iteritems():
-                        assert len(instr_data[k]) == in_proc_iters
-                else:
-                    # The benchmark failed, so we assume the instrumentation
-                    # data to be compromised, and thus discard it.
-                    instr_data = {}
+            # Collect instrumentation data
+            if vm_def.instrument and flag == "C":
+                instr_data = vm_def.get_instr_data()
+                for k, v in instr_data.iteritems():
+                    assert len(instr_data[k]) == in_proc_iters
             else:
+                # The benchmark either failed, needs to be re-run, or had
+                # instrumentation turned off.
                 instr_data = {}
         else:
             measurements = self.empty_measurements
@@ -402,7 +408,7 @@ class ExecutionJob(object):
              (self.benchmark, self.parameter, self.variant, self.vm_name))
 
         # Move the environment log out of /tmp
-        if not dry_run:
+        if not dry_run and flag != "O":
             key_exec_num = self.sched.manifest.completed_exec_counts[self.key]
             util.stash_envlog(envlog_filename, self.sched.config,
                               self.sched.platform, self.key, key_exec_num)
@@ -517,6 +523,11 @@ class ExecutionScheduler(object):
             exec_start_time = time.time()
             measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
+
+            # Bail early if the process execution needs to be re-run.
+            if flag == "O":
+                info("Rebooting to re-run previous process execution")
+                util.reboot(self.manifest, self.platform, update_count=False)
 
             # Store new result.
             Results.ok_to_instantiate = True
