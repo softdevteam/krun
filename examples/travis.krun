@@ -55,7 +55,7 @@ VMS = {
 
 BENCHMARKS = {
     'dummy': 1000,
-    'nbody': 1000,
+    'nbody': 5,
 }
 
 # list of "bench:vm:variant"

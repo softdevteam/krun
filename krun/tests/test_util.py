@@ -39,7 +39,7 @@ from krun.util import (format_raw_exec_results, log_and_mail, fatal,
                        check_and_parse_execution_results, run_shell_cmd,
                        run_shell_cmd_bench, get_git_version, ExecutionFailed,
                        get_session_info, run_shell_cmd_list, FatalKrunError,
-                       stash_envlog, dump_instr_json)
+                       stash_envlog, dump_instr_json, RerunExecution)
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
@@ -52,6 +52,15 @@ import logging
 import pytest
 import os
 from tempfile import NamedTemporaryFile
+
+
+# A dummy configuration for testing check_and_parse_execution_results()
+class DummyConfig(object):
+    pass
+DUMMY_CONFIG = DummyConfig()
+DUMMY_CONFIG.AMPERF_RATIO_BOUNDS = 0.93, 1.03
+DUMMY_CONFIG.AMPERF_BUSY_THRESHOLD = 10
+DUMMY_CONFIG.OUTLIER_WINDOW_SIZE = 10
 
 
 def test_fatal(capsys, caplog):
@@ -129,13 +138,14 @@ def test_run_shell_cmd_bench_fatal():
 
 def test_check_and_parse_execution_results0001():
     stdout = json.dumps({
-        "wallclock_times": [123.4],
+        "wallclock_times": [1],
         "core_cycle_counts": [[1], [2], [3], [4]],
-        "aperf_counts": [[5], [6], [7], [8]],
-        "mperf_counts": [[9], [10], [11], [12]],
+        "aperf_counts": [[5], [5], [5], [5]],
+        "mperf_counts": [[5], [5], [5], [5]],
     })
     stderr = "[iterations_runner.py] iteration 1/1"
-    assert check_and_parse_execution_results(stdout, stderr, 0) == json.loads(stdout)
+    js = check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
+    assert js == json.loads(stdout)
 
 
 def test_check_and_parse_execution_results0002():
@@ -148,7 +158,7 @@ def test_check_and_parse_execution_results0002():
     stderr = "[iterations_runner.py] iteration 1/1"
     # Non-zero return code.
     with pytest.raises(ExecutionFailed) as excinfo:
-        check_and_parse_execution_results(stdout, stderr, 1)
+        check_and_parse_execution_results(stdout, stderr, 1, DUMMY_CONFIG)
     expected = """Benchmark returned non-zero or emitted invalid JSON.
 return code: 1
 stdout:
@@ -167,9 +177,9 @@ stderr:
 def test_check_and_parse_execution_results0003():
     stderr = "[iterations_runner.py] iteration 1/1"
     stdout = "[0.000403["
-    # Corrupt Json in STDOUT.
+    # Corrupt JSON in STDOUT.
     with pytest.raises(ExecutionFailed) as excinfo:
-        check_and_parse_execution_results(stdout, stderr, 0)
+        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
     expected = """Benchmark returned non-zero or emitted invalid JSON.\nException string: Expecting , delimiter: line 1 column 10 (char 9)
 return code: 0
 stdout:
@@ -183,6 +193,41 @@ stderr:
 --------------------------------------------------
 """
     assert excinfo.value.message == expected
+
+
+def test_check_and_parse_execution_results0004(caplog):
+    stdout = json.dumps({
+        "wallclock_times": [1],
+        "core_cycle_counts": [[1], [1], [1], [1]],
+        "aperf_counts": [[30], [20], [5], [3]],
+        "mperf_counts": [[20], [30], [5], [5]],
+    })
+    stderr = "[iterations_runner.py] iteration 1/1"
+
+    with pytest.raises(RerunExecution) as e:
+        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
+
+    assert e.value.message == \
+        "APERF/MPERF ratio badness detected\n" \
+        "  in_proc_iter=0, core=0, type=turbo, ratio=1.5\n" \
+        "  in_proc_iter=0, core=1, type=throttle, ratio=0.666666666667\n\n" \
+        "The process execution will be retried until the ratios are OK."
+
+def test_check_and_parse_execution_results0005(caplog):
+    stdout = json.dumps({
+        "wallclock_times": [.5, .5],
+        "core_cycle_counts": [[1000, 500], [50, 50], [30, 30], [40, 40]],
+        "aperf_counts": [[20, 15], [5, 5], [5, 5], [5, 5]],
+        "mperf_counts": [[20, 20], [5, 5], [5, 5], [5, 5]],
+    })
+    stderr = "[iterations_runner.py] iteration 1/1"
+
+    with pytest.raises(RerunExecution) as e:
+        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
+    assert e.value.message == \
+        "APERF/MPERF ratio badness detected\n" \
+        "  in_proc_iter=1, core=0, type=throttle, ratio=0.75\n\n" \
+        "The process execution will be retried until the ratios are OK."
 
 
 def test_get_session_info0001():

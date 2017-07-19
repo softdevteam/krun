@@ -45,6 +45,7 @@ import subprocess
 from subprocess import Popen, PIPE
 from logging import error, debug, info, warn
 from bz2 import BZ2File
+from krun.amperf import check_amperf_ratios
 
 FLOAT_FORMAT = ".6f"
 
@@ -68,12 +69,17 @@ SANITY_CHECK_STACK_KB = 8192
 PLATFORM_SANITY_CHECK_DIR = os.path.join(DIR, "..", "platform_sanity_checks")
 VM_SANITY_CHECKS_DIR = os.path.join(DIR, "..", "vm_sanity_checks")
 
+BAD_AMPERF_SUBJECT = "Bad APERF/MPERF ratio(s) detected"
 
 # Keys we expect in each iteration runner's output
 EXPECT_JSON_KEYS = set(["wallclock_times", "core_cycle_counts",
                         "aperf_counts", "mperf_counts"])
 
 class ExecutionFailed(Exception):
+    pass
+
+
+class RerunExecution(Exception):
     pass
 
 
@@ -231,7 +237,9 @@ def read_popen_output_carefully(process, platform, print_stderr=True):
 
     return stdout, stderr, process.returncode
 
-def check_and_parse_execution_results(stdout, stderr, rc):
+
+def check_and_parse_execution_results(stdout, stderr, rc, config,
+                                      sanity_check=False):
     json_exn = None
 
     # cset(1) on Linux prints to stdout information about which cpuset a pinned
@@ -272,6 +280,32 @@ def check_and_parse_execution_results(stdout, stderr, rc):
                          (key, len(core_data)))
                 raise ExecutionFailed(err_s)
 
+    # Check the CPU did not clock down, if the platform supports APERF/MPERF
+    if config.AMPERF_RATIO_BOUNDS and not sanity_check:
+        if json_data["aperf_counts"] == []:
+            warn("platform does not support APERF and MPERF counts."
+                 " Not checking ratios.")
+        else:
+            amperf_results = check_amperf_ratios(json_data["aperf_counts"],
+                                                 json_data["mperf_counts"],
+                                                 json_data["wallclock_times"],
+                                                 config.AMPERF_BUSY_THRESHOLD,
+                                                 config.AMPERF_RATIO_BOUNDS)
+            error_lines = []
+            for core_idx, ratios in enumerate(amperf_results):
+                if not ratios.ok():
+                    if not error_lines:
+                        # First badness, make a header
+                        error_lines.append("APERF/MPERF ratio badness detected")
+                    for typ in ratios.violations.keys():
+                        for iter_idx in ratios.violations[typ]:
+                            error_lines.append(
+                                "  in_proc_iter=%s, core=%s, type=%s, ratio=%s" %
+                            (iter_idx, core_idx, typ, ratios.vals[iter_idx]))
+            if error_lines:
+                error_lines.append("\nThe process execution will be retried"
+                                   " until the ratios are OK.")
+                raise RerunExecution("\n".join(error_lines))
     return json_data
 
 def spawn_sanity_check(platform, entry_point, vm_def,
@@ -291,7 +325,9 @@ def spawn_sanity_check(platform, entry_point, vm_def,
     del_envlog_tempfile(envlog_filename, platform)
 
     try:
-        _ = check_and_parse_execution_results(stdout, stderr, rc)
+        _ = check_and_parse_execution_results(stdout, stderr, rc,
+                                              platform.config,
+                                              sanity_check=True)
     except ExecutionFailed as e:
         fatal("%s sanity check failed: %s" % (check_name, e.message))
 
@@ -453,13 +489,14 @@ def _do_reboot(platform):
         subprocess.call(platform.get_reboot_cmd())
 
 
-def reboot(manifest, platform):
+def reboot(manifest, platform, update_count=True):
     """Check reboot count and reboot"""
 
     expected_reboots = manifest.total_num_execs
-    manifest.update_num_reboots()
-    debug("About to execute reboot: %g, expecting %g in total." %
-          (manifest.num_reboots, expected_reboots))
+    if update_count:
+        manifest.update_num_reboots()
+        debug("about to execute reboot: %g, expecting %g in total." %
+              (manifest.num_reboots, expected_reboots))
 
     # Check for a boot loop
     if manifest.num_reboots > expected_reboots:
