@@ -1,12 +1,12 @@
 import os
-from krun.vm_defs import (PythonVMDef, NativeCodeVMDef)
+from krun.vm_defs import (PyPyVMDef, NativeCodeVMDef)
 from krun import EntryPoint
 from krun.util import fatal
 from distutils.spawn import find_executable
 
 # For a real experiment you would certainly use absolute paths
-PYTHON27_BIN = find_executable("python2.7")
-if PYTHON27_BIN is None:
+PYPY_BIN = find_executable("pypy")
+if PYPY_BIN is None:
     fatal("Python binary not found in path")
 
 # Who to mail
@@ -35,8 +35,8 @@ VMS = {
         'variants': ['default-c'],
         'n_iterations': ITERATIONS_ALL_VMS,
     },
-    'CPython': {
-        'vm_def': PythonVMDef(PYTHON27_BIN),
+    'PyPy': {
+        'vm_def': PyPyVMDef(PYPY_BIN),
         'variants': ['default-python'],
         'n_iterations': ITERATIONS_ALL_VMS,
     }
@@ -45,13 +45,13 @@ VMS = {
 
 BENCHMARKS = {
     'dummy': 1000,
-    'nbody': 1000,
+    'nbody': 15,
 }
 
 # list of "bench:vm:variant"
 SKIP=[
     #"*:C:*",
-    #"*:CPython:*",
+    #"*:PyPy:*",
 ]
 
 N_EXECUTIONS = 2  # Number of fresh processes.
