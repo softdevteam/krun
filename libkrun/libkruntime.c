@@ -543,10 +543,15 @@ krun_measure(int mdata_idx)
      * Although APERF/MPERF are separate measurements, they are used together
      * later to make a ratio, so they are taken in the same order before/after
      * benchmarking.
+     *
+     * XXX add some commentary on the APERF "priming" if it works.
+     * https://patchwork.kernel.org/patch/8443911/
+     *
      */
     if (mdata_idx == 0) {
         // start readings
         for (int core = 0; core < krun_num_cores; core++) {
+            krun_read_aperf(core); //  prime APERF
             data->aperf[core] = krun_read_aperf(core);
             data->mperf[core] = krun_read_mperf(core);
             data->core_cycles[core] = krun_read_core_cycles(core);
@@ -557,6 +562,7 @@ krun_measure(int mdata_idx)
         data->wallclock = krun_clock_gettime_monotonic();
         for (int core = 0; core < krun_num_cores; core++) {
             data->core_cycles[core] = krun_read_core_cycles(core);
+            krun_read_aperf(core); // prime APERF
             data->aperf[core] = krun_read_aperf(core);
             data->mperf[core] = krun_read_mperf(core);
         }
