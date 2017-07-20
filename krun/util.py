@@ -486,7 +486,14 @@ def _do_reboot(platform):
         os.execv(args[0], args)  # replace myself
         assert False  # unreachable
     else:
-        subprocess.call(platform.get_reboot_cmd())
+        rc = subprocess.call(platform.get_reboot_cmd())
+        if rc != 0:
+            fatal("Failed to reboot with: %s" % platform.get_reboot_cmd())
+        else:
+            debug("hard exit")
+            # Use _exit() to stop without raising SystemExit, otherwise more
+            # Python code may run.
+            os._exit(0)
 
 
 def reboot(manifest, platform, update_count=True):
