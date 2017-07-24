@@ -526,6 +526,10 @@ class ExecutionScheduler(object):
 
             # Bail early if the process execution needs to be re-run.
             if flag == "O":
+                util.run_shell_cmd_list(
+                    self.config.POST_EXECUTION_CMDS,
+                    extra_env=self._make_post_cmd_env(results)
+                )
                 info("Rebooting to re-run previous process execution")
                 util.reboot(self.manifest, self.platform, update_count=False)
 
