@@ -120,17 +120,6 @@ class TestLibKrunTime(object):
         # Depends on speed of CPU, but should be very close to 1
         assert 0.95 <= dct["monotonic_delta"] <= 1.05
 
-    @pytest.mark.skipif(not CORECYCLES_SUPPORT, reason="would not make sense")
-    def test_msr_time(self):
-        rv, out, _ = invoke_c_prog("msr_time")
-        assert rv == 0
-        dct = parse_keyvals(out, True)
-
-        # On Linux I expect reading core cycles (via the MSR device nodes) to
-        # be slower than reading the monotonic clock via a system call. This
-        # is why the readings are ordered as they are in the iterations runner.
-        assert dct["monotonic_delta_msrs"] > dct["monotonic_delta_nothing"]
-
     @pytest.mark.skipif(not APERF_MPERF_SUPPORT,
                         reason="no performance counters")
     def test_aperf_mperf(self):

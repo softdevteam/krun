@@ -53,7 +53,6 @@ void test_cycles_double_prec_ok(void);
 void test_cycles_double_prec_bad(void);
 void test_cycles_u64_double_ratio(void);
 void test_clock_gettime_monotonic(void);
-void test_msr_time(void);
 void test_aperf_mperf(void);
 void test_aperf(void);
 void test_mperf(void);
@@ -73,7 +72,6 @@ usage()
     printf("  test_prog cycles_double_prec_bad\n");
     printf("  test_prog cycles_u64_double_ratio\n");
     printf("  test_prog clock_gettime_monotonic\n");
-    printf("  test_prog msr_time\n");
     printf("  test_prog aperf_mperf\n");
     printf("  test_prog aperf\n");
     printf("  test_prog mperf\n");
@@ -114,10 +112,6 @@ main(int argc, char **argv)
     } else if (strcmp(mode, "cycles_u64_double_ratio") == 0) {
         krun_init();
         test_cycles_u64_double_ratio();
-        krun_done();
-    } else if (strcmp(mode, "msr_time") == 0) {
-        krun_init();
-        test_msr_time();
         krun_done();
     } else if (strcmp(mode, "clock_gettime_monotonic") == 0) {
         test_clock_gettime_monotonic();  // doesn't need init/done
@@ -234,36 +228,6 @@ test_clock_gettime_monotonic()
     printf("monotonic_start= %f\n", t1);
     printf("monotonic_stop = %f\n", t2);
     printf("monotonic_delta= %f\n", delta);
-}
-
-void
-test_msr_time(void)
-{
-    double t1, t2, t3, t4, delta1, delta2;
-    uint64_t c1, c2;
-
-    // time doing "nothing"
-    t1 = krun_clock_gettime_monotonic();
-    t2 = krun_clock_gettime_monotonic();
-    delta1 = t2 - t1;
-
-    // time two msr reads
-    t3 = krun_clock_gettime_monotonic();
-    c1 = krun_read_core_cycles(TEST_CORE);
-    c2 = krun_read_core_cycles(TEST_CORE);
-    t4 = krun_clock_gettime_monotonic();
-
-    delta2 = t4 - t3;
-
-    printf("monotonic_start_nothing= %f\n", t1);
-    printf("monotonic_stop_nothing = %f\n", t2);
-    printf("monotonic_delta_nothing= %f\n", delta1);
-
-    printf("monotonic_start_msrs   = %f\n", t3);
-    printf("monotonic_stop_msrs    = %f\n", t4);
-    printf("cycles_u64_start       = %" PRIu64 "\n", c1);
-    printf("cycles_u64_stop        = %" PRIu64 "\n", c2);
-    printf("monotonic_delta_msrs   = %f\n", delta2);
 }
 
 void

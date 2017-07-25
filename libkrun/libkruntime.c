@@ -55,6 +55,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "libkruntime.h"
 
@@ -66,6 +67,11 @@
 #define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC_RAW
 #else
 #define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC
+#endif
+
+#if defined(__linux__)
+// pick up Krun syscall numbers -- requires custom kernel headers installed.
+#include <asm/unistd.h>
 #endif
 
 /*
@@ -91,13 +97,6 @@ static void     krun_core_bounds_check(int core);
 static void     krun_mdata_bounds_check(int mdata_idx);
 #ifndef NO_MSRS
 static int      krun_get_fixed_pctr1_width(void);
-static int      krun_open_msr_node(int cpu);
-static void     krun_config_fixed_ctr1(int cpu, int enable);
-static uint64_t krun_read_msr(int core, long addr);
-static void     krun_write_msr(int cpu, long addr, uint64_t msr_val);
-static void     krun_close_fd(int fd);
-static uint64_t krun_read_aperf(int core);
-static uint64_t krun_read_mperf(int core);
 #endif // NO_MSRS
 #endif // __linux__
 void            krun_check_mdata(void);
@@ -136,38 +135,10 @@ krun_mdata_bounds_check(int mdata_idx)
 
 #if defined(__linux__) && !defined(NO_MSRS)
 /*
- * Rather than open and close the MSR device nodes all the time, we hold them
- * open over multiple in-process iterations, thus minimising the amount of work
- * that needs to be done to use them
+ * Fixed-function counters vary in size across machines.
+ * (configured in initialisation).
  */
-int *krun_msr_nodes = NULL;
-
-#define MAX_MSR_PATH 32
-
-// Fixed-funtion counter control register
-#define MSR_IA32_FIXED_CTR_CTRL 0x38d
-
-/*
- * Bitfields of MSR_IA32_FIXED_CTR_CTRL related to fixed counter 1.
- * AKA, CPU_CLK_UNHLATED.CORE in the Intel manual.
- */
-// Enable couting in ring 0
-#define EN1_OS      1 << 4
-// Enable counting in higer rings
-#define EN1_USR     1 << 5
-// Enable counting for all core threads (if any)
-#define EN1_ANYTHR  1 << 6
-
-/* MSR addresses */
-#define MSR_IA32_PERF_FIXED_CTR1    0x30a
-#define IA32_MPERF                  0xe7
-#define IA32_APERF                  0xe8
-
-/* {A,M}PERF counters are 64-bit */
-#define IA32_MPERF_MASK 0xffffffffffffffff
-#define IA32_APERF_MASK 0xffffffffffffffff
-
-static uint64_t krun_pctr_val_mask = 0; // configured in initialisation
+static uint64_t krun_pctr_val_mask = 0;
 
 #elif defined(__linux__) && defined(NO_MSRS)
 #elif defined(__OpenBSD__)
@@ -257,101 +228,10 @@ Java_IterationsRunner_JNI_1krun_1get_1num_1cores(JNIEnv *e, jclass c)
 
 #if defined(__linux__) && !defined(NO_MSRS)
 static int
-krun_open_msr_node(int core)
-{
-    char path[MAX_MSR_PATH];
-    int msr_node;
-
-    /*
-     * Note this is not the default msr(4) device node!
-     *
-     * We are using a lightly modified version of that driver we call rmsr,
-     * which disables capabilities on the device node. This allows a normal
-     * user to access the device as per normal filesystem permissions, without
-     * having to tag executables with capabilities, and whilst retaining the
-     * use of LD_LIBRARY_PATH (which Krun uses a lot).
-     *
-     * https://github.com/softdevteam/rmsr
-     */
-    if (snprintf(path, MAX_MSR_PATH, "/dev/cpu/%d/rmsr", core) < 0) {
-        perror("snprintf");
-        exit(EXIT_FAILURE);
-    }
-
-    msr_node = open(path, O_RDWR);
-    if (msr_node == -1) {
-        perror(path);
-        exit(EXIT_FAILURE);
-    }
-
-    return msr_node;
-}
-
-static uint64_t
-krun_read_msr(int core, long addr)
-{
-    uint64_t msr_val;
-    int msr_node;
-
-    msr_node = krun_msr_nodes[core];
-
-    if (lseek(msr_node, addr, SEEK_SET) == -1) {
-        perror("lseek");
-        exit(EXIT_FAILURE);
-    }
-
-    if (read(msr_node, &msr_val, sizeof(msr_val)) != sizeof(msr_val)) {
-        perror("read");
-        exit(EXIT_FAILURE);
-    }
-
-    return msr_val;
-}
-
-static void
-krun_write_msr(int core, long addr, uint64_t msr_val)
-{
-    int msr_node;
-
-    msr_node = krun_msr_nodes[core];
-
-    if (lseek(msr_node, addr, SEEK_SET) == -1) {
-        perror("lseek");
-        exit(EXIT_FAILURE);
-    }
-
-    if (write(msr_node, &msr_val, sizeof(msr_val)) != sizeof(msr_val)) {
-        perror("write");
-        exit(EXIT_FAILURE);
-    }
-}
-
 /*
- * Configure fixed-function counter 1 to count all rings and threads
+ * Fetches the width of the fixed-function performance counters so we can
+ * correctly mask the values we read from the core-cycle counters.
  */
-static void
-krun_config_fixed_ctr1(int core, int enable)
-{
-    uint64_t msr_val = krun_read_msr(core, MSR_IA32_FIXED_CTR_CTRL);
-    if (enable) {
-        msr_val |= (EN1_OS | EN1_USR | EN1_ANYTHR);
-    } else {
-        msr_val &= ~(EN1_OS | EN1_USR | EN1_ANYTHR);
-    }
-    krun_write_msr(core, MSR_IA32_FIXED_CTR_CTRL, msr_val);
-}
-
-static void
-krun_close_fd(int fd)
-{
-    int ok = close(fd);
-    if (ok == -1) {
-        perror("close");
-        exit(EXIT_FAILURE);
-    }
-}
-
-static int
 krun_get_fixed_pctr1_width()
 {
     uint32_t eax, edx;
@@ -383,7 +263,10 @@ krun_get_fixed_pctr1_width()
         exit(EXIT_FAILURE);
     }
 
-    // We are interested in IA32_FIXED_CTR1, (i.e. the second fixed counter)
+    /*
+     * We are interested in the existence of IA32_FIXED_CTR1, (i.e. the second
+     * fixed counter)
+     */
     if (num_fixed_ctrs < 2) {
         fprintf(stderr, "too few fixed-function counters: %d\n",
             num_fixed_ctrs);
@@ -403,7 +286,7 @@ void
 krun_init(void)
 {
 #if defined(__linux__) && !defined(NO_MSRS)
-    int core, i;
+    int i, err;
 
     /* See how wide the counter values are and make an appropriate mask */
     krun_pctr_val_mask = ((uint64_t) 1 << krun_get_fixed_pctr1_width()) - 1;
@@ -416,23 +299,15 @@ krun_init(void)
         krun_mdata[i].mperf = krun_xcalloc(krun_num_cores, sizeof(uint64_t));
     }
 
-    /* Open rmsr device nodes */
-    krun_msr_nodes = krun_xcalloc(krun_num_cores, sizeof(int));
-    for (core = 0; core < krun_num_cores; core++) {
-        krun_msr_nodes[core] = krun_open_msr_node(core);
-    }
-
     /* Configure and reset CPU_CLK_UNHALTED.CORE on all CPUs */
-    for (core = 0; core < krun_num_cores; core++) {
-        krun_config_fixed_ctr1(core, 1);
-        krun_write_msr(core, MSR_IA32_PERF_FIXED_CTR1, 0); // reset
+    err = syscall(__NR_krun_configure, krun_num_cores);
+    if (err) {
+        fprintf(stderr, "krun_configure() syscall failed\n");
+        exit(EXIT_FAILURE);
     }
 
-    /* Reset aperf and mperf on all cores */
-    for (core = 0; core < krun_num_cores; core++) {
-        krun_write_msr(core, IA32_MPERF, 0);
-        krun_write_msr(core, IA32_APERF, 0);
-    }
+    /* Reset all MSRs of interest */
+    syscall(__NR_krun_reset_msrs, krun_num_cores);
 
 #elif defined(__linux__) && defined(NO_MSRS)
 #elif defined(__OpenBSD__)
@@ -446,13 +321,7 @@ void
 krun_done(void)
 {
 #if defined(__linux__) && !defined(NO_MSRS)
-    int core, i;
-
-    /* Close MSR device nodes */
-    for (core = 0; core < krun_num_cores; core++) {
-        krun_close_fd(krun_msr_nodes[core]);
-    }
-    free(krun_msr_nodes);
+    int i;
 
     /* Free per-core arrays */
     for (i = 0; i < 2; i++) {
@@ -467,38 +336,6 @@ krun_done(void)
 #error "Unsupported platform"
 #endif  // __linux__ && !NO_MSRS
 }
-
-/* Not static as this is exposed for testing */
-uint64_t
-krun_read_core_cycles(int core)
-{
-#if defined(__linux__) && !defined(NO_MSRS)
-    return krun_read_msr(core, MSR_IA32_PERF_FIXED_CTR1) & krun_pctr_val_mask;
-#elif defined(__linux__) && defined(NO_MSRS)
-    // Ideally this function would not be exposed at all, but a test uses it.
-    fprintf(stderr, "%s should not be used on virtualised hosts\n", __func__);
-    exit(EXIT_FAILURE);
-#elif defined(__OpenBSD__)
-    fprintf(stderr, "%s should not be used on OpenBSD\n", __func__);
-    exit(EXIT_FAILURE);
-#else
-#error "Unsupported platform"
-#endif
-}
-
-#if defined(__linux__) && !defined(NO_MSRS)
-static uint64_t
-krun_read_aperf(int core)
-{
-    return krun_read_msr(core, IA32_APERF) & IA32_APERF_MASK;
-}
-
-static uint64_t
-krun_read_mperf(int core)
-{
-    return krun_read_msr(core, IA32_MPERF) & IA32_MPERF_MASK;
-}
-#endif // __linux__ && !NO_MSRS
 
 /*
  * Since some languages cannot represent a uint64_t, we sometimes have to pass
@@ -528,39 +365,44 @@ void
 krun_measure(int mdata_idx)
 {
     struct krun_data *data = &(krun_mdata[mdata_idx]);
-
     krun_mdata_bounds_check(mdata_idx);
 
 #if defined(__linux__) && !defined(NO_MSRS)
-    // We support per-core readings
+    int err;
 
     /*
-     * A note on measurement ordering.
+     * Read the MSRs as fast as possible and in the right order.
      *
      * Wallclock time is innermost, as it is the most important reading (with
      * the least latency also).
      *
      * Although APERF/MPERF are separate measurements, they are used together
      * later to make a ratio, so they are taken in the same order before/after
-     * benchmarking.
+     * benchmarking. Reading APERF, MPERF and the core cycle counter happens inside a
+     * system call.
      */
     if (mdata_idx == 0) {
-        // start readings
-        for (int core = 0; core < krun_num_cores; core++) {
-            data->aperf[core] = krun_read_aperf(core);
-            data->mperf[core] = krun_read_mperf(core);
-            data->core_cycles[core] = krun_read_core_cycles(core);
-        }
+        // taking pre-in-process-iteration readings
+        err = syscall(__NR_krun_read_msrs, krun_num_cores, false, data->aperf,
+            data->mperf, data->core_cycles);
         data->wallclock = krun_clock_gettime_monotonic();
     } else {
-        // stop readings
+        // taking post-in-process-iteration readings
         data->wallclock = krun_clock_gettime_monotonic();
-        for (int core = 0; core < krun_num_cores; core++) {
-            data->core_cycles[core] = krun_read_core_cycles(core);
-            data->aperf[core] = krun_read_aperf(core);
-            data->mperf[core] = krun_read_mperf(core);
-        }
+        err = syscall(__NR_krun_read_msrs, krun_num_cores, true, data->aperf,
+            data->mperf, data->core_cycles);
     }
+
+    if (err) {
+        fprintf(stderr, "krun_read_msrs() syscall failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // mask off the core-cycle counter values to the right width
+    for (int core = 0; core < krun_num_cores; core++) {
+        data->core_cycles[core] &= krun_pctr_val_mask;
+    }
+
 #elif defined(__linux__) && defined(NO_MSRS)
     data->wallclock = krun_clock_gettime_monotonic();
 #elif defined(__OpenBSD__)
