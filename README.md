@@ -58,61 +58,14 @@ steps:
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
   * Run `sudo update-grub`
 
-### Tickless Mode Linux Kernel
+### The Krun Linux Kernel
 
-The Linux kernel can run in ``tickless'' configurations, where under certain
-conditions regular tick interrupts can be avoided for a subset of logical CPUs.
-More info here:
-https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt
+When Krun is run on Linux it requires a custom Linux Kernel. The kernel must
+also be configured to be tickless on all CPU cores except the boot core.
 
-On a Linux system, Krun will insist that the kernel is running in
-"full tickless" mode with the NO_HZ_FULL_ALL compile time flag. This will place
-all logical CPUs apart from the boot processor (i.e. CPU 0) into adaptive ticks
-mode. If this is not enabled, you will need to build a custom kernel. You can
-verify the tickless mode of the current kernel with:
+Instrcutions and source code can be found here:
+https://github.com/softdevteam/krun-linux-kernel
 
-```
-cat /boot/config-`uname -r` | grep HZ
-```
-
-`CONFIG_NO_HZ_FULL_ALL` should be set to *y*. Krun will check this before
-running benchmarks. It will also check this setting was not overridden on the
-kernel command line with a `nohz_full=` argument. Please do not use this.
-
-#### Building a Tickless Kernel
-
-On a Debian machine, the easiest way to build a tickless kernel is to build
-installable deb packages. This process is described
-[here](https://debian-handbook.info/browse/stable/sect.kernel-compilation.html).
-
-When you run `make menuconfig` to configure the kernel:
-
- * Go into `General
-setup->Timers subsystem->Timer tick handling` and choose `Full dynticks system
-(tickless)` (internally known as `CONFIG_NO_HZ_FULL`).
-
- * Then go up one level and select `Full dynticks system on all CPUs by default (except CPU 0)` (internally `NO_HZ_FULL_ALL`).
-
-I also find it useful to give the kernel some useful name so that you can
-identify it on a running system. To do this, in `make menuconfig` find `General
-setup->Local Version` and type in a meaningful name. As tempting as it is, *do
-not* use symbols in this name, as it will cause the Debian package build to
-bomb out. I used `softdevnohzfullall`.
-
-You can then continue to build and package as usual with `make deb-pkg`. Once
-finished, you will find `.deb` files in the parent directory. To install them,
-use `dpkg install`. This will automatically set the new kernel as the default
-boot kernel. Reboot the system and check the kernel is running:
-
-```
-$ uname -r
-3.16.7-ckt11softdevnohzfullall
-$ cat /boot/config-`uname -r` | grep NO_HZ_FULL_ALL
-CONFIG_NO_HZ_FULL_ALL=y
-```
-
-For more information on tickless mode, see
-[the kernel docs](https://www.kernel.org/doc/Documentation/timers/NO_HZ.txt).
 
 ## Step 2: Fetch the Krun source
 
@@ -406,8 +359,7 @@ development switches turned on.
 ## Unit Tests
 
 Krun has a pytest suite which can be run by executing `py.test` in the
-top-level source directory. The user running the tests should be in the `root`
-group so as to allow access to `/dev/cpu/*/rmsr`.
+top-level source directory.
 
 ## Security Notes
 
