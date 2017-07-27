@@ -378,8 +378,6 @@ Sudo is used to:
  * Set process priorities.
  * Create cgroup shields (Linux only, off by default)
  * Detect virtualised hosts.
- * Change Linux capabilities(7) for MSR device node access.
- * Change MSR device node filesystem permissions.
 
 Please make sure you understand the implications of this.
 
