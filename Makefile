@@ -8,7 +8,7 @@ PASS_DOWN_ARGS =	ENABLE_JAVA=${ENABLE_JAVA} JAVAC=${JAVAC} \
 
 .PHONY: libkrun vm-sanity-checks clean all
 
-all: iterations-runners libkrun vm-sanity-checks platform-sanity-checks rmsr/rmsr.ko
+all: iterations-runners libkrun vm-sanity-checks platform-sanity-checks
 
 iterations-runners: libkrun
 	cd iterations_runners && ${MAKE} ${PASS_DOWN_ARGS}
@@ -22,19 +22,8 @@ vm-sanity-checks:
 platform-sanity-checks:
 	cd platform_sanity_checks && ${MAKE} ${PASS_DOWN_ARGS}
 
-rmsr/rmsr.ko:
-ifeq ($(shell uname -s),Linux)
-ifneq ("${TRAVIS}","true")
-	cd rmsr && ${MAKE}
-endif
-endif
-
-
 clean:
 	cd iterations_runners && ${MAKE} clean
 	cd libkrun && ${MAKE} clean
 	cd vm_sanity_checks && ${MAKE} clean
 	cd platform_sanity_checks && ${MAKE} clean
-ifeq ($(shell uname -s),Linux)
-	cd rmsr && ${MAKE} clean
-endif
