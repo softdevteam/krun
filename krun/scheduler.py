@@ -537,6 +537,8 @@ class ExecutionScheduler(object):
                 )
                 info("Rebooting to re-run previous process execution")
                 util.reboot(self.manifest, self.platform, update_count=False)
+                # reboot() does not return
+                raise RuntimeError("reached unreachable code!")
 
             # Store new result.
             results.append_exec_measurements(job.key, measurements)
