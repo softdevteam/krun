@@ -524,6 +524,11 @@ class ExecutionScheduler(object):
             measurements, instr_data, flag = job.run(self.mailer, self.dry_run)
             exec_end_time = time.time()
 
+            # Only now is it OK to load the results file into memory.
+            Results.ok_to_instantiate = True
+            results = Results(self.config, self.platform,
+                              results_file=self.config.results_filename())
+
             # Bail early if the process execution needs to be re-run.
             if flag == "O":
                 util.run_shell_cmd_list(
@@ -532,11 +537,10 @@ class ExecutionScheduler(object):
                 )
                 info("Rebooting to re-run previous process execution")
                 util.reboot(self.manifest, self.platform, update_count=False)
+                # reboot() does not return
+                raise RuntimeError("reached unreachable code!")
 
             # Store new result.
-            Results.ok_to_instantiate = True
-            results = Results(self.config, self.platform,
-                                   results_file=self.config.results_filename())
             results.append_exec_measurements(job.key, measurements)
 
             # Store instrumentation data in a separate file
