@@ -28,7 +28,7 @@ using, e.g. on Linux you should be able to run `sudo`.
 
 ### Dependencies
 
-Krun runs Linux systems (running a 3.x kernel) and OpenBSD.
+Krun currently runs on (Debian) Linux and OpenBSD.
 
 You need to have the following installed:
 
@@ -38,6 +38,7 @@ You need to have the following installed:
   * cffi (`python-cffi` package in Debian)
   * cset (for pinning on Linux only. `cpuset` package in Debian)
   * virt-what (Linux only. `virt-what` package in Debian)
+  * Our custom Linux kernel (see below).
   * Linux kernel headers (Linux only. linux-headers-3... in Debian)
 
 If you want to benchmark Java, you will also need:
@@ -60,8 +61,11 @@ steps:
 
 ### The Krun Linux Kernel
 
-When Krun is run on Linux it requires a custom Linux Kernel. The kernel must
-also be configured to be tickless on all CPU cores except the boot core.
+When Krun is run on Linux it requires a custom Linux Kernel which offers low
+latency access to the `IA32_APERF`, `IA32_MPERF` and `IA32_PERF_FIXED_CTR1`
+MSRs (sadly `IA32_APERF` or `IA32_MPERF` cannot be read from user-space via
+`rdpmc` and `rdmsr` is strictly a ring 0 operation). The kernel must also be
+configured to be tickless on all CPU cores except the boot core.
 
 Instrcutions and source code can be found here:
 https://github.com/softdevteam/krun-linux-kernel
