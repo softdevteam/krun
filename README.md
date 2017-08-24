@@ -60,8 +60,11 @@ steps:
 
 ### The Krun Linux Kernel
 
-When Krun is run on Linux it requires a custom Linux Kernel. The kernel must
-also be configured to be tickless on all CPU cores except the boot core.
+When Krun is run on Linux it requires a custom Linux Kernel which offers low
+latency access to the `IA32_APERF`, `IA32_MPERF` and `IA32_PERF_FIXED_CTR1`
+MSRs (sadly `IA32_APERF` or `IA32_MPERF` cannot be read from user-space via
+`rdpmc` and `rdmsr` is strictly a ring 0 operation). The kernel must also be
+configured to be tickless on all CPU cores except the boot core.
 
 Instrcutions and source code can be found here:
 https://github.com/softdevteam/krun-linux-kernel
