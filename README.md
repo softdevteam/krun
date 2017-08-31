@@ -70,6 +70,20 @@ configured to be tickless on all CPU cores except the boot core.
 Instrcutions and source code can be found here:
 https://github.com/softdevteam/krun-linux-kernel
 
+#### Benchmarking on a Stock Linux Kernel
+
+You can run Krun on a stock Linux Kernel, but Krun will be unable to
+collect data from:
+
+  * IA32_PERF_FIXED_CTR1 (the core cycle counter)
+  * IA32_APERF counts
+  * IA32_MPERF counts
+
+Since these are highly useful metrics, we strongly advise against using a stock
+Linux kernel for real benchmarking.
+
+With the above warning in mind, to run on a stock Linux kernel, when building
+Krun, include `NO_MSRS=1` in your environment.
 
 ## Step 2: Fetch the Krun source
 

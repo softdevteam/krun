@@ -160,7 +160,7 @@ class Results(object):
                 expect_num_iters = len(self.wallclock_times[key][exec_idx])
 
                 cycles_num_cores = len(self.core_cycle_counts[key][exec_idx])
-                if cycles_num_cores != num_cores:
+                if cycles_num_cores != self.platform.num_per_core_measurements:
                     fatal("wrong #cores in core_cycle_counts: %s[%d]: %d vs %d" %
                           (key, exec_idx, num_cores, cycles_num_cores))
                 for core_idx, core in enumerate(self.core_cycle_counts[key][exec_idx]):
@@ -171,7 +171,7 @@ class Results(object):
                               (key, exec_idx, core_idx, core_len, expect_num_iters))
 
                 aperf_num_cores = len(self.aperf_counts[key][exec_idx])
-                if aperf_num_cores != num_cores:
+                if aperf_num_cores != self.platform.num_per_core_measurements:
                     fatal("wrong #cores in aperf_counts: %s[%d]: %d vs %d" %
                           (key, exec_idx, num_cores, aperf_num_cores))
                 for core_idx, core in enumerate(self.aperf_counts[key][exec_idx]):
@@ -182,7 +182,7 @@ class Results(object):
                               (key, exec_idx, core_idx, core_len, expect_num_iters))
 
                 mperf_num_cores = len(self.mperf_counts[key][exec_idx])
-                if mperf_num_cores != num_cores:
+                if mperf_num_cores != self.platform.num_per_core_measurements:
                     fatal("wrong #cores in mperf_counts: %s[%d]: %d vs %d" %
                           (key, exec_idx, num_cores, mperf_num_cores))
                 for core_idx, core in enumerate(self.mperf_counts[key][exec_idx]):
