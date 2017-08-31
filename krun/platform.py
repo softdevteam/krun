@@ -688,6 +688,7 @@ class LinuxPlatform(UnixLikePlatform):
     ASLR_MODE = 2
     CSET_CMD = "/usr/bin/cset"
     USER_CSET_DIR = "/cpusets/user"
+    RESTRICT_DMESG_FILE = "/proc/sys/kernel/dmesg_restrict"
 
     # Expected tickless kernel config
     #
@@ -829,6 +830,7 @@ class LinuxPlatform(UnixLikePlatform):
         if not self.no_tickless_check:
             self._check_tickless_kernel()
         self._check_aslr_enabled()
+        self._check_dmesg_unrestricted()
 
     def _find_virt_what(self):
         debug("Check virt-what is installed")
@@ -874,6 +876,25 @@ class LinuxPlatform(UnixLikePlatform):
             cmd = " ".join(args)
             out, _, _ = run_shell_cmd(cmd)
             debug(out)  # cset is quite chatty on stdout
+
+    def _check_dmesg_unrestricted(self):
+        debug("Checking if dmesg buffer is restricted")
+
+        if os.path.exists(LinuxPlatform.RESTRICT_DMESG_FILE):
+            cmd = "%s cat %s" % (self.change_user_cmd,
+                                 LinuxPlatform.RESTRICT_DMESG_FILE)
+            out, _, _ = run_shell_cmd(cmd)
+            if int(out) == 0:
+                debug("%s: 0" % LinuxPlatform.RESTRICT_DMESG_FILE)
+                return
+
+            debug("%s: 1 -> 0" % LinuxPlatform.RESTRICT_DMESG_FILE)
+            cmd = "%s sh -c 'echo 0 > %s'" % \
+                (self.change_user_cmd, LinuxPlatform.RESTRICT_DMESG_FILE)
+            run_shell_cmd(cmd)
+        else:
+            debug("%s does not exist, assuming dmesg is not restricted" %
+                  LinuxPlatform.RESTRICT_DMESG_FILE)
 
     @staticmethod
     def _tickless_config_info_str(modes):
