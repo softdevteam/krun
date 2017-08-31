@@ -145,6 +145,9 @@ def create_arg_parser():
     parser.add_argument("--info", action="store_true",
                         help=("Print session info for specified "
                               "config file and exit"))
+    parser.add_argument("--hardware-reboots", action="store_true", default=False,
+                        help=("Reboot physical hardware before each benchmark "
+                              "execution. Off by default."))
 
     # Developer switches
     parser.add_argument("--quick", action="store_true", default=False,
@@ -161,9 +164,6 @@ def create_arg_parser():
     parser.add_argument("--no-tickless-check", action="store_true", default=False,
                         help=("Don't check if the Linux kernel is tickless. "
                               "Linux kernel. For development only."))
-    parser.add_argument("--hardware-reboots", action="store_true", default=False,
-                        help=("Reboot physical hardware before each benchmark "
-                              "execution. Off by default."))
 
     filename_help = ("Krun configuration or results file. FILENAME should" +
                      " be a configuration file when running benchmarks " +

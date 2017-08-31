@@ -341,7 +341,7 @@ easier.
 
   * `--no-user-change`: Without this flag, For each process execution, Krun
     will use a fresh user account called 'krun'. This involves deleting any
-    exising user account (with `userdel -r`) and creating a new user account
+    existing user account (with `userdel -r`) and creating a new user account
     (with `useradd -m`).  This switch disables the use of a fresh user account,
     meaning that `userdel` and `useradd` are not invoked, nor does Krun switch
     user; the user Krun was invoked with is used for benchmarking.
@@ -354,11 +354,20 @@ easier.
 
   * `--no-pstate-check`: Do not crash out if Intel P-states are not disabled.
 
-  * `--hardware-reboots`: Restart physical hardware before each benchmark
-    execution.
+## Benchmarking for reliable results
 
-Note that you should not collect results intended for publication with
-development switches turned on.
+You should not collect results intended for publication with development switches
+turned on.
+
+We also recommend that for 'real' benchmarking you turn on the `--hardware-reboots`
+switch to restart physical hardware before each benchmark execution.
+You will also need to ensure that Krun is restarted once the machine has
+rebooted. Depending on your OS, this might best be done by inserting a line into
+`/etc/rc.local` (that line should also pass in the `--hardware-reboots` switch
+to Krun). This will suppress some emails that Krun sends out.
+
+The `krun/etc` directory contains example `rc.local` files for some Linux
+distributions and OpenBSD, which go with the examples here.
 
 ## Unit Tests
 
@@ -367,12 +376,12 @@ top-level source directory.
 
 ## Security Notes
 
-Krun is not intended to be run on a secure multi-user system, as it uses sudo
-to elevate privileges. It also uses files with fixed names in /tmp/ which means
+Krun is not intended to be run on a secure multi-user system, as it uses `sudo`
+to elevate privileges. It also uses files with fixed names in `/tmp/` which means
 that only one instance of Krun should be run at any one time (running more
 than one leads to undefined behaviour).
 
-Sudo is used to:
+`sudo` is used to:
 
  * Add and remove a fresh benchmarking user for each process execution.
  * Switch users.
