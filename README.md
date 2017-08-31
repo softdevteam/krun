@@ -70,7 +70,7 @@ MSRs (sadly `IA32_APERF` or `IA32_MPERF` cannot be read from user-space via
 `rdpmc` and `rdmsr` is strictly a ring 0 operation). The kernel must also be
 configured to be tickless on all CPU cores except the boot core.
 
-Instrcutions and source code can be found here:
+Instructions and source code can be found here:
 https://github.com/softdevteam/krun-linux-kernel
 
 #### Benchmarking on a Stock Linux Kernel
