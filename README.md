@@ -59,6 +59,9 @@ steps:
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
   * Run `sudo update-grub`
 
+You can disable Krun's P-state check with `--disable-pstate-check`, however
+this is strongly discouraged for real benchmarking.
+
 ### The Krun Linux Kernel
 
 When Krun is run on Linux it requires a custom Linux Kernel which offers low
