@@ -391,6 +391,7 @@ than one leads to undefined behaviour).
  * Set process priorities.
  * Create cgroup shields (Linux only, off by default)
  * Detect virtualised hosts.
+ * Unrestrict the dmesg buffer (Linux Kernel 4.8+)
 
 Please make sure you understand the implications of this.
 
