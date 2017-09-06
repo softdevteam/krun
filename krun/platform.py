@@ -45,6 +45,7 @@ import glob
 import subprocess
 import re
 import pwd
+import cffi
 from distutils.spawn import find_executable
 from collections import OrderedDict
 from krun import ABS_TIME_FORMAT
@@ -81,6 +82,7 @@ class BasePlatform(object):
         self.mailer = mailer
         self.audit = OrderedDict()
         self.config = config
+        self.num_per_core_measurements = self._libkrun_num_cores()
 
         # Temperatures should always be a dict mapping a descriptive name of
         # the sensor to a platform dependent linear temperature measurement.
@@ -91,6 +93,24 @@ class BasePlatform(object):
         self.find_temperature_sensors()
 
         self.last_dmesg = None
+
+    def _libkrun_num_cores(self):
+        """Ask libkrun how many per-core readings we are expecting"""
+
+        ffi = cffi.FFI()
+        ffi.cdef("""
+            void krun_init(void);
+            void krun_done(void);
+            uint64_t krun_get_num_cores(void);
+        """)
+        libkruntime = ffi.dlopen(os.path.join(LIBKRUNTIME_DIR, "libkruntime.so"))
+
+        libkruntime.krun_init()
+        n_cores = libkruntime.krun_get_num_cores()
+        libkruntime.krun_done()
+
+        debug("libkrun is working with %d cores for per-core counters" % n_cores)
+        return n_cores
 
     def sleep(self, secs):
         if self.quick_mode:
@@ -508,9 +528,6 @@ class OpenBSDPlatform(UnixLikePlatform):
     def __init__(self, mailer, config):
         UnixLikePlatform.__init__(self, mailer, config)
 
-        # per-core measurements not supported yet
-        self.num_per_core_measurements = 0
-
     def find_temperature_sensors(self):
         lines = self._get_sysctl_sensor_lines()
         sensors = []
@@ -720,14 +737,6 @@ class LinuxPlatform(UnixLikePlatform):
         UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
         self.virt_what_cmd = self._find_virt_what()
-        self.num_per_core_measurements = self._get_num_per_core_measurements()
-
-    def _get_num_per_core_measurements(self):
-        # For all systems apart from virtualised hosts we expect per-core measurements
-        if self.is_virtual():
-            return 0
-        else:
-            return self.num_cpus
 
     def _fatal_kernel_arg(self, arg, prefix, suffix):
         """Bail out and inform user how to add a kernel argument"""

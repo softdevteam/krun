@@ -59,6 +59,9 @@ steps:
   * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
   * Run `sudo update-grub`
 
+You can disable Krun's P-state check with `--disable-pstate-check`, however
+this is strongly discouraged for real benchmarking.
+
 ### The Krun Linux Kernel
 
 When Krun is run on Linux it requires a custom Linux Kernel which offers low
@@ -67,9 +70,23 @@ MSRs (sadly `IA32_APERF` or `IA32_MPERF` cannot be read from user-space via
 `rdpmc` and `rdmsr` is strictly a ring 0 operation). The kernel must also be
 configured to be tickless on all CPU cores except the boot core.
 
-Instrcutions and source code can be found here:
+Instructions and source code can be found here:
 https://github.com/softdevteam/krun-linux-kernel
 
+#### Benchmarking on a Stock Linux Kernel
+
+You can run Krun on a stock Linux Kernel, but Krun will be unable to
+collect data from:
+
+  * IA32_PERF_FIXED_CTR1 (the core cycle counter)
+  * IA32_APERF counts
+  * IA32_MPERF counts
+
+Since these are highly useful metrics, we strongly advise against using a stock
+Linux kernel for real benchmarking.
+
+With the above warning in mind, to run on a stock Linux kernel, when building
+Krun, include `NO_MSRS=1` in your environment.
 
 ## Step 2: Fetch the Krun source
 
