@@ -234,8 +234,8 @@ class TestLinuxPlatform(BaseKrunTest):
 
         for sid in temps.iterkeys():
             elems = sid.split(":")
-            assert len(elems) == 2
-            assert elems[1].endswith("_input")
+            assert len(elems) == 3
+            assert elems[2].endswith("_input")
 
         # check temperature readings are within reasonable parameters
         assert all([type(v) == float for v in temps.itervalues()])
@@ -267,6 +267,159 @@ class TestLinuxPlatform(BaseKrunTest):
         got = platform.take_temperature_readings()
 
         assert expect == got
+
+    def test_find_temperature_sensors0001(self, monkeypatch):
+        """Test your typical Linux machine"""
+
+        @staticmethod
+        def fake_collect_temperature_sensor_globs():
+            return {'/sys/class/hwmon/hwmon0':
+                    ('coretemp', [
+                        '/sys/class/hwmon/hwmon0/temp2_input',
+                        '/sys/class/hwmon/hwmon0/temp5_input',
+                        '/sys/class/hwmon/hwmon0/temp3_input',
+                        '/sys/class/hwmon/hwmon0/temp1_input',
+                        '/sys/class/hwmon/hwmon0/temp4_input'])}
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_collect_temperature_sensor_globs",
+                            fake_collect_temperature_sensor_globs)
+        platform = krun.platform.detect_platform(None, None)
+        assert platform.temp_sensor_map == {
+            'coretemp:5:temp5_input': '/sys/class/hwmon/hwmon0/temp5_input',
+            'coretemp:5:temp4_input': '/sys/class/hwmon/hwmon0/temp4_input',
+            'coretemp:5:temp3_input': '/sys/class/hwmon/hwmon0/temp3_input',
+            'coretemp:5:temp2_input': '/sys/class/hwmon/hwmon0/temp2_input',
+            'coretemp:5:temp1_input': '/sys/class/hwmon/hwmon0/temp1_input'
+        }
+
+    def test_find_temperature_sensors0002(self, monkeypatch, caplog):
+        """Test one un-named chip"""
+
+        @staticmethod
+        def fake_collect_temperature_sensor_globs():
+            return {'/sys/class/hwmon/hwmon0':
+                    ('coretemp', [
+                        '/sys/class/hwmon/hwmon0/temp2_input',
+                        '/sys/class/hwmon/hwmon0/temp5_input',
+                        '/sys/class/hwmon/hwmon0/temp3_input',
+                        '/sys/class/hwmon/hwmon0/temp1_input',
+                        '/sys/class/hwmon/hwmon0/temp4_input']),
+                    '/sys/class/hwmon/hwmon1':
+                    (None, ['/sys/class/hwmon/hwmon1/temp1_input'])}
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_collect_temperature_sensor_globs",
+                            fake_collect_temperature_sensor_globs)
+        platform = krun.platform.detect_platform(None, None)
+        assert platform.temp_sensor_map == {
+            'coretemp:5:temp4_input': '/sys/class/hwmon/hwmon0/temp4_input',
+            'coretemp:5:temp3_input': '/sys/class/hwmon/hwmon0/temp3_input',
+            'coretemp:5:temp2_input': '/sys/class/hwmon/hwmon0/temp2_input',
+            'coretemp:5:temp1_input': '/sys/class/hwmon/hwmon0/temp1_input',
+            '__krun_unknown_chip_name:1:temp1_input':
+                '/sys/class/hwmon/hwmon1/temp1_input',
+            'coretemp:5:temp5_input': '/sys/class/hwmon/hwmon0/temp5_input'}
+        assert "Un-named temperature sensor chip found" in caplog.text()
+
+    def test_find_temperature_sensors0003(self, monkeypatch, caplog):
+        """Test two un-named chips with the same number of sensors"""
+
+        @staticmethod
+        def fake_collect_temperature_sensor_globs():
+            return {'/sys/class/hwmon/hwmon0':
+                    ('coretemp', [
+                        '/sys/class/hwmon/hwmon0/temp2_input',
+                        '/sys/class/hwmon/hwmon0/temp5_input',
+                        '/sys/class/hwmon/hwmon0/temp3_input',
+                        '/sys/class/hwmon/hwmon0/temp1_input',
+                        '/sys/class/hwmon/hwmon0/temp4_input']),
+                    '/sys/class/hwmon/hwmon1':
+                    (None, ['/sys/class/hwmon/hwmon1/temp1_input']),
+                    '/sys/class/hwmon/hwmon2':
+                    (None, ['/sys/class/hwmon/hwmon2/temp1_input'])}
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_collect_temperature_sensor_globs",
+                            fake_collect_temperature_sensor_globs)
+        platform = krun.platform.detect_platform(None, None)
+        # The duplicate chips should be ignored
+        assert platform.temp_sensor_map == {
+            'coretemp:5:temp5_input': '/sys/class/hwmon/hwmon0/temp5_input',
+            'coretemp:5:temp4_input': '/sys/class/hwmon/hwmon0/temp4_input',
+            'coretemp:5:temp3_input': '/sys/class/hwmon/hwmon0/temp3_input',
+            'coretemp:5:temp2_input': '/sys/class/hwmon/hwmon0/temp2_input',
+            'coretemp:5:temp1_input': '/sys/class/hwmon/hwmon0/temp1_input'
+        }
+        log = caplog.text()
+        assert "Un-named temperature sensor chip found" in log
+        assert ("Found duplicate chips named '%s' with 1 temperature sensor(s)"
+                % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME) in log
+
+    def test_find_temperature_sensors0004(self, monkeypatch, caplog):
+        """Test three un-named chips with the same number of sensors"""
+
+        @staticmethod
+        def fake_collect_temperature_sensor_globs():
+            return {'/sys/class/hwmon/hwmon0':
+                    ('coretemp', [
+                        '/sys/class/hwmon/hwmon0/temp2_input',
+                        '/sys/class/hwmon/hwmon0/temp5_input',
+                        '/sys/class/hwmon/hwmon0/temp3_input',
+                        '/sys/class/hwmon/hwmon0/temp1_input',
+                        '/sys/class/hwmon/hwmon0/temp4_input']),
+                    '/sys/class/hwmon/hwmon1':
+                    (None, ['/sys/class/hwmon/hwmon1/temp1_input']),
+                    '/sys/class/hwmon/hwmon2':
+                    (None, ['/sys/class/hwmon/hwmon2/temp1_input']),
+                    '/sys/class/hwmon/hwmon3':
+                    (None, ['/sys/class/hwmon/hwmon3/temp1_input'])}
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_collect_temperature_sensor_globs",
+                            fake_collect_temperature_sensor_globs)
+        platform = krun.platform.detect_platform(None, None)
+        # The duplicate chips should be ignored
+        assert platform.temp_sensor_map == {
+            'coretemp:5:temp5_input': '/sys/class/hwmon/hwmon0/temp5_input',
+            'coretemp:5:temp4_input': '/sys/class/hwmon/hwmon0/temp4_input',
+            'coretemp:5:temp3_input': '/sys/class/hwmon/hwmon0/temp3_input',
+            'coretemp:5:temp2_input': '/sys/class/hwmon/hwmon0/temp2_input',
+            'coretemp:5:temp1_input': '/sys/class/hwmon/hwmon0/temp1_input'
+        }
+        log = caplog.text()
+        assert "Un-named temperature sensor chip found" in log
+        assert ("Found duplicate chips named '%s' with 1 temperature sensor(s)"
+                % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME) in log
+        assert ("Found another chip named '%s' with 1 temperature sensor(s)"
+                % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME) in log
+
+    def test_find_temperature_sensors0005(self, monkeypatch, caplog):
+        """Test two un-named chips with a differing number of sensors works OK"""
+
+        @staticmethod
+        def fake_collect_temperature_sensor_globs():
+            return {
+                # First un-named chip with one sensor
+                '/sys/class/hwmon/hwmon0':
+                    (None, ['/sys/class/hwmon/hwmon0/temp1_input']),
+                # Second with two
+                '/sys/class/hwmon/hwmon1':
+                    (None, ['/sys/class/hwmon/hwmon1/temp1_input',
+                            '/sys/class/hwmon/hwmon1/temp2_input'])
+            }
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_collect_temperature_sensor_globs",
+                            fake_collect_temperature_sensor_globs)
+        platform = krun.platform.detect_platform(None, None)
+        assert platform.temp_sensor_map == {
+            # First un-named chip
+            '%s:1:temp1_input' % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME:
+                '/sys/class/hwmon/hwmon0/temp1_input',
+            # Second un-named chip
+            '%s:2:temp1_input' % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME:
+                '/sys/class/hwmon/hwmon1/temp1_input',
+            '%s:2:temp2_input' % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME:
+                '/sys/class/hwmon/hwmon1/temp2_input',
+        }
+        log = caplog.text()
+        assert "Un-named temperature sensor chip found" in log
 
     def test_isolcpus0001(self, platform, monkeypatch, caplog):
         platform.num_cpus = 4
