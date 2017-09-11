@@ -51,7 +51,7 @@ from krun.tests import TEST_DIR
 from krun.tests.test_results import no_results_instantiation_check
 
 
-class TestReboot(Exception):
+class _TestReboot(Exception):
     pass
 
 def type_check_results(results):
@@ -74,7 +74,7 @@ def make_reboot_raise(monkeypatch):
     def dummy_do_reboot(self):
         from logging import info
         info("SIMULATED: reboot via exception")
-        raise TestReboot()
+        raise _TestReboot()
     monkeypatch.setattr(util, '_do_reboot', dummy_do_reboot)
 
 
@@ -116,7 +116,7 @@ def run_with_captured_reboots(config, platform, monkeypatch):
         sched = ExecutionScheduler(config, platform.mailer, platform, dry_run=True)
         try:
             sched.run()
-        except TestReboot:
+        except _TestReboot:
             reboots += 1
         else:
             # normal exit() from run -- schedule finished
@@ -250,7 +250,7 @@ class TestScheduler(BaseKrunTest):
         assert sched.manifest.num_mails_sent == 1
         try:
             sched.run()
-        except TestReboot:
+        except _TestReboot:
             pass
         else:
             assert False
@@ -291,7 +291,7 @@ class TestScheduler(BaseKrunTest):
                                    dry_run=True)
         try:
             sched.run()
-        except TestReboot:
+        except _TestReboot:
             pass
         else:
             assert False
@@ -329,7 +329,7 @@ class TestScheduler(BaseKrunTest):
                                    dry_run=True)
         try:
             sched.run()
-        except TestReboot:
+        except _TestReboot:
             pass
         else:
             assert False
