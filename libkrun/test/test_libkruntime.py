@@ -51,11 +51,7 @@ sys.path.append(os.path.join(DIR, "..", ".."))
 from krun.platform import detect_platform
 PLATFORM = detect_platform(None, None)
 
-CORECYCLES_SUPPORT = sys.platform.startswith("linux") and \
-    not PLATFORM.is_virtual()
-
-APERF_MPERF_SUPPORT = sys.platform.startswith("linux") and \
-    not PLATFORM.is_virtual()
+MSR_SUPPORT = PLATFORM.num_per_core_measurements > 0
 
 def invoke_c_prog(mode):
     assert os.path.exists(TEST_PROG_PATH)
@@ -78,8 +74,7 @@ def parse_keyvals(out, doubles=False):
 
 
 class TestLibKrunTime(object):
-    @pytest.mark.skipif(not CORECYCLES_SUPPORT,
-                        reason="no performance counters")
+    @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_cycles_u64(self):
         rv, out, _ = invoke_c_prog("cycles_u64")
         assert rv == 0
@@ -87,8 +82,7 @@ class TestLibKrunTime(object):
 
         assert 0 <= dct["cycles_u64_delta"] <= NOT_MANY_CYCLES
 
-    @pytest.mark.skipif(not CORECYCLES_SUPPORT,
-                        reason="no performance counters")
+    @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_cycles_double(self):
         rv, out, _ = invoke_c_prog("cycles_double")
         assert rv == 0
@@ -105,7 +99,7 @@ class TestLibKrunTime(object):
         assert rv == 1
         assert "Loss of precision detected!" in err
 
-    @pytest.mark.skipif(not CORECYCLES_SUPPORT, reason="would divide by zero")
+    @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_cycles_u64_double_ratio(self):
         rv, out, _ = invoke_c_prog("cycles_u64_double_ratio")
         assert rv == 0
@@ -120,8 +114,7 @@ class TestLibKrunTime(object):
         # Depends on speed of CPU, but should be very close to 1
         assert 0.95 <= dct["monotonic_delta"] <= 1.05
 
-    @pytest.mark.skipif(not APERF_MPERF_SUPPORT,
-                        reason="no performance counters")
+    @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_aperf_mperf(self):
         rv, out, _ = invoke_c_prog("aperf_mperf")
         assert rv == 0
@@ -133,16 +126,14 @@ class TestLibKrunTime(object):
         # aperf is ticking for a subset of the time mperf is
         assert dct["aperf"] <= dct["mperf"]
 
-    @pytest.mark.skipif(not APERF_MPERF_SUPPORT,
-                        reason="no performance counters")
+    @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_aperf(self):
         rv, out, _ = invoke_c_prog("aperf")
         assert rv == 0
         dct = parse_keyvals(out)
         assert dct["aperf_start"] < dct["aperf_stop"]
 
-    @pytest.mark.skipif(not APERF_MPERF_SUPPORT,
-                        reason="no performance counters")
+    @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_mperf(self):
         rv, out, _ = invoke_c_prog("mperf")
         assert rv == 0
@@ -167,12 +158,10 @@ class TestLibKrunTime(object):
         # Two wallclock measurements
         expect = 2
 
-        # Two more for measurements for each core
-        if CORECYCLES_SUPPORT:
+        if MSR_SUPPORT:
+            # Two more for measurements for each core
             expect += PLATFORM.num_cpus * 2
-
-        # Two more for measurements for each aperf and mperf on each core
-        if APERF_MPERF_SUPPORT:
+            # Two more for measurements for each aperf and mperf on each core
             expect += 2 * PLATFORM.num_cpus * 2
 
         assert len(dct) == expect

@@ -52,7 +52,7 @@ from krun import ABS_TIME_FORMAT
 from krun.util import (fatal, run_shell_cmd, log_and_mail,
                        PLATFORM_SANITY_CHECK_DIR)
 import krun.util as util
-from logging import warn, debug
+from logging import warn, debug, info
 from abc import ABCMeta, abstractmethod, abstractproperty
 from krun.env import EnvChangeSet, EnvChange, EnvChangeAppend
 from krun.vm_defs import BENCHMARK_USER
@@ -91,6 +91,8 @@ class BasePlatform(object):
         self._starting_temperatures = {}  # accessed via property
         self.temperature_thresholds = {}
         self.find_temperature_sensors()
+        if self.get_num_temperature_sensors() == 0 and not self.is_virtual():
+            fatal("No usable temperature sensors!")
 
         self.last_dmesg = None
 
@@ -405,6 +407,11 @@ class BasePlatform(object):
         remnants of any existing krun user."""
         pass
 
+    @abstractmethod
+    def get_num_temperature_sensors(self):
+        """Get the number of temperature sensors"""
+        pass
+
 
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
@@ -540,6 +547,9 @@ class OpenBSDPlatform(UnixLikePlatform):
 
                 sensors.append(elems[0].strip())
         self.temp_sensors = sensors
+
+    def get_num_temperature_sensors(self):
+        return len(self.temp_sensors)
 
     def bench_env_changes(self):
         # Force malloc flags
@@ -706,6 +716,8 @@ class LinuxPlatform(UnixLikePlatform):
     CSET_CMD = "/usr/bin/cset"
     USER_CSET_DIR = "/cpusets/user"
     RESTRICT_DMESG_FILE = "/proc/sys/kernel/dmesg_restrict"
+    UNKNOWN_SENSOR_CHIP_NAME = "__krun_unknown_chip_name"
+    TEMP_SENSOR_INPUT_GLOB = "temp[0-9]*_input"
 
     # Expected tickless kernel config
     #
@@ -734,9 +746,9 @@ class LinuxPlatform(UnixLikePlatform):
 
     def __init__(self, mailer, config):
         self.temp_sensor_map = None
+        self.virt_what_cmd = self._find_virt_what()
         UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
-        self.virt_what_cmd = self._find_virt_what()
 
     def _fatal_kernel_arg(self, arg, prefix, suffix):
         """Bail out and inform user how to add a kernel argument"""
@@ -755,32 +767,77 @@ class LinuxPlatform(UnixLikePlatform):
               "Set `%s` in the kernel arguments.\n"
               "%s" % (prefix, arg, suffix))
 
-    def find_temperature_sensors(self):
-        """Detect sensors using the hwmon sysfs framework
+    @staticmethod
+    def _collect_temperature_sensor_globs():
+        """Collects the sysfs info needed to enumerate temperature sensors.
+        Separate to enable test mocking"""
 
-        The sensors move between reboots, so we have to roll our own sensor
-        identifier. We are not fussy, and use as many sensors as we can find."""
-
-        # maps our identifier to actual sysfs filename
-        sensor_map = {}
-
+        res = {}
         hwmons = glob.glob(LinuxPlatform.HWMON_CHIPS_GLOB)
         for chip in hwmons:
             name_path = os.path.join(chip, "name")
-            with open(name_path) as fh:
-                chip_name = fh.read().strip()
+            try:
+                with open(name_path) as fh:
+                    chip_name = fh.read().strip()
+            except IOError:
+                chip_name = None
 
-            inputs_glob = os.path.join(chip, "temp[0-9]*_input")
-            chip_sensors = glob.glob(inputs_glob)
+            # Check our super-obscure un-named chip string doesn't arise in the wild!
+            assert chip_name != LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME
 
-            for sensor in chip_sensors:
-                key = "%s:%s" % (chip_name, os.path.basename(sensor))
-                assert key not in sensor_map  # two chips with the same name?
-                sensor_map[key] = sensor
+            inputs_glob = os.path.join(chip, LinuxPlatform.TEMP_SENSOR_INPUT_GLOB)
+            res[chip] = chip_name, list(glob.glob(inputs_glob))
+        return res
+
+    def find_temperature_sensors(self):
+        """Detect sensors using the hwmon sysfs framework
+
+        It's unclear as to whether the sensors may move between reboots, so we
+        have to roll our own sensor identifiers. We are not fussy, and use as
+        many sensors as we can find"""
+
+        # maps our identifier to actual sysfs filename
+        sensor_tree = {}  # chip_id -> sensor_id -> sysfs_path
+        # chip IDs are pairs: (chip_name, num_sensors)
+        duplicate_chip_ids = set()
+
+        for chip, (chip_name, chip_sensors) in \
+                LinuxPlatform._collect_temperature_sensor_globs().iteritems():
+            if chip_name is None:
+                debug("Un-named temperature sensor chip found.")
+                debug("Naming the chip: '%s'" % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME)
+                chip_name = LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME
+
+            chip_id = (chip_name, len(chip_sensors))
+            if chip_id in sensor_tree:
+                info("Found duplicate chips named '%s' with %s temperature sensor(s)" % chip_id)
+                # Ignore all chips with this ID
+                duplicate_chip_ids.add(chip_id)
+                del sensor_tree[chip_id]
+                continue
+            elif chip_id in duplicate_chip_ids:
+                info("Found another chip named '%s' with %s temperature sensor(s)" % chip_id)
+                continue
+
+            sensor_tree[chip_id] = {}
+            for sysfs_path in chip_sensors:
+                sensor_id = (chip_id[0], str(chip_id[1]), os.path.basename(sysfs_path))
+                assert sensor_id not in sensor_tree[chip_id]
+                sensor_tree[chip_id][sensor_id] = sysfs_path
+
+        # flatten the tree into a dict: sensor_id -> sysfs_path
+        sensor_map = {}
+        for chip_id, sensors in sensor_tree.iteritems():
+            for sensor_id, sysfs_path in sensors.iteritems():
+                assert sensor_id not in sensor_map
+                sensor_map[":".join(sensor_id)] = sysfs_path
 
         debug("Detected temperature sensors: %s" % sensor_map)
         self.temp_sensors = sensor_map.keys()
         self.temp_sensor_map = sensor_map
+
+    def get_num_temperature_sensors(self):
+        return len(self.temp_sensors)
 
     def _get_num_cpus(self):
         # most reliable method generic to all Linux

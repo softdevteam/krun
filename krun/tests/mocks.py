@@ -140,6 +140,9 @@ class MockPlatform(BasePlatform):
     def make_fresh_krun_user(self):
         pass
 
+    def get_num_temperature_sensors(self):
+        return 1
+
 
 @pytest.fixture
 def mock_platform():
