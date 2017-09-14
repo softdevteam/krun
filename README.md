@@ -378,13 +378,10 @@ turned on.
 
 We also recommend that for 'real' benchmarking you turn on the `--hardware-reboots`
 switch to restart physical hardware before each benchmark execution.
-You will also need to ensure that Krun is restarted once the machine has
-rebooted. Depending on your OS, this might best be done by inserting a line into
-`/etc/rc.local` (that line should also pass in the `--hardware-reboots` switch
-to Krun). This will suppress some emails that Krun sends out.
 
-The `krun/etc` directory contains example `rc.local` files for some Linux
-distributions and OpenBSD, which go with the examples here.
+You will also need to ensure that Krun is restarted once the machine has
+rebooted. The `etc/` directory contains example `/etc/rc.local` files for the
+platforms supported by Krun.
 
 ## Unit Tests
 
