@@ -7,7 +7,7 @@ from distutils.spawn import find_executable
 # For a real experiment you would certainly use absolute paths
 PYPY_BIN = find_executable("pypy")
 if PYPY_BIN is None:
-    fatal("Python binary not found in path")
+    fatal("pypy binary not found in path")
 
 # Who to mail
 MAIL_TO = []
