@@ -38,6 +38,7 @@
 from krun import LOGFILE_FILENAME_TIME_FORMAT
 from krun.config import Config
 from krun.env import EnvChangeAppend
+from krun.util import FatalKrunError
 
 import os
 import pytest
@@ -310,3 +311,9 @@ def test_user_env0004():
         'ANOTHER_ENV': 'arbitrary_user_val',
         'LD_LIBRARY_PATH': '/wibble/lib:/opt/pypy/pypy/goal',
     }
+
+def test_space_in_vm_name0001():
+    path = os.path.join(TEST_DIR, "space_in_vm_name.krun")
+    with pytest.raises(FatalKrunError) as e:
+        config = Config(path)
+    assert "VM names must not contain spaces" in str(e)

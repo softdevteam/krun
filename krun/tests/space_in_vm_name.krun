@@ -1,0 +1,27 @@
+import os
+from krun.vm_defs import PythonVMDef
+from krun import EntryPoint
+
+VARIANTS = {
+    "default-python": EntryPoint("bench.py", subdir="python"),
+}
+
+ITERATIONS_ALL_VMS = 5
+
+VMS = {
+    'C Python': {
+        'vm_def': PythonVMDef('/usr/bin/python2'),
+        'variants': ['default-python'],
+        'n_iterations': ITERATIONS_ALL_VMS,
+    }
+}
+
+
+BENCHMARKS = {
+    'dummy': 1000,
+}
+
+N_EXECUTIONS = 2
+
+HEAP_LIMIT = 2097152
+STACK_LIMIT = 8192
