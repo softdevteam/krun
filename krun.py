@@ -148,6 +148,8 @@ def create_arg_parser():
     parser.add_argument("--hardware-reboots", action="store_true", default=False,
                         help=("Reboot physical hardware before each benchmark "
                               "execution. Off by default."))
+    parser.add_argument("--daemonise", "-D", action="store_true",
+                        default=False, help=("Daemonise Krun"))
 
     # Developer switches
     parser.add_argument("--quick", action="store_true", default=False,
@@ -286,6 +288,11 @@ def inner_main(mailer, on_first_invocation, config, args):
              "Use bare-metal for reliable results!")
 
     platform.collect_audit()
+
+    # At this point the config file is OK, and on-disk state is consistent,
+    # so let's daemonise (if requested).
+    if args.daemonise:
+        util.daemonise()
 
     if not on_first_invocation:
         # output file must exist, due to check above

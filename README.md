@@ -378,8 +378,10 @@ easier.
 You should not collect results intended for publication with development switches
 turned on.
 
-We also recommend that for 'real' benchmarking you turn on the `--hardware-reboots`
-switch to restart physical hardware before each benchmark execution.
+We also recommend that for 'real' benchmarking you turn on the
+`--hardware-reboots` and `--daemonise` switches. These ensure that the system
+will reboot before each benchmark execution, and that Krun will run in the
+background, allowing you to log out before the first reboot.
 
 You will also need to ensure that Krun is restarted once the machine has
 rebooted. The `etc/` directory contains example `/etc/rc.local` files for the

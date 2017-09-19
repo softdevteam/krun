@@ -528,3 +528,33 @@ def check_audit_unchanged(results, platform):
             "identical to the one on which the last results were "
             "gathered, which is not the case.")
         fatal(error_msg)
+
+
+def daemonise():
+    """Daemonise Krun"""
+
+    debug("daemonising...")
+    try:
+        pid = os.fork()
+    except OSError:
+        fatal("failed to daemonise: first fork")
+
+    if pid != 0:
+        # parent
+        os._exit(0)
+
+    os.setsid()
+    try:
+        pid = os.fork()
+    except OSError:
+        fatal("failed to daemonise: second fork")
+
+    if pid != 0:
+        # parent
+        os._exit(0)
+
+    # Redirect stdin/stdout/stderr to /dev/null
+    null = os.open("/dev/null", os.O_RDWR)
+    for fd in xrange(3):
+        # Since these fds will be in-use, dup2 will close them first
+        os.dup2(null, fd)
