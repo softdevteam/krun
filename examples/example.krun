@@ -49,7 +49,7 @@ BENCHMARKS = {
 }
 
 # list of "bench:vm:variant"
-SKIP=[
+SKIP = [
     #"*:C:*",
     #"*:PyPy:*",
 ]
