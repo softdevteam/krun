@@ -40,6 +40,8 @@ You need to have the following installed:
   * virt-what (Linux only. `virt-what` package in Debian)
   * Our custom Linux kernel (see below).
   * Linux kernel headers (Linux only. linux-headers-3... in Debian)
+  * taskset (Linux only)
+  * msr-tools (Linux only)
 
 If you want to benchmark Java, you will also need:
   * A Java SDK 7 (`openjdk-7-jdk` package in Debian)
@@ -406,6 +408,7 @@ than one leads to undefined behaviour).
  * Create cgroup shields (Linux only, off by default)
  * Detect virtualised hosts.
  * Unrestrict the dmesg buffer (Linux Kernel 4.8+)
+ * Turn off "turbo boost" (Linux only)
 
 Please make sure you understand the implications of this.
 

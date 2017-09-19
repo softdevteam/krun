@@ -6,9 +6,9 @@ PASS_DOWN_ARGS =	ENABLE_JAVA=${ENABLE_JAVA} JAVAC=${JAVAC} \
 			CC=${CC} CFLAGS=${CFLAGS} CPPFLAGS=${CPPFLAGS} \
 			LDFLAGS=${LDFLAGS} NO_MSRS=${NO_MSRS}
 
-.PHONY: libkrun vm-sanity-checks clean all
+.PHONY: utils libkrun vm-sanity-checks clean all
 
-all: iterations-runners libkrun vm-sanity-checks platform-sanity-checks
+all: utils iterations-runners libkrun vm-sanity-checks platform-sanity-checks
 
 iterations-runners: libkrun
 	cd iterations_runners && ${MAKE} ${PASS_DOWN_ARGS}
@@ -22,8 +22,12 @@ vm-sanity-checks:
 platform-sanity-checks:
 	cd platform_sanity_checks && ${MAKE} ${PASS_DOWN_ARGS}
 
+utils:
+	cd utils && ${MAKE}
+
 clean:
 	cd iterations_runners && ${MAKE} clean
 	cd libkrun && ${MAKE} clean
 	cd vm_sanity_checks && ${MAKE} clean
 	cd platform_sanity_checks && ${MAKE} clean
+	cd utils && ${MAKE} clean

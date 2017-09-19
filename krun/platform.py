@@ -60,6 +60,7 @@ from krun.vm_defs import BENCHMARK_USER
 NICE_PRIORITY = -20
 DIR = os.path.abspath(os.path.dirname(__file__))
 LIBKRUNTIME_DIR = os.path.join(DIR, "..", "libkrun")
+UTILS_DIR = os.path.join(DIR, "..", "utils")
 SYNC_SLEEP_SECS = 30  # time to wait for sync() to finish
 
 
@@ -718,6 +719,8 @@ class LinuxPlatform(UnixLikePlatform):
     RESTRICT_DMESG_FILE = "/proc/sys/kernel/dmesg_restrict"
     UNKNOWN_SENSOR_CHIP_NAME = "__krun_unknown_chip_name"
     TEMP_SENSOR_INPUT_GLOB = "temp[0-9]*_input"
+    IA32_MISC_ENABLE = 0x1a0
+    IA32_MISC_ENABLE_TURBO_DISABLE = 1 << 38
 
     # Expected tickless kernel config
     #
@@ -749,6 +752,13 @@ class LinuxPlatform(UnixLikePlatform):
         self.virt_what_cmd = self._find_virt_what()
         UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
+        self._load_modules(["msr"])
+
+    def _load_modules(self, modules):
+        for mod in modules:
+            debug("Loading kernel module: %s" % mod)
+            args = self.change_user_args("root") + ["modprobe", mod]
+            run_shell_cmd(" ".join(args))
 
     def _fatal_kernel_arg(self, arg, prefix, suffix):
         """Bail out and inform user how to add a kernel argument"""
@@ -1102,6 +1112,16 @@ class LinuxPlatform(UnixLikePlatform):
         if changed:
             self._check_cpu_governor()  # just to be sure
 
+    def _read_ia32_misc_enable_msr(self):
+        """Returns the the IA32_MISC_ENABLE MSR values. One for each core"""
+
+        args = self.change_user_args("root") + \
+            ["rdmsr", "--all", hex(LinuxPlatform.IA32_MISC_ENABLE)]
+        out, _, rv = run_shell_cmd(" ".join(args))
+        vals = [int(x, 16) for x in out.strip().splitlines()]
+        assert len(vals) == self.num_cpus
+        return vals
+
     def _check_cpu_scaler(self):
         """Check the correct CPU scaler is in effect"""
 
@@ -1140,19 +1160,42 @@ class LinuxPlatform(UnixLikePlatform):
                     fatal("The kernel is using '%s' for CPU scaling instead "
                           "of using 'acpi-cpufreq'" % v)
 
-        # Check "turbo boost" is disabled
-        # It really should be, as turbo boost is only available using pstates,
-        # and the code above is ensuring we are not. Let's check anyway.
+        # On some systems, you cannot turn turbo boost off in the BIOS, so we
+        # forcibly turn off turbo mode via the IA32_MISC_ENABLE MSR for cores
+        # which report as "supporting" turbo mode.
         debug("Checking 'turbo boost' is disabled")
-        if os.path.exists(LinuxPlatform.TURBO_DISABLED):
-            with open(LinuxPlatform.TURBO_DISABLED) as fh:
-                v = int(fh.read().strip())
 
-            if v != 1:
-                fatal("Machine has 'turbo boost' enabled. "
-                      "This should not happen, as this feature only applies to "
-                      "pstate CPU scaling and Krun just determined that "
-                      "the system is not!")
+        # If this file exists, then the pstate driver is loaded. It shouldn't be!
+        assert not os.path.exists(LinuxPlatform.TURBO_DISABLED)
+
+        # Query each core asking if it supports turbo mode. If it says "yes",
+        # then we turn it off. Depending on the CPU, the turbo settings may be
+        # shared across more than a single core. To be safe, we assume there is
+        # no sharing.
+        query_program_path = os.path.join(UTILS_DIR, "query_turbo")
+        for core in xrange(self.num_cpus):
+            args = ["taskset", "-c", str(core), query_program_path]
+            out, _, _ = run_shell_cmd(" ".join(args))
+            if int(out.strip()) == 0:
+                debug("CPU %d doesn't support turbo boost, or it is already disabled" % core)
+                continue
+
+            debug("CPU supports turbo boost and it is enabled. Disabling...")
+            val = self._read_ia32_misc_enable_msr()[core]
+            new_val = val | LinuxPlatform.IA32_MISC_ENABLE_TURBO_DISABLE
+            args = self.change_user_args("root") + \
+                ["wrmsr", "-p", str(core), hex(LinuxPlatform.IA32_MISC_ENABLE), hex(new_val)]
+            run_shell_cmd(" ".join(args))
+
+        # Sanity check the update
+        vals = self._read_ia32_misc_enable_msr()
+        for core in xrange(self.num_cpus):
+            # MSR disable bit is on?
+            assert (vals[core] & LinuxPlatform.IA32_MISC_ENABLE_TURBO_DISABLE) != 0
+            # Core reports not supporting turbo now?
+            args = ["taskset", "-c", str(core), query_program_path]
+            out, _, _ = run_shell_cmd(" ".join(args))
+            assert int(out.strip()) == 0
 
     def _check_aslr_enabled(self):
         """Check ASLR is cranked to level 2
