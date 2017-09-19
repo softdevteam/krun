@@ -103,6 +103,10 @@ class Config(object):
             if key not in config_dict:
                 fatal("Config file is missing a %s" % key)
 
+        for vm_name in config_dict["VMS"]:
+            if " " in vm_name:
+                fatal("VM names must not contain spaces")
+
         self.__dict__.update(config_dict)
         self.filename = config_file
         with open(config_file, "r") as fp:
