@@ -111,8 +111,7 @@ class TestLibKrunTime(object):
         rv, out, _ = invoke_c_prog("clock_gettime_monotonic")
         assert rv == 0
         dct = parse_keyvals(out, True)
-        # Depends on speed of CPU, but should be very close to 1
-        assert 0.95 <= dct["monotonic_delta"] <= 1.05
+        assert dct["monotonic_start"] <= dct["monotonic_stop"]
 
     @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_aperf_mperf(self):

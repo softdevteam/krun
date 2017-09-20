@@ -524,6 +524,7 @@ class UnixLikePlatform(BasePlatform):
 class OpenBSDPlatform(UnixLikePlatform):
     FIND_TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
     GET_SETPERF_CMD = "sysctl hw.setperf"
+    VIO_DMESG_PATTERN = "virtio[0-9]+ at"
 
     # flags to set OpenBSD MALLOC_OPTIONS to. We disable anything that could
     # possibly introduce non-determinism or extra computation.
@@ -572,8 +573,12 @@ class OpenBSDPlatform(UnixLikePlatform):
 
     def _check_apm_state(self):
         debug("Checking APM state is geared for high-performance")
-        adjust = False
 
+        # apmd needs to be enabled for this code to work
+        args = self.change_user_args("root") + ["rcctl", "start", "apmd"]
+        run_shell_cmd(" ".join(args))
+
+        adjust = False
         out = self._get_apm_output()
         lines = out.split("\n")
 
@@ -692,9 +697,11 @@ class OpenBSDPlatform(UnixLikePlatform):
         return []  # not supported on OpenBSD
 
     def is_virtual(self):
-        """Not yet implemented on this platform, assume not virtualised"""
+        """If we see a vio(4) disk in the dmesg, this is a virtual machine"""
 
-        return False
+        dmesg_lines = self._collect_dmesg_lines()
+        comp_pat = re.compile(OpenBSDPlatform.VIO_DMESG_PATTERN)
+        return any(comp_pat.match(l) for l in dmesg_lines)
 
     def get_allowed_dmesg_patterns(self):
         # PyPy uses write+executable pages, which causes this dmesg entry

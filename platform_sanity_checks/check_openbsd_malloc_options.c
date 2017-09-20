@@ -48,7 +48,7 @@ run_iter(int param)
 {
     char        *malloc_opts;
 
-    param = param;  /* silence gcc warning */
+    (void) param;  /* silence compiler warning */
 
     malloc_opts = getenv("MALLOC_OPTIONS");
     if ((malloc_opts == NULL) || (strcmp(malloc_opts, EXPECT_OPTS) != 0)) {

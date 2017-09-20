@@ -41,6 +41,7 @@ import sys
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import run_shell_cmd, FatalKrunError
 from krun.vm_defs import PythonVMDef
+from krun.platform import OpenBSDPlatform
 
 
 def make_dummy_get_apm_output_fn(output):
@@ -212,3 +213,16 @@ class TestOpenBSDPlatform(BaseKrunTest):
                   '/usr/local/bin/sudo', '-u', 'krun', '/usr/local/bin/dash',
                   wrapper_filename]
         assert got == expect
+
+    def test_is_virtual0001(self, monkeypatch):
+        """Check a machine with vio disks is flagged as virtual"""
+
+        def fake_collect_dmesg_lines(_):
+            return [
+                'real mem = 17074860032 (16283MB)',
+                'avail mem = 16550350848 (15783MB)',
+                'virtio3 at pci0 dev 4 function 0 "OpenBSD VMM Control" rev 0x00',
+            ]
+        monkeypatch.setattr(OpenBSDPlatform, "_collect_dmesg_lines", fake_collect_dmesg_lines)
+        platform = OpenBSDPlatform(None, None)
+        assert platform.is_virtual()
