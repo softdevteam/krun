@@ -524,6 +524,7 @@ class UnixLikePlatform(BasePlatform):
 class OpenBSDPlatform(UnixLikePlatform):
     FIND_TEMP_SENSORS_CMD = "sysctl -a | grep -e 'hw\.sensors\..*\.temp'"
     GET_SETPERF_CMD = "sysctl hw.setperf"
+    VIO_DMESG_PATTERN = "virtio[0-9]+ at"
 
     # flags to set OpenBSD MALLOC_OPTIONS to. We disable anything that could
     # possibly introduce non-determinism or extra computation.
@@ -696,8 +697,13 @@ class OpenBSDPlatform(UnixLikePlatform):
         return []  # not supported on OpenBSD
 
     def is_virtual(self):
-        """Not yet implemented on this platform, assume not virtualised"""
+        """If we see a vio(4) disk in the dmesg, this is a virtual machine"""
 
+        dmesg_lines = self._collect_dmesg_lines()
+        comp_pat = re.compile(OpenBSDPlatform.VIO_DMESG_PATTERN)
+        for line in dmesg_lines:
+            if comp_pat.match(line):
+                return True
         return False
 
     def get_allowed_dmesg_patterns(self):
