@@ -572,8 +572,12 @@ class OpenBSDPlatform(UnixLikePlatform):
 
     def _check_apm_state(self):
         debug("Checking APM state is geared for high-performance")
-        adjust = False
 
+        # apmd needs to be enabled for this code to work
+        args = self.change_user_args("root") + ["rcctl", "start", "apmd"]
+        run_shell_cmd(" ".join(args))
+
+        adjust = False
         out = self._get_apm_output()
         lines = out.split("\n")
 
