@@ -701,10 +701,7 @@ class OpenBSDPlatform(UnixLikePlatform):
 
         dmesg_lines = self._collect_dmesg_lines()
         comp_pat = re.compile(OpenBSDPlatform.VIO_DMESG_PATTERN)
-        for line in dmesg_lines:
-            if comp_pat.match(line):
-                return True
-        return False
+        return any(comp_pat.match(l) for l in dmesg_lines)
 
     def get_allowed_dmesg_patterns(self):
         # PyPy uses write+executable pages, which causes this dmesg entry

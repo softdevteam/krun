@@ -227,7 +227,6 @@ test_clock_gettime_monotonic()
 
     printf("monotonic_start= %f\n", t1);
     printf("monotonic_stop = %f\n", t2);
-    printf("monotonic_delta= %f\n", delta);
 }
 
 void
