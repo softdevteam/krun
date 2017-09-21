@@ -306,13 +306,6 @@ def inner_main(mailer, on_first_invocation, config, args):
             platform_temps[sensor] = tup[1]
         platform.starting_temperatures = platform_temps
     else:
-        # Touch the config file to update its mtime. This is required
-        # by when resuming a partially complete benchmark session, in which
-        # case Krun uses the mtime to determine the name of the log file.
-        _, _, rc = util.run_shell_cmd("touch " + args.filename)
-        if rc != 0:
-            util.fatal("Could not touch config file: " + args.filename)
-
         manifest = ManifestManager(config, platform, new_file=True)
         if manifest.num_execs_left == 0:
             # No executions, or all skipped
