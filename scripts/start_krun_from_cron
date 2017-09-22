@@ -1,0 +1,45 @@
+#!/bin/sh
+#
+# This script is designed to be invoked as cron @reboot task and as a normal
+# user.
+
+set -e
+
+if [ $# -lt 1 ]; then
+    echo "start_krun_from_cron <absolute-path-to-config-file> [extra krun args]"
+    exit 1
+fi
+
+# Consume arguments
+SCRIPT_PATH=`readlink -f $0`
+KRUN_CONFIG_FILE=$1
+shift
+
+# File needs to exist for `readlink -f` to work
+if [ ! -e "${KRUN_CONFIG_FILE}" ]; then
+    echo "The config file is non-existent"
+    exit 1
+fi
+
+if [ "`readlink -f ${KRUN_CONFIG_FILE}`" != "${KRUN_CONFIG_FILE}" ]; then
+    echo "Please supply an absolute path to the config file"
+    exit 1
+fi
+
+# Find Python
+if [ "`uname`" = "OpenBSD" ]; then
+    PATH=${PATH}:/usr/local/bin
+fi
+PYTHON=`which python2.7`
+
+if [ "${PYTHON}" = "" ]; then
+    echo "Failed to find python"
+    exit 1
+fi
+
+KRUN_DIR=`dirname ${SCRIPT_PATH}`/..
+EXPERIMENT_DIR=`dirname ${KRUN_CONFIG_FILE}`
+KRUN_ARGS="--hardware-reboots --daemonise $* ${KRUN_CONFIG_FILE}"
+
+# All is well, invoke Krun.
+cd ${EXPERIMENT_DIR} && ${PYTHON} ${KRUN_DIR}/krun.py ${KRUN_ARGS}

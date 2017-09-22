@@ -378,14 +378,34 @@ easier.
 You should not collect results intended for publication with development switches
 turned on.
 
-We also recommend that for 'real' benchmarking you turn on the
-`--hardware-reboots` and `--daemonise` switches. These ensure that the system
-will reboot before each benchmark execution, and that Krun will run in the
-background, allowing you to log out before the first reboot.
+You should also benchmark in "reboot mode". The recommended way to do
+this is via `cron(8)`. We supply a script `start_krun_from_cron` to make this
+easier.
 
-You will also need to ensure that Krun is restarted once the machine has
-rebooted. The `etc/` directory contains example `/etc/rc.local` files for the
-platforms supported by Krun.
+As a regular user (who has access to your experiment and the Krun code), run
+`crontab -e` a line similar to the following:
+
+```
+@reboot /path/to/krun/scripts/start_krun_from_cron /path/to/your/config.krun
+```
+
+The path to the config file must be an absolute path.
+
+Any arguments supplied after the config file path are passed to Krun unchanged.
+
+You can then start the experiment with the same command (i.e. your crontab(5)
+line without the `@reboot`).
+
+You shouldn't log in for the duration of your experiment. Instead, you should
+add a `MAIL_TO` list into your config file and Krun will email you when your
+experiment is complete (or if something goes wrong). E.g.:
+
+```
+MAIL_TO = ["me@mydomain.com", "other_person@herdomain.com"]
+```
+
+Krun uses `sendmail(8)` to send email, so you will need to make sure that this
+works prior to starting your experiment.
 
 ## Unit Tests
 
