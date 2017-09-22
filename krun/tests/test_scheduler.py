@@ -382,7 +382,7 @@ class TestScheduler(BaseKrunTest):
         assert n_reboots == 1
         elems = got.split(":")
         assert os.path.basename(elems[0]) == "one_exec_results.json.bz2"
-        assert re.match("one_exec_[0-9]{8}_[0-9]{6}.log", os.path.basename(elems[1]))
+        assert os.path.basename(elems[1]) == "one_exec.log"
         assert os.path.basename(elems[2]) == "one_exec.manifest"
 
         # all paths should be in the same dir
