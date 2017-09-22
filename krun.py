@@ -220,6 +220,11 @@ def main(parser):
     on_first_invocation = not (os.path.isfile(manifest_filename) and
                                os.stat(manifest_filename).st_size > 0)
 
+    log_file = config.log_filename()
+    if on_first_invocation and os.path.exists(log_file):
+        util.fatal("Log file '%s' already exists. "
+                   "Move the file away before running Krun." % log_file)
+
     attach_log_file(config, not on_first_invocation)
     debug("Krun invoked with arguments: %s" % sys.argv)
 
