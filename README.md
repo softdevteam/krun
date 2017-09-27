@@ -373,7 +373,7 @@ easier.
 
   * `--no-pstate-check`: Do not crash out if Intel P-states are not disabled.
 
-## Benchmarking for reliable results
+## Benchmarking for Reliable Results
 
 You should not collect results intended for publication with development switches
 turned on.
