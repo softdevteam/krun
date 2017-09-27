@@ -42,6 +42,8 @@ You need to have the following installed:
   * Linux kernel headers (Linux only. linux-headers-3... in Debian)
   * taskset (Linux only)
   * msr-tools (Linux only)
+  * policykit (Linux only, only if you want to use `systemctl start/stop` in
+    `PRE/POST_EXECUTION_CMDS`. See *Benchmarking for Reliable Results* below)
 
 If you want to benchmark Java, you will also need:
   * A Java SDK 7 (`openjdk-7-jdk` package in Debian)
@@ -406,6 +408,22 @@ MAIL_TO = ["me@mydomain.com", "other_person@herdomain.com"]
 
 Krun uses `sendmail(8)` to send email, so you will need to make sure that this
 works prior to starting your experiment.
+
+You should disable any daemons which could interfere with your experiments
+(e.g. `cron`). You can turn off daemons before each process execution by adding
+the appropriate commands to `PRE_EXECUTION_CMDS` in your config file. E.g. for
+a systemd Linux system:
+
+```
+PRE_EXECUTION_CMDS = [
+    "sudo systemctl stop cron",
+    "sudo systemctl stop atd",
+    ...
+]
+```
+
+Similarly, you can use `POST_EXECUTION_CMDS` to turn daemons back on after each
+process execution.
 
 ## Unit Tests
 
