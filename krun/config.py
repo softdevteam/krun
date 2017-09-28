@@ -107,6 +107,14 @@ class Config(object):
             if " " in vm_name:
                 fatal("VM names must not contain spaces")
 
+        for vm_name in config_dict["BENCHMARKS"]:
+            if " " in vm_name:
+                fatal("Benchmark names must not contain spaces")
+
+        for variant_name in config_dict["VARIANTS"]:
+            if " " in variant_name:
+                fatal("Variant names must not contain spaces")
+
         self.__dict__.update(config_dict)
         self.filename = config_file
         with open(config_file, "r") as fp:
