@@ -43,7 +43,7 @@ import shutil
 import sys
 import subprocess
 from subprocess import Popen, PIPE
-from logging import error, debug, info, warn
+from logging import error, debug, info, warn, root as root_logger
 from bz2 import BZ2File
 from krun.amperf import check_amperf_ratios
 
@@ -476,6 +476,16 @@ def del_envlog_tempfile(filename, platform):
         args = platform.change_user_args(BENCHMARK_USER) + ["rm", filename]
         run_shell_cmd(" ".join(args))
 
+
+def logging_done():
+    """Close all logging file descriptors"""
+
+    for handler in root_logger.handlers[:]:
+        debug("close logging handler: %s" % handler)
+        handler.close()
+        root_logger.removeHandler(handler)
+
+
 def _do_reboot(platform):
     """Really do the reboot, separate for testing"""
 
@@ -483,9 +493,12 @@ def _do_reboot(platform):
         warn("SIMULATED: reboot (--hardware-reboots is OFF)")
         args = sys.argv
         debug("Simulated reboot with args: " + " ".join(args))
+        logging_done()
         os.execv(args[0], args)  # replace myself
         assert False  # unreachable
     else:
+        # No need to close logging fds in the case of a real reboot. This also
+        # allows the fatal() below to log in case of failure.
         rc = subprocess.call(platform.get_reboot_cmd())
         if rc != 0:
             fatal("Failed to reboot with: %s" % platform.get_reboot_cmd())
