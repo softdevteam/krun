@@ -93,10 +93,10 @@ static int krun_num_cores = 0;
 
 // Private prototypes
 #ifdef __linux__
-static void     krun_core_bounds_check(int core);
 static void     krun_mdata_bounds_check(int mdata_idx);
 #ifndef NO_MSRS
 static int      krun_get_fixed_pctr1_width(void);
+static void     krun_core_bounds_check(int core);
 #endif // NO_MSRS
 #endif // __linux__
 void            krun_check_mdata(void);
@@ -115,6 +115,7 @@ krun_xcalloc(size_t nmemb, size_t size)
     return p;
 }
 
+#if defined(__linux__) && !defined(NO_MSRS)
 static void
 krun_core_bounds_check(int core)
 {
@@ -123,6 +124,7 @@ krun_core_bounds_check(int core)
         exit(EXIT_FAILURE);
     }
 }
+#endif // defined(__linux__) && !defined(NO_MSRS)
 
 static void
 krun_mdata_bounds_check(int mdata_idx)
@@ -397,12 +399,6 @@ krun_measure(int mdata_idx)
         fprintf(stderr, "krun_read_msrs() syscall failed\n");
         exit(EXIT_FAILURE);
     }
-
-    // mask off the core-cycle counter values to the right width
-    for (int core = 0; core < krun_num_cores; core++) {
-        data->core_cycles[core] &= krun_pctr_val_mask;
-    }
-
 #elif defined(__linux__) && defined(NO_MSRS)
     data->wallclock = krun_clock_gettime_monotonic();
 #elif defined(__OpenBSD__)
@@ -466,25 +462,40 @@ krun_get_wallclock(int mdata_idx)
 uint64_t
 krun_get_core_cycles(int mdata_idx, int core)
 {
+#if defined(__linux__) && !defined(NO_MSRS)
     krun_mdata_bounds_check(mdata_idx);
     krun_core_bounds_check(core);
-    return krun_mdata[mdata_idx].core_cycles[core];
+    return krun_mdata[mdata_idx].core_cycles[core] & krun_pctr_val_mask;
+#else
+    fprintf(stderr, "%s: libkruntime was built without MSR support\n", __func__);
+    exit(EXIT_FAILURE);
+#endif // defined(__linux__) && !defined(NO_MSRS)
 }
 
 uint64_t
 krun_get_aperf(int mdata_idx, int core)
 {
+#if defined(__linux__) && !defined(NO_MSRS)
     krun_mdata_bounds_check(mdata_idx);
     krun_core_bounds_check(core);
     return krun_mdata[mdata_idx].aperf[core];
+#else
+    fprintf(stderr, "%s: libkruntime was built without MSR support\n", __func__);
+    exit(EXIT_FAILURE);
+#endif // defined(__linux__) && !defined(NO_MSRS)
 }
 
 uint64_t
 krun_get_mperf(int mdata_idx, int core)
 {
+#if defined(__linux__) && !defined(NO_MSRS)
     krun_mdata_bounds_check(mdata_idx);
     krun_core_bounds_check(core);
     return krun_mdata[mdata_idx].mperf[core];
+#else
+    fprintf(stderr, "%s: libkruntime was built without MSR support\n", __func__);
+    exit(EXIT_FAILURE);
+#endif // defined(__linux__) && !defined(NO_MSRS)
 }
 
 /*
