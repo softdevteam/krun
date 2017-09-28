@@ -309,3 +309,17 @@ def test_space_in_vm_name0001():
     with pytest.raises(FatalKrunError) as e:
         config = Config(path)
     assert "VM names must not contain spaces" in str(e)
+
+
+def test_space_in_benchmark_name0001():
+    path = os.path.join(TEST_DIR, "space_in_benchmark_name.krun")
+    with pytest.raises(FatalKrunError) as e:
+        config = Config(path)
+    assert "Benchmark names must not contain spaces" in str(e)
+
+
+def test_space_in_variant_name0001():
+    path = os.path.join(TEST_DIR, "space_in_variant_name.krun")
+    with pytest.raises(FatalKrunError) as e:
+        config = Config(path)
+    assert "Variant names must not contain spaces" in str(e)
