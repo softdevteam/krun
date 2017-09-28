@@ -75,12 +75,18 @@ def parse_keyvals(out, doubles=False):
 
 class TestLibKrunTime(object):
     @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
-    def test_cycles_u64(self):
+    def test_cycles_u64_0001(self):
         rv, out, _ = invoke_c_prog("cycles_u64")
         assert rv == 0
         dct = parse_keyvals(out)
 
         assert 0 <= dct["cycles_u64_delta"] <= NOT_MANY_CYCLES
+
+    @pytest.mark.skipif(MSR_SUPPORT, reason="Without MSRs only")
+    def test_cycles_u64_0002(self):
+        rv, _, err = invoke_c_prog("cycles_u64")
+        assert rv != 0
+        assert "libkruntime was built without MSR support" in err
 
     @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_cycles_double(self):
@@ -126,24 +132,46 @@ class TestLibKrunTime(object):
         assert dct["aperf"] <= dct["mperf"]
 
     @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
-    def test_aperf(self):
+    def test_aperf0001(self):
+        """Check krun_get_aperf when libkruntime has MSR support"""
+
         rv, out, _ = invoke_c_prog("aperf")
         assert rv == 0
         dct = parse_keyvals(out)
         assert dct["aperf_start"] < dct["aperf_stop"]
 
+    @pytest.mark.skipif(MSR_SUPPORT, reason="Without MSRs only")
+    def test_aperf0002(self):
+        """Check krun_get_aperf when libkruntime does not have MSR support"""
+
+        rv, _, err = invoke_c_prog("aperf")
+        assert rv != 0
+        assert "libkruntime was built without MSR support" in err
+
     @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
-    def test_mperf(self):
+    def test_mperf0001(self):
+        """Check krun_get_mperf when libkruntime does not have MSR support"""
+
         rv, out, _ = invoke_c_prog("mperf")
         assert rv == 0
         dct = parse_keyvals(out)
         assert dct["mperf_start"] < dct["mperf_stop"]
 
+    @pytest.mark.skipif(MSR_SUPPORT, reason="Without MSRs only")
+    def test_mperf0002(self):
+        """Check krun_get_aperf when libkruntime does not have MSR support"""
+
+        rv, _, err = invoke_c_prog("mperf")
+        assert rv != 0
+        assert "libkruntime was built without MSR support" in err
+
+    @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_core_bounds_check(self):
         rv, _, err = invoke_c_prog("core_bounds_check")
         assert rv != 0
         assert "core out of range" in err
 
+    @pytest.mark.skipif(not MSR_SUPPORT, reason="No MSRs")
     def test_mdata_index_bounds_check(self):
         rv, _, err = invoke_c_prog("mdata_index_bounds_check")
         assert rv != 0
