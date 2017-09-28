@@ -215,7 +215,7 @@ test_cycles_u64_double_ratio(void)
 void
 test_clock_gettime_monotonic()
 {
-    double t1, t2, delta;
+    double t1, t2;
 
     krun_measure(0);
     sleep(1);
@@ -223,7 +223,6 @@ test_clock_gettime_monotonic()
 
     t1 = krun_get_wallclock(0);
     t2 = krun_get_wallclock(1);
-    delta = t2 - t1;
 
     printf("monotonic_start= %f\n", t1);
     printf("monotonic_stop = %f\n", t2);
