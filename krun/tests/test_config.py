@@ -43,6 +43,8 @@ from krun.util import FatalKrunError
 import os
 import pytest
 import time
+import sys
+import krun.platform
 from distutils.spawn import find_executable
 
 
@@ -323,3 +325,34 @@ def test_space_in_variant_name0001():
     with pytest.raises(FatalKrunError) as e:
         config = Config(path)
     assert "Variant names must not contain spaces" in str(e)
+
+
+def test_custom_dmesg_whitelist0001(monkeypatch):
+    """Test a config file that appends two patterns to the default whitelist"""
+
+    path = os.path.join(TEST_DIR, "custom_dmesg_whitelist0001.krun")
+    config = Config(path)
+    platform = krun.platform.detect_platform(None, config)
+    patterns = [p.pattern for p in platform.get_dmesg_whitelist()]
+    assert patterns == platform.default_dmesg_whitelist() + \
+        ["^custom1*", "^.custom2$"]
+
+
+def test_custom_dmesg_whitelist0002(monkeypatch):
+    """Test a config file that replaces entirely the dmesg whitelist"""
+
+    path = os.path.join(TEST_DIR, "custom_dmesg_whitelist0002.krun")
+    config = Config(path)
+    platform = krun.platform.detect_platform(None, config)
+    patterns = [p.pattern for p in platform.get_dmesg_whitelist()]
+    assert patterns == ["^.no+", "^defaults", "^here+"]
+
+
+def test_custom_dmesg_whitelist0003(monkeypatch):
+    """Test a config file that uses no custom whitelist"""
+
+    path = os.path.join(TEST_DIR, "example.krun")
+    config = Config(path)
+    platform = krun.platform.detect_platform(None, config)
+    patterns = [p.pattern for p in platform.get_dmesg_whitelist()]
+    assert patterns == platform.default_dmesg_whitelist()

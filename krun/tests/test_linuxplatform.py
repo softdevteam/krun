@@ -463,7 +463,7 @@ class TestLinuxPlatform(BaseKrunTest):
             "[   75.007583] tg3 0000:04:00.0 eth0: EEE is disabled",
         ]
         assert not platform._check_dmesg_for_changes(
-            platform.get_allowed_dmesg_patterns(), old_lines, new_lines, mock_manifest)
+            platform.get_dmesg_whitelist(), old_lines, new_lines, mock_manifest)
 
     def test_aslr0001(self, platform, caplog):
         # get current ASLR value
