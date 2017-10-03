@@ -10,3 +10,4 @@ examples/*.manifest
 **/*.so
 iterations_runners/iterations_runner_c
 platform_sanity_checks/check_openbsd_malloc_options
+.cache
