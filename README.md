@@ -425,6 +425,38 @@ PRE_EXECUTION_CMDS = [
 Similarly, you can use `POST_EXECUTION_CMDS` to turn daemons back on after each
 process execution.
 
+## Custom Dmesg Whitelists
+
+For each platform, Krun has a default built-in dmesg whitelist. The whitelist
+is a collection of regex patterns which are used to decide if a line in the
+dmesg buffer is a cause for concern. If a new line appears in the dmesg during
+benchmarking, and the line is not matched by at least one whitelist pattern,
+then Krun will flag the process execution as ``errored'' and email the user.
+
+From time to time you may find that you need to customise the whitelist. This
+is achieved by adding a callback named `custom_dmesg_whitelist` into your
+config file. The callback is passed the default list of patterns for your
+platform and must return a new list of patterns. In the implementation of your
+callback you have the choice to base your custom whitelist on the defaults or
+to define your own patterns from scratch.
+
+For example, to add a pattern, you would add a callback like:
+
+```python
+def custom_dmesg_whitelist(defaults):
+    return defaults + ["^.*your+regex.*pattern$"]
+```
+
+Krun uses Python's `re` module to compile regex patterns. Consult the Python
+docs for more information on the regex syntax.
+
+Bear in mind that Linux dmesg lines start with a time code which custom dmesg
+lines will need to match.
+
+If you have added custom patterns which you think would be useful for other
+users of Krun, please raise an issue (or pull request) to have the patterns
+added to the defaults.
+
 ## Unit Tests
 
 Krun has a pytest suite which can be run by executing `py.test` in the

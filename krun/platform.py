@@ -191,8 +191,18 @@ class BasePlatform(object):
     def _timestamp_to_str(self, lt):
         return time.strftime(ABS_TIME_FORMAT, lt)
 
-    def get_allowed_dmesg_patterns(self):
-        return []
+    @abstractmethod
+    def default_dmesg_whitelist(self):
+        pass
+
+    def get_dmesg_whitelist(self):
+        default_whitelist = self.default_dmesg_whitelist()
+        if self.config.custom_dmesg_whitelist is not None:
+            # Invoke the user's custom function
+            patterns = self.config.custom_dmesg_whitelist(default_whitelist)
+        else:
+            patterns = default_whitelist
+        return [re.compile(p) for p in patterns]
 
     def filter_new_dmesg_line(self, line, patterns):
         for p in patterns:
@@ -203,7 +213,7 @@ class BasePlatform(object):
 
     def check_dmesg_for_changes(self, manifest):
         new_dmesg = self._collect_dmesg_lines()
-        patterns = self.get_allowed_dmesg_patterns()
+        patterns = self.get_dmesg_whitelist()
 
         rv = self._check_dmesg_for_changes(patterns, self.last_dmesg,
                                            new_dmesg, manifest)
@@ -703,11 +713,10 @@ class OpenBSDPlatform(UnixLikePlatform):
         comp_pat = re.compile(OpenBSDPlatform.VIO_DMESG_PATTERN)
         return any(comp_pat.match(l) for l in dmesg_lines)
 
-    def get_allowed_dmesg_patterns(self):
+    def default_dmesg_whitelist(self):
         # PyPy uses write+executable pages, which causes this dmesg entry
         # in OpenBSD-current (as of around 6.0-beta)
-        return UnixLikePlatform.get_allowed_dmesg_patterns(self) + \
-            [re.compile("^.*\([0-9]+\): .*W\^X violation$")]
+        return ["^.*\([0-9]+\): .*W\^X violation$"]
 
 
 class LinuxPlatform(UnixLikePlatform):
@@ -1326,22 +1335,20 @@ class LinuxPlatform(UnixLikePlatform):
                 "isolcpus", "isolcpus should not be in the kernel command line"
             )
 
-    def get_allowed_dmesg_patterns(self):
-        return UnixLikePlatform.get_allowed_dmesg_patterns(self) + \
-            [
+    def default_dmesg_whitelist(self):
+        return [
                 # Bringing the network up and down on Linux (which some
                 # experiments may wish to do) makes some noise. Ignore.
-                re.compile("^.*ADDRCONF\(NETDEV_UP\)"),
-                re.compile("^.*ADDRCONF\(NETDEV_CHANGE\)"),
-                re.compile("^.*NIC Link is (Up|Down)"),
-                re.compile("^.*irq.* for MSI/MSI-X"),
-                re.compile("^.*eth[0-9]: link (down|up)"),
-                re.compile("^.*eth[0-9]: Link is (up|down).*"),
-                re.compile("^.*eth[0-9]: Flow control is (on|off).*"),
-                re.compile("^.*eth[0-9]: EEE is (enabled|disabled).*"),
-
+                "^.*ADDRCONF\(NETDEV_UP\)",
+                "^.*ADDRCONF\(NETDEV_CHANGE\)",
+                "^.*NIC Link is (Up|Down)",
+                "^.*irq.* for MSI/MSI-X",
+                "^.*eth[0-9]: link (down|up)",
+                "^.*eth[0-9]: Link is (up|down).*",
+                "^.*eth[0-9]: Flow control is (on|off).*",
+                "^.*eth[0-9]: EEE is (enabled|disabled).*",
                 # Graphics card goes into powersave
-                re.compile("^.*\[drm\] Enabling RC6 states"),
+                "^.*\[drm\] Enabling RC6 states",
             ]
 
     def _sched_get_priority_max(self):

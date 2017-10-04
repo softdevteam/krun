@@ -52,7 +52,7 @@ class Config(object):
     """
 
     def __init__(self, config_file=None):
-        # config defaults go here
+        # config defaults (variables)
         self.MAIL_TO = list()
         self.MAX_MAILS = 5
         self.VMS = dict()
@@ -67,9 +67,11 @@ class Config(object):
         self.ENABLE_PINNING = False
         self.AMPERF_BUSY_THRESHOLD = None
         self.AMPERF_RATIO_BOUNDS = None
-
         self.PRE_EXECUTION_CMDS = []
         self.POST_EXECUTION_CMDS = []
+
+        # config defaults (callbacks)
+        self.custom_dmesg_whitelist = None
 
         if config_file is not None:
             self.read_from_file(config_file)

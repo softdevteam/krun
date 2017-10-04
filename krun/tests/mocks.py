@@ -71,6 +71,9 @@ class MockPlatform(BasePlatform):
         self.no_user_change = True
         self.temp_sensors = []
 
+    def default_dmesg_whitelist(self):
+        return []
+
     def pin_process_args(self):
         return []
 

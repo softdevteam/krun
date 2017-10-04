@@ -1,0 +1,27 @@
+import os
+from krun.vm_defs import PythonVMDef
+from krun import EntryPoint
+
+VARIANTS = {
+    "default-python": EntryPoint("bench.py", subdir="python"),
+}
+
+N_EXECUTIONS = 2
+
+VMS = {
+    'CPython': {
+        'vm_def': PythonVMDef('/usr/bin/python2'),
+        'variants': ['default-python'],
+        'n_iterations': 10,
+    }
+}
+
+BENCHMARKS = {
+    'nbody': 1000,
+}
+
+def custom_dmesg_whitelist(default_whitelist):
+    return ["^.no+", "^defaults", "^here+"]
+
+HEAP_LIMIT = 2097152
+STACK_LIMIT = 8192
