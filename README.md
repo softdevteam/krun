@@ -1,37 +1,20 @@
 # Krun
 
-Krun is a framework for running software benchmarking experiments.
+Krun is a framework for running high-quality software benchmarking experiments.
+Krun experiments consist of a configuration file, a carefully configured
+benchmarking machine, and the benchmarks themselves.
 
-**Krun uses sudo to elevate privileges! Please read these instructions in
-full.**
 
-The `examples/` directory contains a simple experiment using Krun.
-This is a good starting point for setting up your own Krun configuration.
+## Step 1: Initial installation
 
-The example here contains two benchmark programs (*nbody* and *dummy*),
-executed on two VMs (*cPython* and native code with no VM). There is a separate
-example with Java (using *JVM* such as HotSpot), which requires you to set up
-some environment variables before you compile Krun.
-Each benchmark is run for 5 iterations on the same VM, then the VM is
-restarted and the benchmark is re-run for another 5 iterations.
-We say that the experiment runs 2 *process executions* and 5 *in-process iterations* of
-each benchmark.
-
-This configuration can be found in the file `examples/example.krun`. The
-example with Java can be found in `examples/java.krun`.
-
-## Step 1: prepare the benchmarking machine
-
-Krun currently only runs on Unix-like environments.
-To run this example experiment, you need superuser rights to the machine you are
-using, e.g. on Linux you should be able to run `sudo`.
+Krun currently only runs on Debian Linux and OpenBSD. Porting it to other
+Unix variants is unlikely to be difficult, and we welcome patches.
 
 ### Dependencies
 
-Krun currently runs on (Debian) Linux and OpenBSD.
+You need to have the following programs installed:
 
-You need to have the following installed:
-
+  * sudo
   * Python2.7 (pre-installed in Debian)
   * GNU make, a C compiler and libc (`build-essential` package in Debian)
   * cpufrequtils (Linux only. `cpufrequtils` package in Debian)
@@ -48,86 +31,168 @@ You need to have the following installed:
 If you want to benchmark Java, you will also need:
   * A Java SDK 7 (`openjdk-7-jdk` package in Debian)
 
-Note that to use pinning on Linux, `cset shield` must be in a working state.
-Some Linux distributions have been known to ship with this functionality
-broken. See the `cset` tutorial for information on how to test `cset shield`:
-https://rt.wiki.kernel.org/index.php/Cpuset_Management_Utility/tutorial
 
-### Kernel arguments
+## Step 2 (Linux only): kernel and OS setup
 
-If you are using a Linux system, you will need to set a kernel arguments to
-disable Intel P-states. If your Linux bootloader is Grub, you can follow these
-steps:
+### P-states
 
-  * Edit /etc/default/grub (e.g. `sudo gedit /etc/default/grub`)
-  * Add `intel_pstate=disable` to `GRUB_CMDLINE_LINUX_DEFAULT`
+Benchmarking is at its most accurate when Intel p-states are disabled in
+the kernel. If you are using Grub, this can be achieved as follows:
+
+  * Edit `/etc/default/grub` so that the `GRUB_CMDLINE_LINUX_DEFAULT`
+    variable includes `intel_pstate=disable`.
   * Run `sudo update-grub`
 
-You can disable Krun's P-state check with `--disable-pstate-check`, however
-this is strongly discouraged for real benchmarking.
+If you are unable to do this, you can disable Krun's P-state check with
+`--disable-pstate-check`, but be aware that this degrades the quality of the
+resulting benchmarking numbers.
 
-### The Krun Linux Kernel
+### Performance counters
 
-When Krun is run on Linux it requires a custom Linux Kernel which offers low
-latency access to the `IA32_APERF`, `IA32_MPERF` and `IA32_PERF_FIXED_CTR1`
-MSRs (sadly `IA32_APERF` or `IA32_MPERF` cannot be read from user-space via
-`rdpmc` and `rdmsr` is strictly a ring 0 operation). The kernel must also be
-configured to be tickless on all CPU cores except the boot core.
+We recommend using our custom Linux kernel found at:
 
-Instructions and source code can be found here:
-https://github.com/softdevteam/krun-linux-kernel
+  https://github.com/softdevteam/krun-linux-kernel
 
-#### Benchmarking on a Stock Linux Kernel
+which provides low latency access to the following counters:
 
-You can run Krun on a stock Linux Kernel, but Krun will be unable to
-collect data from:
+  * `IA32_PERF_FIXED_CTR1` (the core cycle counter)
+  * `IA32_APERF` counts
+  * `IA32_MPERF` counts
 
-  * IA32_PERF_FIXED_CTR1 (the core cycle counter)
-  * IA32_APERF counts
-  * IA32_MPERF counts
+If you are unable to do this, you can set `NO_MSRS=1` in your Unix environment
+when building Krun (see later), but be aware that this degrades the quality of
+the resulting benchmarking numbers.
 
-Since these are highly useful metrics, we strongly advise against using a stock
-Linux kernel for real benchmarking.
 
-With the above warning in mind, to run on a stock Linux kernel, when building
-Krun, include `NO_MSRS=1` in your environment.
+## Step 3: Fetch and build Krun
 
-## Step 2: Fetch the Krun source
+First fetch Krun:
 
-```bash
+```sh
 $ git clone --recursive https://github.com/softdevteam/krun.git
 $ cd krun
 ```
 
-## Step 3: Build Krun
+Then run `make` (or `gmake` on OpenBSD). The Krun Makefile honours the standard
+variables: `CC`, `CPPFLAGS`, `CFLAGS` and `LDFLAGS`.
 
-The Krun Makefile honours the standard variables: `CC`, `CPPFLAGS`, `CFLAGS`
-and `LDFLAGS`. For example, if you wish to use `clang` rather than `gcc` you
-can append `CC=clang` to the `make` command below. You should build Krun
-by invoking GNU make:
+If you want to benchmark Java programs, you need to set the
+`JAVA_HOME` environment variable to point to your JDK installation, and
+set several other flags:
 
-```bash
-$ pwd
-.../Krun
-$ make  # gmake on non-Linux platforms.
-```
-
-If you want to benchmark Java programs, you will also need to set the
-`JAVA_HOME` environment variable, and build Krun with some extra flags. The
-invocation below comes from a Ubuntu Linux machine, you may need to replace
-some paths and invoke `gmake` on other platforms:
-
-```bash
-$ pwd
-.../Krun
-$ env JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/ make  \
+```sh
+$ JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/ make  \
     JAVA_CPPFLAGS='"-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"' \
-    JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1
+    JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1 make
 ```
 
-## Step 4: Build the benchmarks
 
-```bash
+## Step 4: Audit system services
+
+Background services (e.g. `cron` or `sendmail`) can interfere with benchmarking.
+The more services that you are able to switch off, the less interference is
+likely to occur. Some services are best disabled at boot and/or permanently
+(depending on your OS) and must be done manually. However, you may wish
+to disable some services only during benchmarking (e.g. you may wish to have a mail server
+running before and after benchmarking to inform you of benchmarking progress),
+which can be specified in the `PRE_EXECUTION_CMDS` and `POST_EXECUTION_CMDS`
+settings in your Krun config file.
+
+Commands in each list are run, in order, using the `krun` user's shell (e.g.
+`/bin/sh`). If a command fails, Krun stops execution immediately without running
+subsequent commands. If you wish execution to continue even if a command fails
+you can use standard shell idioms: e.g. `cmd || true` guarantees that the
+overall command succeeds even if `cmd` fails. 
+
+For example on a systemd Linux you may turn daemons off before execution with:
+
+```
+PRE_EXECUTION_CMDS = [
+    "sudo systemctl stop cron",
+    "sudo systemctl stop atd",
+    ...
+]
+```
+
+and turn them back on with:
+
+```
+POST_EXECUTION_CMDS = [
+    "sudo systemctl start cron || true",
+    "sudo systemctl start atd || true",
+    ...
+]
+```
+
+In general it is best practise to turn things back on explicitly, because after
+Krun runs the final benchmark it will not reboot the machine. If, for example,
+you put network interfaces down in `PRE_EXECUTION_CMDS`, you should put them
+back up in `POST_EXECUTION_CMDS` so that you can login to the machine after the
+final benchmark has been run. We urge you to check such commands carefully:
+small oversights can easily lead to you locking yourself out of the system.
+
+Krun can also copy intermediate results to a remote host and query that host to
+see whether it should suspend benchmarking. See
+`https://github.com/softdevteam/warmup_experiment/blob/master/warmup.krun` for
+more advanced options.
+
+
+### Linux
+
+Note that Debian has, from a benchmarking perspective, the unfortunate habit of
+automatically starting daemons which get pulled in by dependencies.
+
+On Linux, list services with:
+
+```sh
+# systemctl | grep running
+```
+
+Permanently disable services (including after system reset) with:
+
+```sh
+# systemctl stop <service>
+# systemctl disable <service>
+```
+
+Commonly enabled services that you may wish to disable:
+
+ * apache2
+ * memcached
+ * nfs-common
+
+
+### OpenBSD
+
+On OpenBSD, list services with:
+
+```sh
+# doas rcctl ls started
+```
+
+Permanently disable services (including after system reset) with:
+```sh
+# rcctl stop <service>
+# rcctl disable <service>
+```
+
+Commonly enabled services that you may wish to disable:
+
+ * pflogd
+ * sndiod
+
+
+## Step 5: Build and run the example
+
+The `examples` directory contains the `example.krun` experiment. This contains
+two benchmark programs (*nbody* and *dummy*), both of which are run on *C* and
+*PyPy*. Each benchmark is run for 5 *in-process iterations* (where the
+benchmark is repeated 5 times within a for loop within a single process) across
+2 *process executions* (where the entire VM is restarted).
+
+First build the examples:
+
+```sh
 $ cd examples/benchmarks
 $ pwd
 .../krun/examples/benchmarks
@@ -137,73 +202,16 @@ $ make
 If you also want to try the example Java benchmarks, you must build them
 as a separate step:
 
-```bash
+```sh
 $ pwd
 .../krun/examples/benchmarks
 $ make java-bench
 ```
 
-## Step 5: Audit system services
+Then run the example:
 
-You should take some time to review the services running on your benchmarking
-machine. Debian especially has a habit of starting daemons which get pulled in
-by dependencies.
-
-Some services you can disable at boot. Others you may want disabled only for
-the duration of the benchmarking (e.g. mail servers, crond, atd, ntpd). For the
-latter kind, you can use `PRE_EXECUTION_CMDS` and `POST_EXECUTION_CMDS` in your
-Krun config file to stop and start the services.
-
-Note that by default Debian machines do not use a service like ntpd to set the
-system time. Instead the time is set using `ntpdate` when a network interface
-comes up.
-
-### Linux
-
-On Linux, list services with:
-
-```
-# systemctl | grep running
-```
-
-Disable services (now and at boot) with:
-
-```
-# systemctl stop <service>
-# systemctl disable <service>
-```
-
-Commonly enabled services you probably don't want include:
-
- * apache2
- * memcached
- * nfs-common
-
-### OpenBSD
-
-On OpenBSD, list at services with:
-
-```
-# rcctl ls started
-```
-
-Disable services (now and at boot) with:
-```
-# rcctl stop <service>
-# rcctl disable <service>
-```
-
-Commonly enabled services you probably don't want include:
-
- * pflogd
- * sndiod
-
-## Step 6: Run the example experiment
-
-```bash
-$ cd ../
-$ pwd
-.../krun/examples
+```sh
+$ cd krun/examples
 $ ../krun.py example.krun
 ```
 
@@ -214,97 +222,28 @@ If you want to try the example Java benchmarks, there is a separate
 configuration file called `java.krun`, which contains configuration for the Java
 and Python examples:
 
-```bash
-$ pwd
-.../krun/examples
+```sh
 $ ../krun.py java.krun
-
-Note, this will only work if you have followed the extra steps above to
-compile Krun for use with Java.
-
-## Using a Krun results file
-
-Krun generates a bzipped JSON file containing results of all process executions.
-The structure of the JSON results is as follows:
-
-```python
-{
-    'audit': '',  # A dict containing platform information
-    'config': '', # A unicode object containing your Krun configuration
-    'wallclock_times': {        # A dict object containing timing results
-        'bmark:VM:variant': [   # A list of lists of in-process iteration times
-            [ ... ], ...        # One list per process execution
-        ]
-    },
-    'core_cycle_counts': {      # Per-core core cycle counter deltas
-        'bmark:VM:variant': [
-            [                   # One list per process execution
-                [...], ...      # One list per core
-            ]
-    },
-    'aperf_counts': {...}       # Per-core APERF deltas
-                                # (structure same as 'core_cycle_counts')
-    'mperf_counts': {...}       # Per-core MPERF deltas
-                                # (structure same as 'core_cycle_counts')
-    'eta_estimates': {u"bmark:VM:variant": [t_0, t_1, ...], ...} # A dict mapping
-                  # benchmark keys to rough process execution times. Used internally,
-                  # users can ignore this.
-}
 ```
 
-Some options exist to help inspect the results file:
+Note, this will only work if you have followed the earlier steps to compile
+Krun with Java support.
 
-  * `--dump-reboots`
-  * `--dump-etas`
-  * `--dump-config`
-  * `--dump-audits`
-  * `--dump-temps`
-  * `--dump-data`
 
-```bash
-$ python krun.py --dump-config examples/example_results.json.bz2
-INFO:root:Krun starting...
-[2015-11-02 14:23:31: INFO] Krun starting...
-import os
-from krun.vm_defs import (PythonVMDef, NativeVMDef)
-from krun import EntryPoint
+### The Krun user
 
-# Who to mail
-MAIL_TO = []
-...
+Krun runs benchmarks under a new Unix user `krun`, which is wiped and re-added
+before every experiment. Your Krun build and your experiment must both be
+readable by the `krun` user for the experiment to run.
 
-$ python krun.py --dump-audit examples/example_results.json.bz2
-{
-    "cpuinfo":  "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t:
-...
-
-$ python krun.py --dump-reboots examples/example_results.json.bz2
-[2015-11-06 13:14:35: INFO] Krun starting...
-8
-```
-
-## Testing your configurations
-
-It is often useful to test a configuration file, without actually
-running a full benchmark (especially if the benchmark program is
-long). The best to test a config is to do something like:
-
-```bash
-$ ../krun.py --dry-run --quick --debug=INFO example.krun
-```
-
-See the "Development and Debug Switches" section for a description of these
-switches.
-
-Another switch, `--info`, reports various statistics about the setup described in the
-specified config file, such as the total number of process executions and which
-benchmark keys will be skipped etc.
 
 ## Creating your own experiments
 
-The configuration file `examples/example.krun` controls the experiment here.
-To create your own experiments, you can start by expanding on this example.
-The directory structure for the
+It is easiest to use `examples/example.krun` as a template for your own,
+new, experiments. Note that: the benchmarks referenced in the config file
+*must* be in a `benchmarks` subdirectory; and that each benchmark in
+the config must be in a subsubdirectory with a matching name. A typical
+directory structure is therefore as follows:
 
 ```
 experiment/
@@ -317,17 +256,17 @@ experiment/
     ...
 ```
 
-The `Makefile` (or similar build configuration) should perform any necessary
-compilation or preprocessor steps.
-Each benchmark should expose a function (or method) called `run_iter`
-which is the entry point to the benchmark.
-In the case of compiled languages, it often makes sense to add an extra
-class to an existing benchmark, in order to provide an entry point.
+The top-level `Makefile` should build the VMs and benchmarks needed for the
+experiment.
 
-The examples here uses C, Java and cPython.
-The following VMs are currently supported:
+Each benchmark should expose a function (or method) called `run_iter` which is
+the entry point to the benchmark. To preserve source code history, it can
+be easiest to put this function in a new file, which then imports the benchmark.
 
-  * Standard Java SDK (such as Hotspot)
+New VMs require some support in Krun. The following VMs are currently supported
+out of the box:
+
+  * OpenJDK (i.e. Hotspot)
   * GraalVM
   * cPython
   * Lua
@@ -339,91 +278,61 @@ The following VMs are currently supported:
 To add a new VM definition, add a new class to `krun/vm_defs.py` and a
 new iteration runner to the `iterations_runners` directory.
 
-The following platforms are currently supported:
-
-  * Generic Linux
-  * Debian-based Linux
-
 To add a new platform definition, add a new class to `krun/platform.py`.
 
-## Development and Debug Switches
 
-If you are making changes to Krun itself (for example, to add a new platform or
-virtual machine definition), there are a few switches which can make your life
-easier.
+## Testing your configurations
 
-  * `--debug=<level>`: Sets the verbosity of Krun.  Valid debug levels are:
-     `DEBUG`, `INFO`, `WARN`, `DEBUG`, `CRITICAL` and `ERROR`. The default is
-     `WARN`. For real benchmarks you should use the default.
+Before doing a full run of an experiment, you should perform a quick(ish) test
+of your configuration. This can be achieved with:
 
-  * `--quick`: There are several places where Krun would normally wait using
-    sleeps or a polling loop. These are essential for real benchmarking, but
-    annoying for development. Use `--quick` to skip these delays.
+```sh
+$ /path/to/krun/krun.py --dry-run --quick --debug=INFO config.krun
+```
 
-  * `--no-user-change`: Without this flag, For each process execution, Krun
-    will use a fresh user account called 'krun'. This involves deleting any
-    existing user account (with `userdel -r`) and creating a new user account
-    (with `useradd -m`).  This switch disables the use of a fresh user account,
-    meaning that `userdel` and `useradd` are not invoked, nor does Krun switch
-    user; the user Krun was invoked with is used for benchmarking.
+See the "Development and Debug Switches" section for a description of these
+switches.
 
-  * `--dry-run`: Fakes actual benchmark processes, making them finish
-    instantaneously.
 
-  * `--no-tickless-check`: Do not crash out if the Linux kernel is not
-    tickless.
+## Production benchmarking
 
-  * `--no-pstate-check`: Do not crash out if Intel P-states are not disabled.
+Achieving the highest possible benchmarking quality requires more care. First,
+none of Krun's debug or development switches must be used. Second, Krun needs to
+run in "reboot mode" where each process execution will be run after the machine
+has (automatically) rebooted. The recommended way to do this is via `cron(8)`
+and the `start_krun_from_cron` script supplied with Krun.
 
-## Benchmarking for Reliable Results
-
-You should not collect results intended for publication with development switches
-turned on.
-
-You should also benchmark in "reboot mode". The recommended way to do
-this is via `cron(8)`. We supply a script `start_krun_from_cron` to make this
-easier.
-
-As a regular user (who has access to your experiment and the Krun code), run
-`crontab -e` a line similar to the following:
+As a regular user (who has access to the experiment and the Krun code), run
+`crontab -e` and add a line similar to the following:
 
 ```
 @reboot /path/to/krun/scripts/start_krun_from_cron /path/to/your/config.krun
 ```
 
-The path to the config file must be an absolute path.
+Note that: the path to `Krun` must be an absolute paths for `cron` to be
+able to run it; and the config file must be an absolute path for `Krun` to
+be able to use it. Any arguments supplied after the config file path are
+passed to Krun unchanged.
 
-Any arguments supplied after the config file path are passed to Krun unchanged.
-
-You can then start the experiment with the same command (i.e. your crontab(5)
+You can then start the experiment with the same command (i.e. your `crontab(5)`
 line without the `@reboot`).
 
-You shouldn't log in for the duration of your experiment. Instead, you should
-add a `MAIL_TO` list into your config file and Krun will email you when your
-experiment is complete (or if something goes wrong). E.g.:
 
-```
+### Monitoring progress
+
+Whilst benchmarking is occuring, you must not log in to the machine (indeed,
+hopefully `sshd`, or equivalent, has been disabled!). To monitor progress, and
+be informed of errors, you you should add a `MAIL_TO` list of emails to your
+Krun config file:
+
+```python
 MAIL_TO = ["me@mydomain.com", "other_person@herdomain.com"]
 ```
 
-Krun uses `sendmail(8)` to send email, so you will need to make sure that this
-works prior to starting your experiment.
+Krun uses `sendmail(8)` to send email, so you will need to make sure that
+you have a functional SMTP server installed (and don't forget to switch it off
+during benchmarking!).
 
-You should disable any daemons which could interfere with your experiments
-(e.g. `cron`). You can turn off daemons before each process execution by adding
-the appropriate commands to `PRE_EXECUTION_CMDS` in your config file. E.g. for
-a systemd Linux system:
-
-```
-PRE_EXECUTION_CMDS = [
-    "sudo systemctl stop cron",
-    "sudo systemctl stop atd",
-    ...
-]
-```
-
-Similarly, you can use `POST_EXECUTION_CMDS` to turn daemons back on after each
-process execution.
 
 ## Custom Dmesg Whitelists
 
@@ -457,10 +366,104 @@ If you have added custom patterns which you think would be useful for other
 users of Krun, please raise an issue (or pull request) to have the patterns
 added to the defaults.
 
+
+## Development and Debug Switches
+
+If you are making changes to Krun itself (for example, to add a new platform or
+virtual machine definition), there are a few switches which can make your life
+easier.
+
+  * `--debug=<level>`: Sets the verbosity of Krun.  Valid debug levels are:
+     `DEBUG`, `INFO`, `WARN`, `DEBUG`, `CRITICAL` and `ERROR`. The default is
+     `WARN`. Production quality benchmarking should use the default.
+
+  * `--quick`: There are several places where Krun pauses to allow the system
+    to stabilise. In testing these pauses can be burdensome and can thus
+    be skipped with `--quick`.
+
+  * `--no-user-change`: Without this flag, For each process execution, Krun
+    will use a fresh user account called 'krun'. This involves deleting any
+    existing user account (with `userdel -r`) and creating a new user account
+    (with `useradd -m`).  This switch disables the use of a fresh user account,
+    meaning that `userdel` and `useradd` are not invoked, nor does Krun switch
+    user; the user Krun was invoked with is used for benchmarking.
+
+  * `--dry-run`: Fakes actual benchmark processes, making them finish
+    instantaneously.
+
+  * `--no-tickless-check`: Do not crash out if the Linux kernel is not
+    tickless.
+
+  * `--no-pstate-check`: Do not crash out if Intel P-states are not disabled.
+
+
+## Krun results files
+
+Krun generates a bzipped JSON file containing results of all process executions.
+The structure of the JSON results is as follows:
+
+```python
+{
+    'audit': '',  # A dict containing platform information
+    'config': '', # A unicode object containing your Krun configuration
+    'wallclock_times': {        # A dict containing timing results
+        'bmark:VM:variant': [   # A list of lists of in-process iteration times
+            [ ... ], ...        # One list per process execution
+        ]
+    },
+    'core_cycle_counts': {      # Per-core core cycle counter deltas
+        'bmark:VM:variant': [
+            [                   # One list per process execution
+                [...], ...      # One list per core
+            ]
+    },
+    'aperf_counts': {...}       # Per-core APERF deltas
+                                # (structure same as 'core_cycle_counts')
+    'mperf_counts': {...}       # Per-core MPERF deltas
+                                # (structure same as 'core_cycle_counts')
+    'eta_estimates': {u"bmark:VM:variant": [t_0, t_1, ...], ...} # A dict mapping
+                  # benchmark keys to rough process execution times. Used internally:
+                  # users can ignore this.
+}
+```
+
+Some options exist to help inspect the results file:
+
+  * `--dump-reboots`
+  * `--dump-etas`
+  * `--dump-config`
+  * `--dump-audits`
+  * `--dump-temps`
+  * `--dump-data`
+
+```sh
+$ python krun.py --dump-config examples/example_results.json.bz2
+INFO:root:Krun starting...
+[2015-11-02 14:23:31: INFO] Krun starting...
+import os
+from krun.vm_defs import (PythonVMDef, NativeVMDef)
+from krun import EntryPoint
+
+# Who to mail
+MAIL_TO = []
+...
+
+$ python krun.py --dump-audit examples/example_results.json.bz2
+{
+    "cpuinfo":  "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t:
+...
+
+$ python krun.py --dump-reboots examples/example_results.json.bz2
+[2015-11-06 13:14:35: INFO] Krun starting...
+8
+```
+
+
 ## Unit Tests
 
 Krun has a pytest suite which can be run by executing `py.test` in the
 top-level source directory.
+
 
 ## Security Notes
 
@@ -483,6 +486,7 @@ than one leads to undefined behaviour).
  * Turn off "turbo boost" (Linux only)
 
 Please make sure you understand the implications of this.
+
 
 ## Licenses
 
