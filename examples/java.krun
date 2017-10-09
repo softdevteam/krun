@@ -1,79 +1,15 @@
-import os
-from krun.vm_defs import (PythonVMDef, JavaVMDef)
-from krun import EntryPoint
-from krun.util import fatal
-from distutils.spawn import find_executable
+execfile("example.krun", globals())
 
-# For a real experiment you would certainly use absolute paths
-PYTHON27_BIN = find_executable("python2.7")
-if PYTHON27_BIN is None:
-    fatal("Python binary not found in path")
+from krun.vm_defs import JavaVMDef
 
 JAVA_BIN = find_executable("java")
 if JAVA_BIN is None:
     fatal("Java binary not found in path")
 
-# Who to mail
-MAIL_TO = []
+VARIANTS["default-java"] = EntryPoint("KrunEntry", subdir="java")
 
-# Maximum number of error emails to send per-run
-#MAX_MAILS = 2
-
-DIR = os.getcwd()
-JKRUNTIME_DIR = os.path.join(DIR, "krun", "libkruntime", "")
-
-HEAP_LIMIT = 2097152  # KiB
-STACK_LIMIT = 8192  # KiB
-
-# Variant name -> EntryPoint
-VARIANTS = {
-    "default-java": EntryPoint("KrunEntry", subdir="java"),
-    "default-python": EntryPoint("bench.py", subdir="python"),
+VMS['Java'] = {
+    'vm_def': JavaVMDef(JAVA_BIN),
+    'variants': ['default-java'],
+    'n_iterations': ITERATIONS_ALL_VMS,
 }
-
-ITERATIONS_ALL_VMS = 5  # Small number for testing.
-
-VMS = {
-    'Java': {
-        'vm_def': JavaVMDef(JAVA_BIN),
-        'variants': ['default-java'],
-        'n_iterations': ITERATIONS_ALL_VMS,
-    },
-    'CPython': {
-        'vm_def': PythonVMDef(PYTHON27_BIN),
-        'variants': ['default-python'],
-        'n_iterations': ITERATIONS_ALL_VMS,
-    }
-}
-
-
-BENCHMARKS = {
-    'dummy': 1000,
-    'nbody': 1000,
-}
-
-# list of "bench:vm:variant"
-SKIP = [
-    #"*:CPython:*",
-    #"*:Java:*",
-]
-
-N_EXECUTIONS = 2  # Number of fresh processes.
-
-# No. of seconds to wait before taking the initial temperature reading.
-# You should set this high enough for the system to cool down a bit.
-# The default (if omitted) is 60 seconds.
-TEMP_READ_PAUSE = 1
-
-# Commands to run before and after each process execution
-#
-# Environment available for these commands:
-#   KRUN_RESULTS_FILE: path to results file.
-#   KRUN_LOG_FILE: path to log file.
-#   KRUN_ETA_DATUM: time the ETA was computed
-#   KRUN_ETA_VALUE: estimated time of completion
-#PRE_EXECUTION_CMDS = ["sudo service cron stop"]
-#POST_EXECUTION_CMDS = ["sudo service cron start"]
-
-# CPU pinning (off by default)
-#ENABLE_PINNING = False
