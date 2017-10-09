@@ -29,7 +29,8 @@ You need to have the following programs installed:
     `PRE/POST_EXECUTION_CMDS`. See *Benchmarking for Reliable Results* below)
 
 If you want to benchmark Java, you will also need:
-  * A Java SDK 7 (`openjdk-7-jdk` package in Debian)
+
+  * A Java SDK (`openjdk-*-jdk` package in Debian).
 
 
 ## Step 2 (Linux only): kernel and OS setup
@@ -83,7 +84,7 @@ set several other flags:
 ```sh
 $ JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/ make  \
     JAVA_CPPFLAGS='"-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"' \
-    JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1 make
+    JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1
 ```
 
 
