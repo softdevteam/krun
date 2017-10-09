@@ -44,7 +44,7 @@ VMS = {
 
 
 BENCHMARKS = {
-    'dummy': 1000,
+    'fannkuch_redux': 100,
     'nbody': 15,
 }
 
