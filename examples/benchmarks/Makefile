@@ -1,10 +1,9 @@
 JAVAC ?=	javac
 
-BENCHMARKS = dummy nbody
+BENCHMARKS = fannkuch_redux nbody
 
 BENCH_CFLAGS =    -shared -Wall -fPIC -m64
 BENCH_LDFLAGS =
-C_EXTRA_LDFLAGS_dummy =
 C_EXTRA_LDFLAGS_nbody = -lm
 
 .PHONY: all c-bench java-bench clean clean-c clean-java

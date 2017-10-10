@@ -7,6 +7,7 @@ before_install:
     - sudo apt-get install linux-libc-dev libc6-dev
     - sudo apt-get install oracle-java8-installer
     - sudo apt-get install virt-what
+    - sudo apt-get install pypy
 
 install:
     - pip install -r requirements.txt
