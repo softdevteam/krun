@@ -48,7 +48,7 @@ from bz2 import BZ2File
 from krun.amperf import check_amperf_ratios
 
 FLOAT_FORMAT = ".6f"
-
+INSTR_STDERR_TAIL = 100
 SELECT_TIMEOUT = 1.0
 
 # Pipe buffer sizes vary. I've seen reports on the Internet ranging from a
@@ -239,7 +239,7 @@ def read_popen_output_carefully(process, platform, print_stderr=True):
 
 
 def check_and_parse_execution_results(stdout, stderr, rc, config,
-                                      sanity_check=False):
+                                      sanity_check=False, instrument=False):
     json_exn = None
 
     # cset(1) on Linux prints to stdout information about which cpuset a pinned
@@ -260,6 +260,23 @@ def check_and_parse_execution_results(stdout, stderr, rc, config,
             err_s += "Exception string: %s\n" % str(e)
         err_s += "return code: %d\n" % rc
         err_s += "stdout:\n%s\n%s\n%s\n\n" % (rule, stdout, rule)
+
+        # In instrumentation mode, stderr will have been written to disk for
+        # parsing. Read the last INSTR_STDERR_TAIL lines back (it may be huge)
+        # so as to offer the user at least something relating to the error.
+        if instrument:
+            from krun.vm_defs import INST_STDERR_FILE
+            num_stderr_lines = 0
+            with open(INST_STDERR_FILE) as fh:
+                for _ in fh:
+                    num_stderr_lines += 1
+                fh.seek(0, 0)  # rewind file
+                stderr_lines = []
+                for line_num, line in enumerate(fh):
+                    if line_num >= num_stderr_lines - INSTR_STDERR_TAIL:
+                        stderr_lines.append(line)
+            stderr = "".join(stderr_lines)
+
         err_s += "stderr:\n%s\n%s\n%s\n" % (rule, stderr, rule)
         raise ExecutionFailed(err_s)
 
