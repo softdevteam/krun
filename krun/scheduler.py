@@ -370,7 +370,7 @@ class ExecutionJob(object):
         if not dry_run:
             try:
                 measurements = util.check_and_parse_execution_results(
-                    stdout, stderr, rc, self.sched.config)
+                    stdout, stderr, rc, self.sched.config, instrument=vm_def.instrument)
                 flag = "C"
             except util.RerunExecution as e:
                 subject = ("Benchmark needs to be re-run: %s (exec_idx=%s)" %
