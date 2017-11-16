@@ -483,6 +483,12 @@ class ExecutionScheduler(object):
     def run(self):
         """Benchmark execution starts here"""
 
+        # In reboot mode, wait for the system to come up before we proceed
+        if self.platform.hardware_reboots:
+            debug("Waiting %s seconds for the system to come up." %
+                  str(STARTUP_WAIT_SECONDS))
+            self.platform.sleep(STARTUP_WAIT_SECONDS)
+
         # Important that the dmesg is collected after the above startup wait.
         # Otherwise we get spurious dmesg changes.
         self.platform.collect_starting_dmesg()
