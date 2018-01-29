@@ -144,6 +144,24 @@ O dummy:CPython:default-python
 E nbody:CPython:default-python
 """
 
+THIRD_KEY_REP_EXAMPLE_MANIFEST = """eta_avail_idx=4
+num_mails_sent=0000
+num_reboots=00000000
+keys
+E dummy:Java:default-java
+C nbody:Java:default-java
+C dummy:CPython:default-python
+S nbody:CPython:default-python
+C dummy:Java:default-java
+S nbody:Java:default-java
+C dummy:CPython:default-python
+E nbody:CPython:default-python
+C dummy:Java:default-java
+S nbody:Java:default-java
+O dummy:CPython:default-python
+E nbody:CPython:default-python
+"""
+
 def _setup(contents):
     class FakeConfig(object):
         filename = os.path.join(TEST_DIR, "manifest_tests.krun")
@@ -539,3 +557,29 @@ def test_missing_header_manifest0001():
     with pytest.raises(AssertionError):
         manifest = _setup(MISSING_HEADER_EXAMPLE_MANIFEST)
     _tear_down(os.path.join("krun", "tests", "manifest_tests.manifest"))
+
+
+def test_next_exec_key_index0001():
+    manifest = _setup(BLANK_EXAMPLE_MANIFEST)
+    assert manifest.next_exec_key_index() == 0
+    _tear_down(manifest.path)
+
+
+def test_next_exec_key_index0002():
+    manifest = _setup(SKIPS_EXAMPLE_MANIFEST)
+    assert manifest.next_exec_key_index() == 0
+    _tear_down(manifest.path)
+
+
+def test_next_exec_key_index0003():
+    manifest = _setup(ERRORS_ALL_EXAMPLE_MANIFEST)
+    with pytest.raises(FatalKrunError) as e:
+        manifest.next_exec_key_index()
+    assert "Manifest ended unexpectedly" in str(e)
+    _tear_down(manifest.path)
+
+
+def test_next_exec_key_index0004():
+    manifest = _setup(THIRD_KEY_REP_EXAMPLE_MANIFEST)
+    assert manifest.next_exec_key_index() == 2
+    _tear_down(manifest.path)

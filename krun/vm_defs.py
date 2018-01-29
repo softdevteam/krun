@@ -150,8 +150,8 @@ class BaseVMDef(object):
         EnvChange.apply_all(bench_env_changes, env_dct)
 
     @abstractmethod
-    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
-                 stack_lim_k, force_dir=None, sync_disks=True):
+    def run_exec(self, entry_point, iterations, param, heap_lim_k,
+                 stack_lim_k, key, key_pexec_idx, force_dir=None, sync_disks=True):
         pass
 
     def make_wrapper_script(self, args, heap_lim_k, stack_lim_k):
@@ -195,8 +195,8 @@ class BaseVMDef(object):
 
         return wrapper_filename, envlog_filename
 
-    def _run_exec(self, args, heap_lim_k, stack_lim_k, bench_env_changes=None,
-                  sync_disks=True):
+    def _run_exec(self, args, heap_lim_k, stack_lim_k, key, key_pexec_idx,
+                  bench_env_changes=None, sync_disks=True):
         """ Deals with actually shelling out """
 
         if bench_env_changes is None:
@@ -219,15 +219,15 @@ class BaseVMDef(object):
         else:
             args.append("0")
 
-        # Tack on the instrumentation flag
-        # All runners accept this flag, even if instrumentation is not
-        # implemented for the VM in question.
+        # Tack on the instrumentation arguments, if required.
         if self.instrument:
-            args.append("1")
+            args.append(util.get_instr_json_dir(self.config))
             # we will redirect stderr to this handle
             stderr_file = open(INST_STDERR_FILE, "w")
+            # Append flags only present in instrumentation mode.
+            args.extend([key, str(key_pexec_idx)])
+
         else:
-            args.append("0")
             stderr_file = subprocess.PIPE
 
         if self.dry_run:
@@ -236,6 +236,10 @@ class BaseVMDef(object):
 
         if not self.platform.no_user_change:
             self.platform.make_fresh_krun_user()
+            # If we are in instrumentation mode, grant the Krun user write
+            # access to the instrumentation directory.
+            if self.instrument:
+                util.set_instr_dir_perms(self.config, self.platform)
 
         wrapper_filename, envlog_filename = \
             self.make_wrapper_script(args, heap_lim_k, stack_lim_k)
@@ -325,14 +329,16 @@ class NativeCodeVMDef(BaseVMDef):
                                    "iterations_runner_c")
         BaseVMDef.__init__(self, iter_runner, env=env)
 
-    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
-                 stack_lim_k, force_dir=None, sync_disks=True):
+    def run_exec(self, entry_point, iterations, param, heap_lim_k,
+                 stack_lim_k, key, key_pexec_idx, force_dir=None,
+                 sync_disks=True):
+        benchmark = key.split(":")[0]
         benchmark_path = self._get_benchmark_path(benchmark, entry_point,
                                                   force_dir=force_dir)
         args = [self.iterations_runner,
                 benchmark_path, str(iterations), str(param)]
-        return self._run_exec(args, heap_lim_k, stack_lim_k,
-                              sync_disks=sync_disks)
+        return self._run_exec(args, heap_lim_k, stack_lim_k, key,
+                              key_pexec_idx, sync_disks=sync_disks)
 
     def check_benchmark_files(self, benchmark, entry_point):
         benchmark_path = self._get_benchmark_path(benchmark, entry_point)
@@ -349,14 +355,16 @@ class GenericScriptingVMDef(BaseVMDef):
         BaseVMDef.__init__(self, fp_iterations_runner, env=env,
                            instrument=instrument)
 
-    def _generic_scripting_run_exec(self, entry_point, benchmark, iterations,
-                                    param, heap_lim_k, stack_lim_k,
-                                    force_dir=None, sync_disks=True):
+    def _generic_scripting_run_exec(self, entry_point, iterations,
+                                    param, heap_lim_k, stack_lim_k, key,
+                                    key_pexec_idx, force_dir=None,
+                                    sync_disks=True):
+        benchmark = key.split(":")[0]
         script_path = self._get_benchmark_path(benchmark, entry_point,
                                                force_dir=force_dir)
         args = [self.vm_path] + self.extra_vm_args + [self.iterations_runner, script_path, str(iterations), str(param)]
-        return self._run_exec(args, heap_lim_k, stack_lim_k,
-                              sync_disks=sync_disks)
+        return self._run_exec(args, heap_lim_k, stack_lim_k, key,
+                              key_pexec_idx, sync_disks=sync_disks)
 
     def sanity_checks(self):
         BaseVMDef.sanity_checks(self)
@@ -378,12 +386,14 @@ class JavaVMDef(BaseVMDef):
         BaseVMDef.__init__(self, "IterationsRunner", env=env,
                            instrument=instrument)
 
-    def run_exec(self, entry_point, benchmark, iterations,
-                 param, heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
+    def run_exec(self, entry_point, iterations,
+                 param, heap_lim_k, stack_lim_k, key, key_pexec_idx,
+                 force_dir=None, sync_disks=True):
         """Running Java experiments is different due to the way that the JVM
         doesn't simply accept the path to a program to run. We have to set
         the CLASSPATH and then provide a class name instead"""
 
+        benchmark = key.split(":")[0]
         bench_dir = os.path.dirname(self._get_benchmark_path(
             benchmark, entry_point, force_dir=force_dir))
 
@@ -398,7 +408,8 @@ class JavaVMDef(BaseVMDef):
         args += [self.iterations_runner, entry_point.target,
                  str(iterations), str(param)]
 
-        return self._run_exec(args, heap_lim_k, stack_lim_k,
+        return self._run_exec(args, heap_lim_k, stack_lim_k, key,
+                              key_pexec_idx,
                               bench_env_changes=bench_env_changes,
                               sync_disks=sync_disks)
 
@@ -481,12 +492,11 @@ class GraalVMDef(JavaVMDef):
         if java_home is not None:
             self.add_env_change(EnvChangeSet("JAVA_HOME", java_home))
 
-    def run_exec(self, entry_point, benchmark, iterations, param,
-                 heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
-        return JavaVMDef.run_exec(self, entry_point, benchmark,
-                                  iterations, param, heap_lim_k,
-                                  stack_lim_k, force_dir=force_dir,
-                                  sync_disks=sync_disks)
+    def run_exec(self, entry_point, iterations, param, heap_lim_k, stack_lim_k,
+                 key, key_pexec_idx, force_dir=None, sync_disks=True):
+        return JavaVMDef.run_exec(self, entry_point, iterations, param,
+                                  heap_lim_k, stack_lim_k, key, key_pexec_idx,
+                                  force_dir=force_dir, sync_disks=sync_disks)
 
     def _check_jvmci_server_enabled(self):
         """Runs fake benchmark crashing if the Graal JVMCI JIT is disabled"""
@@ -507,13 +517,14 @@ class PythonVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.py",
                                        env=env, instrument=instrument)
 
-    def run_exec(self, entry_point, benchmark, iterations,
-                 param, heap_lim_k, stack_lim_k, force_dir=None, sync_disks=True):
+    def run_exec(self, entry_point, iterations, param, heap_lim_k, stack_lim_k,
+                 key, key_pexec_idx, force_dir=None, sync_disks=True):
         # heap_lim_k unused.
         # Python reads the rlimit structure to decide its heap limit.
-        return self._generic_scripting_run_exec(entry_point, benchmark,
-                                                iterations, param, heap_lim_k,
-                                                stack_lim_k, force_dir=force_dir,
+        return self._generic_scripting_run_exec(entry_point, iterations, param,
+                                                heap_lim_k, stack_lim_k, key,
+                                                key_pexec_idx,
+                                                force_dir=force_dir,
                                                 sync_disks=sync_disks)
 
 
@@ -642,11 +653,12 @@ class LuaVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.lua",
                                        env=env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
-                 stack_lim_k, force_dir=None, sync_disks=True):
-        return self._generic_scripting_run_exec(interpreter, benchmark,
-                                                iterations, param, heap_lim_k,
-                                                stack_lim_k,
+    def run_exec(self, interpreter, iterations, param, heap_lim_k,
+                 stack_lim_k, key, key_pexec_idx, force_dir=None,
+                 sync_disks=True):
+        return self._generic_scripting_run_exec(interpreter, iterations, param,
+                                                heap_lim_k, stack_lim_k, key,
+                                                key_pexec_idx,
                                                 force_dir=force_dir,
                                                 sync_disks=sync_disks)
 
@@ -655,11 +667,12 @@ class PHPVMDef(GenericScriptingVMDef):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.php",
                                        env=env)
 
-    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
-                 stack_lim_k, force_dir=None, sync_disks=True):
-        return self._generic_scripting_run_exec(interpreter, benchmark,
-                                                iterations, param, heap_lim_k,
-                                                stack_lim_k,
+    def run_exec(self, interpreter, iterations, param, heap_lim_k,
+                 stack_lim_k, key, key_pexec_idx, force_dir=None,
+                 sync_disks=True):
+        return self._generic_scripting_run_exec(interpreter, iterations, param,
+                                                heap_lim_k, stack_lim_k, key,
+                                                key_pexec_idx,
                                                 force_dir=force_dir,
                                                 sync_disks=sync_disks)
 
@@ -693,11 +706,13 @@ class TruffleRubyVMDef(RubyVMDef):
         if jvmci_home is not None:
             self.add_env_change(EnvChangeSet("JAVA_HOME", jvmci_home))
 
-    def run_exec(self, interpreter, benchmark, iterations, param, heap_lim_k,
-                 stack_lim_k, force_dir=None, sync_disks=True):
-        return self._generic_scripting_run_exec(
-            interpreter, benchmark, iterations, param, heap_lim_k,
-            stack_lim_k, force_dir=force_dir, sync_disks=sync_disks)
+    def run_exec(self, interpreter, iterations, param, heap_lim_k, stack_lim_k,
+                 key, key_pexec_idx, force_dir=None, sync_disks=True):
+        return self._generic_scripting_run_exec(interpreter, iterations, param,
+                                                heap_lim_k, stack_lim_k, key,
+                                                key_pexec_idx,
+                                                force_dir=force_dir,
+                                                sync_disks=sync_disks)
 
     def _check_truffle_enabled(self):
         """Runs fake benchmark crashing if the Truffle is disabled in
@@ -719,10 +734,12 @@ class JavascriptVMDef(GenericScriptingVMDef):
 
 
 class V8VMDef(JavascriptVMDef):
-    def run_exec(self, entry_point, benchmark, iterations, param, heap_lim_k,
-                 stack_lim_k, force_dir=None, sync_disks=True):
+    def run_exec(self, entry_point, iterations, param, heap_lim_k,
+                 stack_lim_k, key, key_pexec_idx, force_dir=None,
+                 sync_disks=True):
         # Duplicates generic implementation. Need to pass args differently.
 
+        benchmark = key.split(":")[0]
         script_path = self._get_benchmark_path(benchmark, entry_point,
                                                force_dir=force_dir)
 
@@ -734,5 +751,5 @@ class V8VMDef(JavascriptVMDef):
         args = [self.vm_path] + self.extra_vm_args + \
             [self.iterations_runner, '--', script_path, str(iterations), str(param)]
 
-        return self._run_exec(args, heap_lim_k, stack_lim_k,
-                              sync_disks=sync_disks)
+        return self._run_exec(args, heap_lim_k, stack_lim_k, key,
+                              key_pexec_idx, sync_disks=sync_disks)

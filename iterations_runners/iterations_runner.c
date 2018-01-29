@@ -111,29 +111,40 @@ convert_str_to_int(char *s)
     return ((int) r);
 }
 
+void
+usage() {
+    printf("usage: iterations_runner_c <benchmark> <# of iterations> "
+           "<benchmark param>\n             <debug flag> [instrumentation dir] "
+           "[key] [key pexec index]\n\n");
+    printf("Arguments in [] are for instrumentation mode only.\n");
+    exit(EXIT_FAILURE);
+}
+
 int
 main(int argc, char **argv)
 {
     char     *krun_benchmark = 0;
     int       krun_total_iters = 0, krun_param = 0, krun_iter_num = 0;
-    int       krun_debug = 0, krun_num_cores = 0, krun_core;
+    int       krun_debug = 0, krun_num_cores = 0, krun_core, krun_instrument = 0;
     void     *krun_dl_handle = 0;
     int     (*krun_bench_func)(int); /* func ptr to benchmark entry */
     double   *krun_wallclock_times = NULL;
     uint64_t **krun_cycle_counts = NULL, **krun_aperf_counts = NULL;
     uint64_t **krun_mperf_counts = NULL;
 
-    if (argc != 6) {
-        printf("usage: iterations_runner_c "
-            "<benchmark> <# of iterations> <benchmark param> <debug flag> "
-            "<instrument flag>\n");
-        exit(EXIT_FAILURE);
+    if (argc < 5) {
+        usage();
     }
 
     krun_benchmark = argv[1];
     krun_total_iters = convert_str_to_int(argv[2]);
     krun_param = convert_str_to_int(argv[3]);
     krun_debug = convert_str_to_int(argv[4]);
+    krun_instrument = argc >= 6;
+
+    if (krun_instrument && (argc != 8)) {
+        usage();
+    }
 
     krun_init();
     krun_num_cores = krun_get_num_cores();

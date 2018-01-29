@@ -284,6 +284,14 @@ def inner_main(mailer, on_first_invocation, config, args):
     platform.no_pstate_check = args.no_pstate_check
     platform.hardware_reboots = args.hardware_reboots
 
+    # Create the instrumentation directory if required
+    if on_first_invocation:
+        # We only want make a dir if >=1 VM is in instrumentation mode.
+        for vm in config.VMS.itervalues():
+            if vm['vm_def'].instrument:
+                util.make_instr_dir(config)
+                break
+
     debug("Checking platform preliminaries")
     platform.check_preliminaries()
 

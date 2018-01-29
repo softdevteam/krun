@@ -42,6 +42,9 @@ import select
 import shutil
 import sys
 import subprocess
+import pwd
+import grp
+import getpass
 from subprocess import Popen, PIPE
 from logging import error, debug, info, warn, root as root_logger
 from bz2 import BZ2File
@@ -60,6 +63,10 @@ SELECT_TIMEOUT = 1.0
 # than are strictly necessary. In either case we are safe and correct.
 PIPE_BUF_SZ = 1024 * 16
 
+from stat import S_IRUSR, S_IWUSR, S_IRGRP, S_IWGRP, S_IXUSR, S_IXGRP, S_IROTH, S_IXOTH
+INSTR_DIR_MODE = S_IRUSR | S_IWUSR | S_IXUSR \
+    | S_IRGRP | S_IWGRP | S_IXGRP \
+    | S_IROTH | S_IXOTH
 
 DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -335,10 +342,11 @@ def spawn_sanity_check(platform, entry_point, vm_def,
     iterations = 1
     param = 666
 
+    key = "%s:sanity:default-sanity" % check_name
     stdout, stderr, rc, envlog_filename = \
-        vm_def.run_exec(entry_point, check_name, iterations,
+        vm_def.run_exec(entry_point, iterations,
                         param, SANITY_CHECK_HEAP_KB, SANITY_CHECK_STACK_KB,
-                        force_dir=force_dir, sync_disks=False)
+                        key, 0, force_dir=force_dir, sync_disks=False)
     del_envlog_tempfile(envlog_filename, platform)
 
     try:
@@ -438,15 +446,39 @@ def get_instr_json_dir(config):
     return os.path.join(os.getcwd(), "%s_instr_data" % config_base)
 
 
-def dump_instr_json(key, exec_num, config, instr_data):
-    """Write per-execution instrumentation data to a separate JSON file"""
+def make_instr_dir(config):
+    dir = get_instr_json_dir(config)
+    debug("making instrumentation dir: %s" % dir)
+    os.mkdir(dir)
 
-    instr_json_dir = get_instr_json_dir(config)
-    if not os.path.exists(instr_json_dir):
-        os.mkdir(instr_json_dir)
+
+def set_instr_dir_perms(config, platform):
+    """Grant the Krun user write access to the instrumentation dir.
+
+    Sadly this has to be done as root as there is no guarantee that the initial
+    user is in the krun user's group."""
+
+    from krun.vm_defs import BENCHMARK_USER
+    group = grp.getgrnam(BENCHMARK_USER).gr_name
+    user = pwd.getpwnam(getpass.getuser()).pw_name
+
+    from krun import util
+    path = util.get_instr_json_dir(config)
+
+    args = platform.change_user_args()
+    args.extend(["chown", "%s:%s" % (user, group), path])
+    run_shell_cmd(" ".join(args))
+
+    os.chmod(path, INSTR_DIR_MODE)
+
+
+def dump_instr_json(key, exec_num, config, instr_data):
+    """Write per-execution instrumentation data to a separate JSON file.
+
+    Assumes the instrumentation directory exists."""
 
     filename = "%s__%s.json.bz2" % (key.replace(":", "__"), exec_num)
-    path = os.path.join(instr_json_dir, filename)
+    path = os.path.join(get_instr_json_dir(config), filename)
 
     # The directory was checked to be non-existant when the benchmark session
     # started, so it follows that the instrumentation JSON file (each of which
