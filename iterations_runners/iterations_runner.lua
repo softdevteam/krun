@@ -57,6 +57,15 @@ function emit_per_core_measurements(name, num_cores, tbl, tbl_len)
     io.stdout:write("]")
 end
 
+function usage()
+    io.stderr:write("usage: iterations_runner.lua <benchmark> " ..
+                    "<# of iterations> <benchmark param>\n           " ..
+                    "<debug flag> [instrumentation dir] [key] " ..
+                    "[key pexec index]\n\n")
+    io.stderr:write("Arguments in [] are for instrumentation mode only.\n")
+    os.exit(1)
+end
+
 ffi.cdef[[
     void krun_init(void);
     void krun_done(void);
@@ -78,15 +87,18 @@ local krun_get_core_cycles_double = libkruntime.krun_get_core_cycles_double
 local krun_get_aperf_double = libkruntime.krun_get_aperf_double
 local krun_get_mperf_double = libkruntime.krun_get_mperf_double
 
+if #arg < 4 then
+    usage()
+end
+
 local BM_benchmark = arg[1]
 local BM_iters = tonumber(arg[2])
 local BM_param = tonumber(arg[3])
 local BM_debug = tonumber(arg[4]) > 0
+local BM_instrument = #arg >= 5
 
-if #arg ~= 5 then
-    io.stderr:write("usage: iterations_runner.lua <benchmark> <# of iterations> " ..
-                    "<benchmark param> <debug flag> <instrument flag>")
-    os.exit(1)
+if BM_instrument and #arg ~= 7 then
+    usage()
 end
 
 dofile(BM_benchmark)

@@ -48,16 +48,27 @@
  *  krun_get_{core_cycles,aperf,mperf}_double();
  */
 
-if ($argc != 6) {
+function usage() {
     fwrite(STDERR, "usage: iterations_runner.php <benchmark> <# of iterations> " .
-           "<benchmark param> <debug flag> <instrument flag>\n");
+        "<benchmark param>\n           <debug flag> [instrumentation dir] " .
+        "[key] [key pexec index]>\n\n");
+    fwrite(STDERR, "Arguments in [] are for instrumentation mode only.\n");
     exit(1);
+}
+
+if ($argc < 5) {
+    usage();
 }
 
 $BM_benchmark = $argv[1];
 $BM_iters = $argv[2];
 $BM_param = (int) $argv[3];
 $BM_debug = ((int) $argv[4]) > 0;
+$BM_instrument = $argc >= 6;
+
+if ($BM_instrument && ($argc != 8)) {
+    usage();
+}
 
 if (!file_exists($BM_benchmark)) {
     throw new RuntimeException("Can't find $BM_benchmark");

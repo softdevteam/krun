@@ -309,16 +309,57 @@ class ManifestManager(object):
             for item in manifest:
                 fh.write("%s\n" % item)
 
+    def next_exec_key_index(self):
+        """Returns the sequential process execution index into the ordered list
+        of all process executions sharing the same 'bench:vm:variant' key.
+
+        Although this could have been done at `_parse()` time, it would require
+        a (variable sized) `dict` since we don't know which key we will be
+        counting for until we find the first outstanding (O) record.
+
+        Instead, this method does a pass over the manifest searching for
+        records whose key is `self.next_exec_key`.
+
+        This function assumes that there is at least one outstanding job (O
+        line) in the manifest. If there is not, it will raise `FatalKrunError`.
+        """
+
+        fh = self._open()
+        lines = iter(fh)
+        count = 0
+
+        # Skip header
+        for line in lines:
+            strip_line = line.strip()
+            if strip_line == "keys":
+                break
+        else:
+            util.fatal("Manifest is missing a body")
+
+        # Now count the number of matching keys until the first 'O'
+        # (outstanding) record.
+        for line in lines:
+            flag, key = line.strip().split()
+            if key == self.next_exec_key:
+                if flag == "O":
+                    break
+                count += 1
+        else:
+            util.fatal("Manifest ended unexpectedly")
+
+        return count
+
 
 class ExecutionJob(object):
     """Represents a single executions level benchmark run"""
 
-    def __init__(self, sched, vm_name, vm_info, benchmark, variant, parameter):
+    def __init__(self, sched, vm_name, vm_info, benchmark, variant, parameter, key_pexec_idx):
         self.sched = sched
         self.vm_name, self.vm_info = vm_name, vm_info
         self.benchmark = benchmark
         self.variant = variant
         self.parameter = parameter
+        self.key_pexec_idx = key_pexec_idx
 
         # Used in results JSON and ETA dict
         self.key = "%s:%s:%s" % (self.benchmark, self.vm_name, self.variant)
@@ -363,9 +404,10 @@ class ExecutionJob(object):
         stack_limit_kb = self.sched.config.STACK_LIMIT
         in_proc_iters = self.vm_info["n_iterations"]
 
-        stdout, stderr, rc, envlog_filename = vm_def.run_exec(
-            entry_point, self.benchmark, in_proc_iters,
-            self.parameter, heap_limit_kb, stack_limit_kb)
+        stdout, stderr, rc, envlog_filename = \
+            vm_def.run_exec(entry_point, in_proc_iters, self.parameter,
+                            heap_limit_kb, stack_limit_kb, self.key,
+                            self.key_pexec_idx)
 
         if not dry_run:
             try:
@@ -497,8 +539,9 @@ class ExecutionScheduler(object):
         self.platform.wait_for_temperature_sensors()
 
         bench, vm, variant = self.manifest.next_exec_key.split(":")
+        key_pexec_idx = self.manifest.next_exec_key_index()
         job = ExecutionJob(self, vm, self.config.VMS[vm], bench, variant,
-                           self.config.BENCHMARKS[bench])
+                           self.config.BENCHMARKS[bench], key_pexec_idx)
 
         # Default to error state. This is the value the finally block will see
         # if an exception is raised inside the try block, otherwise it is

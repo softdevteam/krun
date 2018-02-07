@@ -201,20 +201,31 @@ class IterationsRunner {
         System.out.print("]");
     }
 
+    public static void usage() {
+        System.out.println("usage: iterations_runner <benchmark> " +
+                "<# of iterations> <benchmark param>\n           " +
+                "<debug flag> [instrumentation dir] [key] [key pexec index]\n");
+        System.out.println("Arguments in [] are for instrumentation mode only.\n");
+        System.exit(1);
+    }
+
     public static void main(String args[]) throws
         ClassNotFoundException, NoSuchMethodException, InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
 
-        if (args.length != 5) {
-            System.out.println("usage: iterations_runner <benchmark> " +
-                    "<# of iterations> <benchmark param> <debug flag>" +
-                    "<instrument flag>\n");
-            System.exit(1);
+        if (args.length < 4) {
+            usage();
         }
+
         String benchmark = args[0];
         int iterations = Integer.parseInt(args[1]);
         int param = Integer.parseInt(args[2]);
         boolean debug = Integer.parseInt(args[3]) > 0;
-        boolean instrument = Integer.parseInt(args[4]) > 0;
+
+        // Note: JDK instrumentation is still using the old Krun interface.
+        boolean instrument = args.length >= 5;
+        if ((instrument) && (args.length != 7)) {
+            usage();
+        }
 
         KrunJDKInstrumentation krunInst = null;
         if (instrument) {

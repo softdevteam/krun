@@ -125,7 +125,7 @@ class TestVMDef(BaseKrunTest):
             return "[1]", "", 0  # stdout, stderr, exit_code
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
-        vm_def.run_exec(ep, "test", 1, 1, 1, 1)
+        vm_def.run_exec(ep, 1, 1, 1, 1, "test:dummyvm:default", 0)
         assert sync_called == [True]
 
     def test_sync_disks0002(self, monkeypatch):

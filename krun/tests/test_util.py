@@ -39,7 +39,8 @@ from krun.util import (format_raw_exec_results, log_and_mail, fatal,
                        check_and_parse_execution_results, run_shell_cmd,
                        run_shell_cmd_bench, get_git_version, ExecutionFailed,
                        get_session_info, run_shell_cmd_list, FatalKrunError,
-                       stash_envlog, dump_instr_json, RerunExecution)
+                       stash_envlog, dump_instr_json, RerunExecution,
+                       make_instr_dir)
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
@@ -428,8 +429,9 @@ def test_stash_envlog0001(mock_platform):
 def test_dump_instr_json0001():
     path = os.path.join(TEST_DIR, "example.krun")
     config = Config(path)
-
     instr_data = {k: ord(k) for k in "abcdef"}
+
+    make_instr_dir(config)
     dump_instr_json("bench:vm:variant", 666, config, instr_data)
 
     dump_dir = os.path.join(TEST_DIR, "example_instr_data")

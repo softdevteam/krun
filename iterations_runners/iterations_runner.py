@@ -37,12 +37,13 @@
 
 """
 Iterations runner for Python VMs.
-Derived from iterations_runner.php.
 
 Executes a benchmark many times within a single process.
 
-In Kalibera terms, this script represents one executions level run.
-"""
+usage: iterations_runner.py <benchmark> <# of iterations> <benchmark param>
+           <debug flag> [instrumentation dir] [key] [key pexec index]
+
+Arguments in [] are for instrumentation mode only."""
 
 import cffi, sys, imp, os
 
@@ -70,20 +71,25 @@ krun_get_core_cycles = libkruntime.krun_get_core_cycles
 krun_get_aperf = libkruntime.krun_get_aperf
 krun_get_mperf = libkruntime.krun_get_mperf
 
+def usage():
+    print(__doc__)
+    sys.exit(1)
+
 # main
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
-        sys.stderr.write("usage: iterations_runner.py <benchmark> "
-                         "<# of iterations> <benchmark param> <debug flag> "
-                         "<instrument flag>\n")
-        sys.exit(1)
+    num_args = len(sys.argv)
+    if num_args < 5:
+        usage()
 
-    benchmark, iters, param, debug, instrument = sys.argv[1:]
-    iters, param, debug, instrument = \
-        int(iters), int(param), int(debug) == 1, int(instrument) == 1
+    benchmark, iters, param, debug = sys.argv[1:5]
+    iters, param, debug = int(iters), int(param), int(debug) == 1
+    instrument = num_args >= 6
+
+    if instrument and num_args != 8:
+        usage()
 
     if instrument:
-        import pypyjit # instrumentation not supported on CPython yet anyway
+        import pypyjit  # instrumentation not supported on CPython yet.
 
     assert benchmark.endswith(".py")
     bench_mod_name = os.path.basename(benchmark[:-3])

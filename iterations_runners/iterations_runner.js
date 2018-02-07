@@ -65,15 +65,26 @@ function emitPerCoreResults(name, num_cores, ary) {
     write("]")
 }
 
-if (this.arguments.length != 5) {
-    throw "usage: iterations_runner.js <benchmark> <# of iterations> " +
-          "<benchmark param> <debug flag> <instrument flag>";
+function usage() {
+    throw "\nusage: iterations_runner.js <benchmark> <# of iterations> " +
+          "<benchmark param>\n       <debug flag> [instrumentation dir] [key] " +
+          "[key pexec index]\n\nArguments in [] are for" +
+          "instrumentation mode only.\n";
+}
+
+if (this.arguments.length < 4) {
+    usage();
 }
 
 var BM_entry_point = this.arguments[0];
 var BM_n_iters = parseInt(this.arguments[1]);
 var BM_param = parseInt(this.arguments[2]);
 var BM_debug = parseInt(this.arguments[3]) > 0;
+var BM_instrument = this.arguments.length >= 5;
+
+if (BM_instrument && (this.arguments.length != 7)) {
+    usage();
+}
 
 load(BM_entry_point);
 

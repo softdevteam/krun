@@ -55,19 +55,29 @@ else
     end
 end
 
+def usage()
+    STDERR.puts "usage: iterations_runner.rb <benchmark> "\
+        "<# of iterations> <benchmark param>\n           "\
+        "<debug flag> [instrumentation dir] [key] [key pexec index]>\n"
+    STDERR.puts "Arguments in [] are supplied for instrumentation mode only.\n"
+    Kernel.exit(1)
+end
+
 # main
 if __FILE__ == $0
-    if ARGV.length != 5
-        STDERR.puts "usage: iterations_runner.rb <benchmark> "\
-                    "<# of iterations> <benchmark param> <debug flag> "\
-                    "<instrument flag>\n"
-        Kernel.exit(1)
+    if ARGV.length < 4
+        usage()
     end
 
     benchmark, iters, param, debug = ARGV
     iters = Integer(iters)
     param = Integer(param)
     debug = Integer(debug) > 0
+    instrument = ARGV.length >= 5
+
+    if instrument and ARGV.length != 7 then
+        usage()
+    end
 
     require("#{benchmark}")
 
