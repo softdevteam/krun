@@ -1,12 +1,9 @@
 #!/bin/sh
-#
-# This script is designed to be invoked as cron @reboot task and as a normal
-# user.
 
 set -e
 
 if [ $# -lt 1 ]; then
-    echo "start_krun_from_cron <absolute-path-to-config-file> [extra krun args]"
+    echo "run_krun_at_boot <absolute-path-to-config-file> [extra krun args]"
     exit 1
 fi
 

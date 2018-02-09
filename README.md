@@ -300,23 +300,27 @@ switches.
 Achieving the highest possible benchmarking quality requires more care. First,
 none of Krun's debug or development switches must be used. Second, Krun needs to
 run in "reboot mode" where each process execution will be run after the machine
-has (automatically) rebooted. The recommended way to do this is via `cron(8)`
-and the `start_krun_from_cron` script supplied with Krun.
+has (automatically) rebooted. The simplest way to do this is to have your init
+system invoke `scripts/run_krun_at_boot` via an `rc.local` script.
 
-As a regular user (who has access to the experiment and the Krun code), run
-`crontab -e` and add a line similar to the following:
-
+Your `/etc/rc.local` should look like this:
 ```
-@reboot /path/to/krun/scripts/start_krun_from_cron /path/to/your/config.krun
+#!/bin/sh
+/usr/bin/sudo -u someuser /path/to/krun/scripts/run_krun_at_boot /path/to/your/config.krun
+exit 0
 ```
 
-Note that: the path to `Krun` must be an absolute paths for `cron` to be
-able to run it; and the config file must be an absolute path for `Krun` to
-be able to use it. Any arguments supplied after the config file path are
-passed to Krun unchanged.
+Make sure you replace the paths as appropriate and substitute `someuser` with
+the name of a normal unprivileged user that you wish to use to kick off Krun.
 
-You can then start the experiment with the same command (i.e. your `crontab(5)`
-line without the `@reboot`).
+Make sure `/etc/rc.local` is executable and that it only contains absolute
+paths. Note that `sudo(8)` is installed in different places on different
+operating systems (for OpenBSD, it's `/usr/local/bin/sudo`).
+
+Any arguments supplied after the config file path are passed to Krun unchanged.
+
+You can then start the experiment by manually running the command from your new
+`rc.local` (i.e. `sudo -u ...`).
 
 
 ### Monitoring progress
