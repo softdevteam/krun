@@ -8,6 +8,7 @@ before_install:
     - sudo apt-get install oracle-java8-installer
     - sudo apt-get install virt-what
     - sudo apt-get install pypy
+    - sudo apt-get install luajit
 
 install:
     - pip install -r requirements.txt
