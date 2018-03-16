@@ -79,7 +79,6 @@ ffi.cdef[[
 local libkruntime = ffi.load("kruntime")
 
 local krun_init = libkruntime.krun_init
-local krun_done = libkruntime.krun_done
 local krun_measure = libkruntime.krun_measure
 local krun_get_num_cores = libkruntime.krun_get_num_cores
 local krun_get_wallclock = libkruntime.krun_get_wallclock
@@ -164,7 +163,11 @@ for BM_i = 1, BM_iters, 1 do
     end
 end
 
-krun_done()
+-- In LuaJIT, FFI functions are cdata values that are unable to reference any other object owned by
+-- the garbage collector. Calling an FFI function which has been cached on the stack (as we've done above) 
+-- might fail because the parent FFI clib object may have been GC'd . By explicitly accessing krun_done via libkruntime
+-- here we guarantee libkruntime to live until this point.
+libkruntime.krun_done()
 
 io.stdout:write("{")
 
