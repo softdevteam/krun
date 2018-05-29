@@ -383,6 +383,9 @@ class BasePlatform(object):
         debug("Save power")
         self._save_power()
 
+    def clear_cpu_pinning(self):
+        pass
+
     @abstractmethod
     def _save_power(self):
         pass
@@ -914,8 +917,9 @@ class LinuxPlatform(UnixLikePlatform):
 
         if self.config.ENABLE_PINNING:
             self._check_cset_installed()
+            # Clear any leftover cpu pinning since it will break taskset
+            self.clear_cpu_pinning()
         self._check_isolcpus()
-        self._check_cset_shield()
         self._check_cpu_governor()
         self._check_cpu_scaler()
         self._check_perf_samplerate()
@@ -923,6 +927,8 @@ class LinuxPlatform(UnixLikePlatform):
             self._check_tickless_kernel()
         self._check_aslr_enabled()
         self._check_dmesg_unrestricted()
+        if self.config.ENABLE_PINNING:
+            self._check_cset_shield()
 
     def _find_virt_what(self):
         debug("Check virt-what is installed")
@@ -936,6 +942,12 @@ class LinuxPlatform(UnixLikePlatform):
         if exe is None:
             fatal("virt-what is not installed")
         return exe
+
+    def clear_cpu_pinning(self):
+        debug("Clearing cpuset")
+        args = self.change_user_args() + [LinuxPlatform.CSET_CMD, "shield", "-r"]
+        out, _, _ = run_shell_cmd(" ".join(args))
+        debug(out)
 
     # separate for testing
     def _configure_cset_shield_args(self):

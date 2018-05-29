@@ -675,6 +675,8 @@ class ExecutionScheduler(object):
             util.reboot(self.manifest, self.platform)
         elif self.manifest.num_execs_left == 0:
             self.platform.save_power()
+            if self.config.ENABLE_PINNING:
+                self.platform.clear_cpu_pinning()
 
             info("Done: Results dumped to %s" % self.config.results_filename())
             err_msg = "Errors/warnings occurred -- read the log!"
