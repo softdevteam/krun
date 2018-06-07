@@ -69,9 +69,9 @@
 #define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC
 #endif
 
-#if defined(__linux__)
-// pick up Krun syscall numbers -- requires custom kernel headers installed.
-#include <asm/unistd.h>
+#if defined(__linux__) && !defined(NO_MSRS)
+// pick up our Krun syscall numbers
+#include <sys/krun-syscall.h>
 #endif
 
 /*
@@ -302,14 +302,14 @@ krun_init(void)
     }
 
     /* Configure and reset CPU_CLK_UNHALTED.CORE on all CPUs */
-    err = syscall(__NR_krun_configure, krun_num_cores);
+    err = syscall(SYSCALL_KRUN_CONFIGURE, krun_num_cores);
     if (err) {
         fprintf(stderr, "krun_configure() syscall failed\n");
         exit(EXIT_FAILURE);
     }
 
     /* Reset all MSRs of interest */
-    syscall(__NR_krun_reset_msrs, krun_num_cores);
+    syscall(SYSCALL_KRUN_RESET_MSRS, krun_num_cores);
 
 #elif defined(__linux__) && defined(NO_MSRS)
 #elif defined(__OpenBSD__)
@@ -385,13 +385,13 @@ krun_measure(int mdata_idx)
      */
     if (mdata_idx == 0) {
         // taking pre-in-process-iteration readings
-        err = syscall(__NR_krun_read_msrs, krun_num_cores, false, data->aperf,
+        err = syscall(SYSCALL_KRUN_READ_MSRS, krun_num_cores, false, data->aperf,
             data->mperf, data->core_cycles);
         data->wallclock = krun_clock_gettime_monotonic();
     } else {
         // taking post-in-process-iteration readings
         data->wallclock = krun_clock_gettime_monotonic();
-        err = syscall(__NR_krun_read_msrs, krun_num_cores, true, data->aperf,
+        err = syscall(SYSCALL_KRUN_READ_MSRS, krun_num_cores, true, data->aperf,
             data->mperf, data->core_cycles);
     }
 

@@ -64,6 +64,9 @@ If you are unable to do this, you can set `NO_MSRS=1` in your Unix environment
 when building Krun (see later), but be aware that this degrades the quality of
 the resulting benchmarking numbers.
 
+Krun works on any version of the kernel if NO_MSRS=1 is set. If a suitable
+version of the Krun custom kernel (>= 4.9.88) is used, the MSRs are also
+available.
 
 ## Step 3: Fetch and build Krun
 
