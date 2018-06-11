@@ -732,6 +732,15 @@ class JavascriptVMDef(GenericScriptingVMDef):
     def __init__(self, vm_path, env=None):
         GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.js", env=env)
 
+    def run_exec(self, interpreter, iterations, param, heap_lim_k,
+                 stack_lim_k, key, key_pexec_idx, force_dir=None,
+                 sync_disks=True):
+        return self._generic_scripting_run_exec(interpreter, iterations, param,
+                                                heap_lim_k, stack_lim_k, key,
+                                                key_pexec_idx,
+                                                force_dir=force_dir,
+                                                sync_disks=sync_disks)
+
 
 class V8VMDef(JavascriptVMDef):
     def run_exec(self, entry_point, iterations, param, heap_lim_k,
