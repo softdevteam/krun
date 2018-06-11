@@ -116,8 +116,7 @@ for (BM_core = 0; BM_core < BM_num_cores; BM_core++) {
 // Main loop
 for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
     if (BM_debug) {
-        // Chakra doesn't support printing to stderr
-        //printErr("[iterations_runner.js] iteration " + (BM_i + 1) + "/" + BM_n_iters);
+        printErr("[iterations_runner.js] iteration " + (BM_i + 1) + "/" + BM_n_iters);
     }
 
     // Start timed section
