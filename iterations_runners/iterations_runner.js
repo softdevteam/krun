@@ -72,6 +72,10 @@ function usage() {
           "instrumentation mode only.\n";
 }
 
+// ChakraCore hack.
+// Doesn't support command line arguments so we load a script in which sets them.
+WScript.LoadScriptFile("/tmp/chakra_args.js");
+
 if (this.arguments.length < 4) {
     usage();
 }
@@ -86,7 +90,7 @@ if (BM_instrument && (this.arguments.length != 7)) {
     usage();
 }
 
-load(BM_entry_point);
+WScript.LoadScriptFile(BM_entry_point);
 
 krun_init();
 var BM_num_cores = krun_get_num_cores();
@@ -112,7 +116,8 @@ for (BM_core = 0; BM_core < BM_num_cores; BM_core++) {
 // Main loop
 for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
     if (BM_debug) {
-        printErr("[iterations_runner.js] iteration " + (BM_i + 1) + "/" + BM_n_iters);
+        // Chakra doesn't support printing to stderr
+        //printErr("[iterations_runner.js] iteration " + (BM_i + 1) + "/" + BM_n_iters);
     }
 
     // Start timed section
