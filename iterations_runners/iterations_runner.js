@@ -47,22 +47,22 @@
 //   krun_get_wallclock()
 
 function emitPerCoreResults(name, num_cores, ary) {
-    write('"' + name + '": [')
+    print('"' + name + '": [')
     for (core = 0; core < num_cores; core++) {
-        write("[")
+        print("[")
         for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
-            write(ary[core][BM_i]);
+            print(ary[core][BM_i]);
 
             if (BM_i < BM_n_iters - 1) {
-                write(", ")
+                print(", ")
             }
         }
-        write("]")
+        print("]")
         if (core < num_cores - 1) {
-            write(", ")
+            print(", ")
         }
     }
-    write("]")
+    print("]")
 }
 
 function usage() {
@@ -72,21 +72,17 @@ function usage() {
           "instrumentation mode only.\n";
 }
 
-// ChakraCore hack.
-// Doesn't support command line arguments so we load a script in which sets them.
-WScript.LoadScriptFile("/tmp/chakra_args.js");
-
-if (this.arguments.length < 4) {
+if (WScript.Arguments.length < 4) {
     usage();
 }
 
-var BM_entry_point = this.arguments[0];
-var BM_n_iters = parseInt(this.arguments[1]);
-var BM_param = parseInt(this.arguments[2]);
-var BM_debug = parseInt(this.arguments[3]) > 0;
-var BM_instrument = this.arguments.length >= 5;
+var BM_entry_point = WScript.Arguments[0];
+var BM_n_iters = parseInt(WScript.Arguments[1]);
+var BM_param = parseInt(WScript.Arguments[2]);
+var BM_debug = parseInt(WScript.Arguments[3]) > 0;
+var BM_instrument = WScript.Arguments.length >= 5;
 
-if (BM_instrument && (this.arguments.length != 7)) {
+if (BM_instrument && (WScript.Arguments.length != 7)) {
     usage();
 }
 
@@ -144,22 +140,22 @@ for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
 krun_done();
 
 // Emit measurements
-write("{")
+print("{")
 
-write('"wallclock_times": [')
+print('"wallclock_times": [')
 for (BM_i = 0; BM_i < BM_n_iters; BM_i++) {
-    write(BM_wallclock_times[BM_i]);
+    print(BM_wallclock_times[BM_i]);
 
     if (BM_i < BM_n_iters - 1) {
-        write(", ")
+        print(", ")
     }
 }
-write("], ")
+print("], ")
 
 emitPerCoreResults("core_cycle_counts", BM_num_cores, BM_cycle_counts)
-write(", ")
+print(", ")
 emitPerCoreResults("aperf_counts", BM_num_cores, BM_aperf_counts)
-write(", ")
+print(", ")
 emitPerCoreResults("mperf_counts", BM_num_cores, BM_mperf_counts)
 
-write("}")
+print("}")
