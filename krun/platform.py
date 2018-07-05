@@ -946,7 +946,7 @@ class LinuxPlatform(UnixLikePlatform):
     def clear_cpu_pinning(self):
         debug("Clearing cpuset")
         args = self.change_user_args() + [LinuxPlatform.CSET_CMD, "shield", "-r"]
-        out, _, _ = run_shell_cmd(" ".join(args))
+        out, _, _ = run_shell_cmd(" ".join(args), failure_fatal=False)
         debug(out)
 
     # separate for testing
