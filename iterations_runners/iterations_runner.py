@@ -45,7 +45,7 @@ usage: iterations_runner.py <benchmark> <# of iterations> <benchmark param>
 
 Arguments in [] are for instrumentation mode only."""
 
-import cffi, sys, imp, os
+import array, cffi, sys, imp, os
 
 
 ffi = cffi.FFI()
@@ -105,14 +105,13 @@ if __name__ == "__main__":
     num_cores = krun_get_num_cores()
 
     # Pre-allocate result lists
-    wallclock_times = [0] * iters
-    cycle_counts = [None] * num_cores
-    aperf_counts = [None] * num_cores
-    mperf_counts = [None] * num_cores
-    for core in xrange(num_cores):
-        cycle_counts[core] = [0] * iters
-        aperf_counts[core] = [0] * iters
-        mperf_counts[core] = [0] * iters
+    wallclock_times = array.array("d", [0.0] * iters)
+    # Although we can't be sure what size "L" actually is, if we generate ints
+    # it can't store, an OverflowError results, so there's no chance of silent
+    # truncation.
+    cycle_counts = [array.array("L", [0] * iters) for _ in range(num_cores)]
+    aperf_counts = [array.array("L", [0] * iters) for _ in range(num_cores)]
+    mperf_counts = [array.array("L", [0] * iters) for _ in range(num_cores)]
 
     # Main loop
     for i in xrange(iters):
@@ -158,10 +157,10 @@ if __name__ == "__main__":
 
     import json
     js = {
-        "wallclock_times": wallclock_times,
-        "core_cycle_counts": cycle_counts,
-        "aperf_counts": aperf_counts,
-        "mperf_counts": mperf_counts
+        "wallclock_times": list(wallclock_times),
+        "core_cycle_counts": list(cycle_counts),
+        "aperf_counts": list(aperf_counts),
+        "mperf_counts": list(mperf_counts)
     }
 
     sys.stdout.write("%s\n" % json.dumps(js))
