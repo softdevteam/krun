@@ -185,6 +185,11 @@ Commonly enabled services that you may wish to disable:
  * pflogd
  * sndiod
 
+Note that Krun is unable to check whether turbo mode is enabled on OpenBSD or
+not, and is also unable to use APERF/MPERF ratios to indirectly check whether
+turbo mode was used. You should therefore be particularly careful to check that
+turbo mode is disabled when benchmarking on OpenBSD.
+
 
 ## Step 5: Build and run the example
 
