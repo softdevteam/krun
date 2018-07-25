@@ -186,7 +186,7 @@ class BasePlatform(object):
         return (self.TEMP_OK, None)
 
     def _collect_dmesg_lines(self):
-        return run_shell_cmd("dmesg")[0].split("\n")
+        return []# run_shell_cmd("dmesg")[0].split("\n")
 
     def _timestamp_to_str(self, lt):
         return time.strftime(ABS_TIME_FORMAT, lt)
@@ -343,7 +343,7 @@ class BasePlatform(object):
     # And you may want to extend this
     def collect_audit(self):
         self.audit["uname"] = run_shell_cmd("uname -a")[0]
-        self.audit["dmesg"] = run_shell_cmd("dmesg")[0]
+        self.audit["dmesg"] = ""#run_shell_cmd("dmesg")[0]
         self.audit["krun_version"] = util.get_git_version()
         self.audit["cli_args"] = sys.argv
 
@@ -771,7 +771,7 @@ class LinuxPlatform(UnixLikePlatform):
         self.virt_what_cmd = self._find_virt_what()
         UnixLikePlatform.__init__(self, mailer, config)
         self.num_cpus = self._get_num_cpus()
-        self._load_modules(["msr"])
+        #self._load_modules(["msr"])
 
     def _load_modules(self, modules):
         for mod in modules:
@@ -922,11 +922,11 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_isolcpus()
         self._check_cpu_governor()
         self._check_cpu_scaler()
-        self._check_perf_samplerate()
+        #self._check_perf_samplerate()
         if not self.no_tickless_check:
             self._check_tickless_kernel()
         self._check_aslr_enabled()
-        self._check_dmesg_unrestricted()
+        #self._check_dmesg_unrestricted()
         if self.config.ENABLE_PINNING:
             self._check_cset_shield()
 
