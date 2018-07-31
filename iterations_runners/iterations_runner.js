@@ -91,22 +91,23 @@ load(BM_entry_point);
 krun_init();
 var BM_num_cores = krun_get_num_cores();
 
-// Pre-allocate and fill arrays
-var BM_wallclock_times = new Array(BM_n_iters);
-BM_wallclock_times.fill(0);
+// Pre-allocate and fill arrays.
+// We use typed arrays to encourage type stability.
+var BM_wallclock_times = new Float64Array(BM_n_iters);
+BM_wallclock_times.fill(NaN);
 
 var BM_cycle_counts = new Array(BM_num_cores);
 var BM_aperf_counts = new Array(BM_num_cores);
 var BM_mperf_counts = new Array(BM_num_cores);
 
 for (BM_core = 0; BM_core < BM_num_cores; BM_core++) {
-    BM_cycle_counts[BM_core] = new Array(BM_n_iters);
-    BM_aperf_counts[BM_core] = new Array(BM_n_iters);
-    BM_mperf_counts[BM_core] = new Array(BM_n_iters);
+    BM_cycle_counts[BM_core] = new Float64Array(BM_n_iters);
+    BM_aperf_counts[BM_core] = new Float64Array(BM_n_iters);
+    BM_mperf_counts[BM_core] = new Float64Array(BM_n_iters);
 
-    BM_cycle_counts[BM_core].fill(0);
-    BM_aperf_counts[BM_core].fill(0);
-    BM_mperf_counts[BM_core].fill(0);
+    BM_cycle_counts[BM_core].fill(NaN);
+    BM_aperf_counts[BM_core].fill(NaN);
+    BM_mperf_counts[BM_core].fill(NaN);
 }
 
 // Main loop
