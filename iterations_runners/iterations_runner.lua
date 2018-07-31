@@ -105,17 +105,18 @@ dofile(BM_benchmark)
 krun_init()
 local BM_num_cores = krun_get_num_cores()
 
--- Pre-allocate and fill results tables
+-- Pre-allocate and fill results tables.
+-- There doesn't appear to be a way to allocate the array all at once in Lua.
 local BM_wallclock_times = {}
 for BM_i = 1, BM_iters, 1 do
-    BM_wallclock_times[BM_i] = 0
+    BM_wallclock_times[BM_i] = -0.0
 end
 
 local BM_cycle_counts = {}
 for BM_core = 1, BM_num_cores, 1 do
     BM_cycle_counts[BM_core] = {}
     for BM_i = 1, BM_iters, 1 do
-        BM_cycle_counts[BM_core][BM_i] = 0
+        BM_cycle_counts[BM_core][BM_i] = -0.0
     end
 end
 
@@ -123,7 +124,7 @@ local BM_aperf_counts = {}
 for BM_core = 1, BM_num_cores, 1 do
     BM_aperf_counts[BM_core] = {}
     for BM_i = 1, BM_iters, 1 do
-        BM_aperf_counts[BM_core][BM_i] = 0
+        BM_aperf_counts[BM_core][BM_i] = -0.0
     end
 end
 
@@ -131,7 +132,7 @@ local BM_mperf_counts = {}
 for BM_core = 1, BM_num_cores, 1 do
     BM_mperf_counts[BM_core] = {}
     for BM_i = 1, BM_iters, 1 do
-        BM_mperf_counts[BM_core][BM_i] = 0
+        BM_mperf_counts[BM_core][BM_i] = -0.0
     end
 end
 

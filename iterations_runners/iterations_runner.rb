@@ -85,14 +85,14 @@ if __FILE__ == $0
     num_cores = krun_get_num_cores()
 
     # Pre-allocate result lists
-    wallclock_times = [0] * iters
+    wallclock_times = [-0.0] * iters
     cycle_counts = []
     aperf_counts = []
     mperf_counts = []
     for core in 0..num_cores - 1 do
-        cycle_counts[core] = [0] * iters
-        aperf_counts[core] = [0] * iters
-        mperf_counts[core] = [0] * iters
+        cycle_counts[core] = [-0.0] * iters
+        aperf_counts[core] = [-0.0] * iters
+        mperf_counts[core] = [-0.0] * iters
     end
 
     # Main loop
