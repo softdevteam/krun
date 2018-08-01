@@ -85,14 +85,14 @@ krun_init();
 $BM_num_cores = krun_get_num_cores();
 
 // Pre-allocate results arrays
-$BM_wallclock_times = array_fill(0, $BM_iters, 0);
+$BM_wallclock_times = array_fill(0, $BM_iters, -0.0);
 $BM_cycle_counts = array_fill(0, $BM_num_cores, array());
 $BM_aperf_counts = array_fill(0, $BM_num_cores, array());
 $BM_mperf_counts = array_fill(0, $BM_num_cores, array());
 for ($BM_core = 0; $BM_core < $BM_num_cores; $BM_core++) {
-    $BM_cycle_counts[$BM_core] = array_fill(0, $BM_iters, 0);
-    $BM_aperf_counts[$BM_core] = array_fill(0, $BM_iters, 0);
-    $BM_mperf_counts[$BM_core] = array_fill(0, $BM_iters, 0);
+    $BM_cycle_counts[$BM_core] = array_fill(0, $BM_iters, -0.0);
+    $BM_aperf_counts[$BM_core] = array_fill(0, $BM_iters, -0.0);
+    $BM_mperf_counts[$BM_core] = array_fill(0, $BM_iters, -0.0);
 }
 
 // Main loop

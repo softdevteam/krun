@@ -105,7 +105,7 @@ if __name__ == "__main__":
     num_cores = krun_get_num_cores()
 
     # Pre-allocate result lists
-    wallclock_times = array.array("d", [0.0] * iters)
+    wallclock_times = array.array("d", [-0.0] * iters)
     # Although we can't be sure what size "L" actually is, if we generate ints
     # it can't store, an OverflowError results, so there's no chance of silent
     # truncation.
@@ -158,9 +158,10 @@ if __name__ == "__main__":
     import json
     js = {
         "wallclock_times": list(wallclock_times),
-        "core_cycle_counts": list(cycle_counts),
-        "aperf_counts": list(aperf_counts),
-        "mperf_counts": list(mperf_counts)
+        # You can't JSON encode a typed array, so convert to lists.
+        "core_cycle_counts": [list(a) for a in cycle_counts],
+        "aperf_counts": [list(a) for a in aperf_counts],
+        "mperf_counts": [list(a) for a in mperf_counts],
     }
 
     sys.stdout.write("%s\n" % json.dumps(js))
