@@ -740,6 +740,8 @@ class LinuxPlatform(UnixLikePlatform):
     TEMP_SENSOR_INPUT_GLOB = "temp[0-9]*_input"
     IA32_MISC_ENABLE = 0x1a0
     IA32_MISC_ENABLE_TURBO_DISABLE = 1 << 38
+    OVERCOMMIT_POLICY_MIB = "vm.overcommit_memory"
+    OVERCOMMIT_POLICY_OFF = 2
 
     # Expected tickless kernel config
     #
@@ -929,6 +931,7 @@ class LinuxPlatform(UnixLikePlatform):
         self._check_dmesg_unrestricted()
         if self.config.ENABLE_PINNING:
             self._check_cset_shield()
+        self._check_overcommit()
 
     def _find_virt_what(self):
         debug("Check virt-what is installed")
@@ -1346,6 +1349,28 @@ class LinuxPlatform(UnixLikePlatform):
             self._fatal_kernel_arg(
                 "isolcpus", "isolcpus should not be in the kernel command line"
             )
+
+    def _check_overcommit(self):
+        """
+        Check that memory overcommit is totally disabled.
+        """
+
+        debug("Checking over-commit policy")
+
+        def get_overcommit_policy():
+            cmd = "%s sysctl %s" % (self.change_user_cmd, LinuxPlatform.OVERCOMMIT_POLICY_MIB)
+            out, _, _ = run_shell_cmd(cmd, failure_fatal=False)
+            return int(out.strip().split("=")[1])
+
+        if get_overcommit_policy() != LinuxPlatform.OVERCOMMIT_POLICY_OFF:
+            debug("Over-commit not disabled. Disabling now.")
+            cmd = "%s sysctl %s=%s" % (self.change_user_cmd,
+                                       LinuxPlatform.OVERCOMMIT_POLICY_MIB,
+                                       LinuxPlatform.OVERCOMMIT_POLICY_OFF)
+            run_shell_cmd(cmd, failure_fatal=False)
+            assert get_overcommit_policy() == LinuxPlatform.OVERCOMMIT_POLICY_OFF
+        else:
+            debug("Over-commit was already disabled.")
 
     def default_dmesg_whitelist(self):
         return [
