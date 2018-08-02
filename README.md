@@ -497,6 +497,7 @@ than one leads to undefined behaviour).
  * Detect virtualised hosts.
  * Unrestrict the dmesg buffer (Linux Kernel 4.8+)
  * Turn off "turbo boost" (Linux only)
+ * Turn off memory over-commit (Linux only).
 
 Please make sure you understand the implications of this.
 
