@@ -321,6 +321,29 @@ class BaseVMDef(object):
             return self.parse_instr_stderr_file(fh)
 
 
+class ExternalSuiteVMDef(BaseVMDef):
+    """Not really a "VM definition". This runs an arbitrary script which is
+    expected to run one process execution and write the results to stdout. This
+    is useful if you want to wrap an external benchmark suite, but note that
+    you won't get any of the advanced Krun goodies like A/MPERF ratio checks or
+    core-cycle counts."""
+
+    def __init__(self, script_path, env=None):
+        BaseVMDef.__init__(self, None, env=env, instrument=False)
+        self.script_path = script_path
+
+    def run_exec(self, _entry_point, iterations, param, heap_lim_k,
+                 stack_lim_k, key, key_pexec_idx, force_dir=None, sync_disks=True):
+        benchmark = key.split(":")[0]
+        args = [self.script_path, benchmark, str(iterations), str(param)]
+        return self._run_exec(args, heap_lim_k, stack_lim_k, key,
+                              key_pexec_idx, sync_disks=sync_disks)
+
+    def check_benchmark_files(self, _benchmark, _entry_point):
+        if not os.path.exists(self.script_path):
+            fatal("External script non-existent: %s" % self.script_path)
+
+
 class NativeCodeVMDef(BaseVMDef):
     """Not really a "VM definition" at all. Runs native code."""
 
