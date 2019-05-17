@@ -1,0 +1,58 @@
+import os
+from krun.vm_defs import ExternalSuiteVMDef
+
+# Who to mail
+MAIL_TO = []
+
+# Maximum number of error emails to send per-run
+#MAX_MAILS = 2
+
+DIR = os.getcwd()
+
+HEAP_LIMIT = 2097152  # KiB
+STACK_LIMIT = 8192  # KiB
+
+# Variant name -> EntryPoint
+VARIANTS = {
+    # Normally you'd have an EntryPoint on the right-hand side, but there's no
+    # such notion for the ExternalSuiteVMDef. Just pass None.
+    "default-ext": None,
+}
+
+ITERATIONS_ALL_VMS = 5  # Small number for testing.
+
+VMS = {
+    'Ext': {
+        'vm_def': ExternalSuiteVMDef(os.path.join(DIR, "ext_script.py")),
+        'variants': ['default-ext'],
+        'n_iterations': ITERATIONS_ALL_VMS,
+    },
+}
+
+BENCHMARKS = {
+    'fannkuch_redux': 100,
+    'nbody': 15,
+}
+
+# list of "bench:vm:variant"
+SKIP = []
+
+N_EXECUTIONS = 2  # Number of fresh processes.
+
+# No. of seconds to wait before taking the initial temperature reading.
+# You should set this high enough for the system to cool down a bit.
+# The default (if omitted) is 60 seconds.
+TEMP_READ_PAUSE = 1
+
+# Commands to run before and after each process execution
+#
+# Environment available for these commands:
+#   KRUN_RESULTS_FILE: path to results file.
+#   KRUN_LOG_FILE: path to log file.
+#   KRUN_ETA_DATUM: time the ETA was computed
+#   KRUN_ETA_VALUE: estimated time of completion
+#PRE_EXECUTION_CMDS = ["sudo service cron stop"]
+#POST_EXECUTION_CMDS = ["sudo service cron start"]
+
+# CPU pinning (off by default)
+#ENABLE_PINNING = False

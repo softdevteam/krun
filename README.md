@@ -272,23 +272,36 @@ Each benchmark should expose a function (or method) called `run_iter` which is
 the entry point to the benchmark. To preserve source code history, it can
 be easiest to put this function in a new file, which then imports the benchmark.
 
-New VMs require some support in Krun. The following VMs are currently supported
-out of the box:
+With regards to VM/compiler support, there are two ways Krun can invoke a
+benchmark:
 
-  * OpenJDK (i.e. Hotspot)
-  * GraalVM
-  * cPython
-  * Lua
-  * PHP
-  * Ruby
-  * TruffleRuby
-  * Javascript V8
+  * Via a dedicated "VM definition" (e.g. `JavaVMDef`).
+  * Via an external benchmark suite (`ExternalSuiteVMDef`).
 
-To add a new VM definition, add a new class to `krun/vm_defs.py` and a
-new iteration runner to the `iterations_runners` directory.
+The former option is best, as it supports Krun's core-cycle counting and
+APERF/MPERF ratio features. The following compilers/VMs are currently supported
+for this mode:
+
+  * Native code languages (`NativeCodeVMDef`).
+  * OpenJDK. (i.e. Hotspot) (`JavaVMDef`).
+  * GraalVM (`GraalVMDef`).
+  * cPython (`PythonVMDef`).
+  * Lua (`LuaVMDef`).
+  * PHP (`PHPVMDef`).
+  * Ruby (`RubyVMDef`).
+  * TruffleRuby (`TruffleRubyVMDef`).
+  * Javascript V8 (`V8VMDef`).
+
+If your VM isn't listed, you can either add it to Krun, or use the external
+suite definition (see below). To add a new VM definition, add a new class to
+`krun/vm_defs.py` and a new iteration runner to the `iterations_runners`
+directory.
+
+The latter option -- `ExternalSuiteVMDef` -- is useful if you want to quickly
+wrap an existing benchmark suite. For an example see `examples/ext.krun` and
+`examples/ext_script.py`.
 
 To add a new platform definition, add a new class to `krun/platform.py`.
-
 
 ## Testing your configurations
 
