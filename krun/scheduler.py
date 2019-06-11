@@ -404,6 +404,9 @@ class ExecutionJob(object):
         stack_limit_kb = self.sched.config.STACK_LIMIT
         in_proc_iters = self.vm_info["n_iterations"]
 
+        if not dry_run:
+            self.sched.platform.collect_starting_throttle_counts()
+
         stdout, stderr, rc, envlog_filename = \
             vm_def.run_exec(entry_point, in_proc_iters, self.parameter,
                             heap_limit_kb, stack_limit_kb, self.key,
@@ -411,6 +414,7 @@ class ExecutionJob(object):
 
         if not dry_run:
             try:
+                self.sched.platform.check_throttle_counts(self.sched.manifest)
                 measurements = util.check_and_parse_execution_results(
                     stdout, stderr, rc, self.sched.config, instrument=vm_def.instrument)
                 flag = "C"

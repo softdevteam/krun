@@ -96,6 +96,7 @@ class BasePlatform(object):
             fatal("No usable temperature sensors!")
 
         self.last_dmesg = None
+        self.throttle_counts = None
 
     def _libkrun_num_cores(self):
         """Ask libkrun how many per-core readings we are expecting"""
@@ -426,6 +427,37 @@ class BasePlatform(object):
         """Get the number of temperature sensors"""
         pass
 
+    @abstractmethod
+    def _read_throttle_counts(self):
+        """Reads throttle counters from the OS and returns a dict mapping the
+        throttle name to an integer."""
+        pass
+
+    def collect_starting_throttle_counts(self):
+        """Stores the starting throttle counts"""
+        self.throttle_counts = self._read_throttle_counts()
+
+    def check_throttle_counts(self, manifest):
+        """Checks if the CPU throttled during benchmarking (according to
+        throttle counters) in which case a RerunExecution exception is
+        raised."""
+
+        def throttle_lines(dct):
+            lines = []
+            for k in sorted(dct):
+                lines.append("%s = %d" % (k, dct[k]))
+            return lines
+
+        counts = self._read_throttle_counts()
+        if counts != self.throttle_counts:
+            differ = difflib.Differ()
+            delta_lines = differ.compare(throttle_lines(self.throttle_counts),
+                                         throttle_lines(counts))
+            msg = "Throttle counts changed!\n\n"
+            msg += "\n".join(
+                [l for l in delta_lines if not l[0:2] in ["  ", "? "]])
+            raise util.RerunExecution(msg)
+
 
 class UnixLikePlatform(BasePlatform):
     """A UNIX-like platform, e.g. Linux, BSD, Solaris"""
@@ -721,6 +753,9 @@ class OpenBSDPlatform(UnixLikePlatform):
         # in OpenBSD-current (as of around 6.0-beta)
         return ["^.*\([0-9]+\): .*W\^X violation$"]
 
+    def _read_throttle_counts(self):
+        return {}  # Not supported on OpenBSD.
+
 
 class LinuxPlatform(UnixLikePlatform):
     """Deals with aspects generic to all Linux distributions. """
@@ -742,6 +777,7 @@ class LinuxPlatform(UnixLikePlatform):
     IA32_MISC_ENABLE_TURBO_DISABLE = 1 << 38
     OVERCOMMIT_POLICY_MIB = "vm.overcommit_memory"
     OVERCOMMIT_POLICY_OFF = 2
+    THROTTLE_DIRS_FMT = "/sys/devices/system/cpu/cpu%d/thermal_throttle"
 
     # Expected tickless kernel config
     #
@@ -1417,6 +1453,18 @@ class LinuxPlatform(UnixLikePlatform):
         # Needed on Linux because the default mail spool ownership causes
         # non-zero userdel exit status.
         return ["-f"]  # force
+
+    def _read_throttle_counts(self):
+        debug("reading throttle counts")
+        counts = {}
+        for core in xrange(self.num_cpus):
+            throttle_dir = LinuxPlatform.THROTTLE_DIRS_FMT % core
+            for file in glob.glob(os.path.join(throttle_dir, "*")):
+                with open(file) as fh:
+                    val = int(fh.read().strip())
+                counts[file] = val
+        debug("throttle counts: %s", counts)
+        return counts
 
 
 class DebianLinuxPlatform(LinuxPlatform):
