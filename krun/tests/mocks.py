@@ -146,6 +146,9 @@ class MockPlatform(BasePlatform):
     def get_num_temperature_sensors(self):
         return 1
 
+    def _read_throttle_counts(self):
+        return {}
+
 
 @pytest.fixture
 def mock_platform():

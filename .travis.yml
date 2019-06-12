@@ -6,7 +6,7 @@ python: 2.7
 before_install:
     - sudo apt-get update -qq
     - sudo apt-get install linux-libc-dev libc6-dev
-    - sudo apt-get install oracle-java8-installer
+    - sudo apt-get install default-jdk
     - sudo apt-get install virt-what
     - sudo apt-get install pypy
     - sudo apt-get install luajit
@@ -17,7 +17,6 @@ install:
 
 script:
     - sudo update-java-alternatives -l || true  # returns 1 on success!
-    - sudo update-java-alternatives -s `sudo update-java-alternatives -l | grep 8-oracle | awk '{print $1}'`
     - uname -a
     - make --version
     - ldd --version
