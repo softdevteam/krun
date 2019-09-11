@@ -85,6 +85,7 @@ If you want to benchmark Java programs, you need to set the
 set several other flags:
 
 ```sh
+$ make clean
 $ JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/ make  \
     JAVA_CPPFLAGS='"-I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux"' \
     JAVA_LDFLAGS=-L${JAVA_HOME}/lib ENABLE_JAVA=1
@@ -209,7 +210,8 @@ $ make
 ```
 
 If you also want to try the example Java benchmarks, you must build them
-as a separate step:
+as a separate step. Additionally, be sure to have compiled Krun with Java
+support as described in Step 3
 
 ```sh
 $ pwd
@@ -483,6 +485,21 @@ $ python krun.py --dump-reboots examples/example_results.json.bz2
 [2015-11-06 13:14:35: INFO] Krun starting...
 8
 ```
+
+## Troubleshooting
+
+### `java.lang.UnsatisfiedLinkError` Error
+
+The following error in the log file is indicative that Krun has not been
+compiled with Java support:
+
+```
+Exception in thread "main" java.lang.UnsatisfiedLinkError: IterationsRunner.JNI_krun_init()V
+	at IterationsRunner.JNI_krun_init(Native Method)
+	at IterationsRunner.main(iterations_runner.java:248)
+```
+
+See Step 3 on how to build with Java support.
 
 
 ## Unit Tests
