@@ -1,4 +1,5 @@
 #!/usr/bin/env python2.7
+
 """Check the environment logs of many pexecs for similarity.
 
 Usage: check_envlogs.py <envlog dir>
