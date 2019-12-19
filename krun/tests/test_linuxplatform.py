@@ -1,5 +1,6 @@
 import pytest
 import krun.platform
+from distutils.spawn import find_executable
 from krun.platform import LinuxPlatform
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import FatalKrunError, run_shell_cmd
@@ -7,6 +8,8 @@ from krun.vm_defs import  PythonVMDef
 from krun.tests.mocks import mock_manifest
 import sys
 from StringIO import StringIO
+
+DASH = find_executable("dash")
 
 
 def mk_dummy_kernel_config_fn(options_dct):
@@ -182,7 +185,7 @@ class TestLinuxPlatform(BaseKrunTest):
         wrapper_filename = "abcdefg.dash"
         got = vm_def._wrapper_args(wrapper_filename)
         expect = ['/usr/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
-                  '/usr/bin/sudo', '-u', 'krun', '/bin/dash', wrapper_filename]
+                  '/usr/bin/sudo', '-u', 'krun', DASH, wrapper_filename]
         assert got == expect
 
     def test_wrapper_args0002(self, platform):
@@ -193,7 +196,7 @@ class TestLinuxPlatform(BaseKrunTest):
         wrapper_filename = "abcdefg.dash"
         got = vm_def._wrapper_args(wrapper_filename)
         expect = ['/usr/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
-                  '/usr/bin/sudo', '-u', 'krun', '/bin/dash', wrapper_filename]
+                  '/usr/bin/sudo', '-u', 'krun', DASH, wrapper_filename]
         assert got == expect
 
     def test_take_temperature_readings0001(self, platform):
