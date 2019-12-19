@@ -68,6 +68,21 @@ Krun works on any version of the kernel if NO_MSRS=1 is set. If a suitable
 version of the Krun custom kernel (>= 4.9.88) is used, the MSRs are also
 available.
 
+### Tickless Kernel
+
+Unless `--no-tickless-check` is passed to Krun, all cores but the boot core
+are  expected to be in full adaptive ticks mode (tickless mode).
+
+On older kernels which still have the `CONFIG_NO_HZ_FULL_ALL` config option,
+build the kernel with this set to "y".
+
+On newer kernels, where `CONFIG_NO_HZ_FULL_ALL` is absent, you will have to add
+a `nohz_full=1-N` kernel command line option (where N is the number of cores
+your system has, minus one).
+
+If your system has only one core then tickless mode is not checked, as the boot
+core (i.e. your only core) cannot be placed into adaptive ticks mode.
+
 ## Step 3: Fetch and build Krun
 
 First fetch Krun:

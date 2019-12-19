@@ -1,5 +1,6 @@
 import pytest
 import krun.platform
+from distutils.spawn import find_executable
 from krun.platform import LinuxPlatform
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import FatalKrunError, run_shell_cmd
@@ -7,6 +8,8 @@ from krun.vm_defs import  PythonVMDef
 from krun.tests.mocks import mock_manifest
 import sys
 from StringIO import StringIO
+
+DASH = find_executable("dash")
 
 
 def mk_dummy_kernel_config_fn(options_dct):
@@ -31,13 +34,19 @@ class TestLinuxPlatform(BaseKrunTest):
             "CONFIG_NO_HZ_PERIODIC": "n",
             "CONFIG_NO_HZ_IDLE": "n",
             "CONFIG_NO_HZ_FULL": "y",
-            "CONFIG_NO_HZ_FULL_ALL": "y",
+            # CONFIG_NO_HZ_FULL_ALL is absent on new kernels.
         }
 
         mock_open_kernel_config_file = mk_dummy_kernel_config_fn(opts)
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
+
+        def wrap_get_kernel_cmdline(self):
+            return "nohz_full=1-%s" % (platform.num_cpus - 1)
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_get_kernel_cmdline",
+                            wrap_get_kernel_cmdline)
 
         krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
@@ -97,7 +106,8 @@ class TestLinuxPlatform(BaseKrunTest):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_tickless0005(self, monkeypatch, platform, caplog):
-        """Adaptive-tick mode CPUs should not be overridden"""
+        """Adaptive-tick mode CPUs should not be overridden if kernel has
+        CONFIG_NO_HZ_FULL_ALL"""
 
         def dummy_get_kernel_cmdline(_self):
             # nohz_full overrides adaptive-tick CPU list
@@ -121,7 +131,7 @@ class TestLinuxPlatform(BaseKrunTest):
         with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
-        assert "Adaptive-ticks CPUs overridden on kernel command line" \
+        assert "CONFIG_NO_HZ_FULL_ALL overridden on kernel command line" \
             in caplog.text()
 
     def test_bench_cmdline_adjust0001(self, platform):
@@ -175,7 +185,7 @@ class TestLinuxPlatform(BaseKrunTest):
         wrapper_filename = "abcdefg.dash"
         got = vm_def._wrapper_args(wrapper_filename)
         expect = ['/usr/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
-                  '/usr/bin/sudo', '-u', 'krun', '/bin/dash', wrapper_filename]
+                  '/usr/bin/sudo', '-u', 'krun', DASH, wrapper_filename]
         assert got == expect
 
     def test_wrapper_args0002(self, platform):
@@ -186,7 +196,7 @@ class TestLinuxPlatform(BaseKrunTest):
         wrapper_filename = "abcdefg.dash"
         got = vm_def._wrapper_args(wrapper_filename)
         expect = ['/usr/bin/sudo', '-u', 'root', '/usr/bin/nice', '-n', '-20',
-                  '/usr/bin/sudo', '-u', 'krun', '/bin/dash', wrapper_filename]
+                  '/usr/bin/sudo', '-u', 'krun', DASH, wrapper_filename]
         assert got == expect
 
     def test_take_temperature_readings0001(self, platform):
