@@ -11,7 +11,7 @@ def test_env_change_set(monkeypatch, caplog):
     assert env.val == 1685
     with pytest.raises(FatalKrunError):
         env.apply({"bach": 1695})
-    assert "Environment bach is already defined" in caplog.text()
+    assert "Environment bach is already defined" in caplog.text
 
 
 def test_env_change_set_apply():

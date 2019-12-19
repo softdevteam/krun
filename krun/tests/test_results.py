@@ -112,7 +112,7 @@ class TestResults(BaseKrunTest):
             fake_results.integrity_check()
 
         expect = "inconsistent etas length: bench:vm:variant: 1 vs 2"
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
     def test_integrity_check_results0003(self, fake_results, caplog):
         # remove a per-core measurement
@@ -121,7 +121,7 @@ class TestResults(BaseKrunTest):
             fake_results.integrity_check()
 
         expect = "inconsistent cycles length: bench:vm:variant: 1 vs 2"
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
     def test_integrity_check_results0004(self, fake_results, caplog):
         # remove a core from a per-core measurement
@@ -130,7 +130,7 @@ class TestResults(BaseKrunTest):
             fake_results.integrity_check()
 
         expect = "wrong #cores in core_cycle_counts: bench:vm:variant[0]: 2 vs 1"
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
     def test_integrity_check_results0005(self, fake_results, caplog):
         # remove an in-proc iteration from a per-core measurement
@@ -139,4 +139,4 @@ class TestResults(BaseKrunTest):
             fake_results.integrity_check()
 
         expect = "inconsistent #iters in core_cycle_counts: bench:vm:variant[0][0]. 1 vs 2"
-        assert expect in caplog.text()
+        assert expect in caplog.text

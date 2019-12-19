@@ -68,7 +68,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         with pytest.raises(FatalKrunError):
             platform.take_temperature_readings()
 
-        assert "Odd non-degC value" in caplog.text()
+        assert "Odd non-degC value" in caplog.text
 
     def test_read_broken_temperatures0002(self, monkeypatch, platform, caplog):
         platform.temp_sensors = ["hw.sensors.some_temp0"]
@@ -83,7 +83,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
         with pytest.raises(FatalKrunError):
             platform.take_temperature_readings()
 
-        assert "Non-numeric value" in caplog.text()
+        assert "Non-numeric value" in caplog.text
 
     def test_read_broken_temperatures0003(self, monkeypatch, platform, caplog):
         platform.temp_sensors = ["hw.sensors.some_temp0"]
@@ -98,19 +98,19 @@ class TestOpenBSDPlatform(BaseKrunTest):
         with pytest.raises(FatalKrunError):
             platform.take_temperature_readings()
 
-        assert "Odd non-degC value" in caplog.text()
+        assert "Odd non-degC value" in caplog.text
 
     def test_apm_state0001(self, platform, caplog):
         run_shell_cmd("apm -C")  # cool mode; forces krun to change this.
 
         platform._check_apm_state()
 
-        if "hw.setperf is not available" in caplog.text():
+        if "hw.setperf is not available" in caplog.text:
             pytest.skip()
 
-        assert "performance mode is not manual" in caplog.text()
+        assert "performance mode is not manual" in caplog.text
         # Hard to check hw.setperf, as it may well be temproarily 100
-        assert "adjusting performance mode" in caplog.text()
+        assert "adjusting performance mode" in caplog.text
 
         out, err, rc = run_shell_cmd("test `sysctl hw.setperf` == 'hw.setperf=100'")
         assert out == err == ""
@@ -129,7 +129,7 @@ class TestOpenBSDPlatform(BaseKrunTest):
 
         with pytest.raises(FatalKrunError):
             platform._check_apm_state()
-        assert "Expected 3 lines of output from apm(8)" in caplog.text()
+        assert "Expected 3 lines of output from apm(8)" in caplog.text
 
     def test_save_power0001(self, platform):
         run_shell_cmd("apm -H")

@@ -37,7 +37,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         expect = ("Temperature timeout: Temperature reading 'x' not "
                   "within interval: (27 <= 999 <= 33)")
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
     def test_temperature_thresholds0003(self, mock_platform, monkeypatch, caplog):
         temps = {"x": 30.0}
@@ -54,7 +54,7 @@ class TestGenericPlatform(BaseKrunTest):
 
         expect = ("Temperature timeout: Temperature reading 'x' not "
                   "within interval: (27 <= -999 <= 33)")
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
     def test_temperature_thresholds0004(self, mock_platform, monkeypatch, caplog):
         temps = {"x": 30.0}
@@ -109,7 +109,7 @@ class TestGenericPlatform(BaseKrunTest):
             platform.take_temperature_readings()
 
         expect = "Failed to read sensor"
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
 
     def test_inconsistent_sensors0002(self, platform, caplog):
@@ -119,7 +119,7 @@ class TestGenericPlatform(BaseKrunTest):
             platform.starting_temperatures = {"a": 1000, "b": 2000}
 
         expect = "Inconsistent sensors. ['a', 'b'] vs ['different', 'sensors']"
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
     def test_inconsistent_sensors0003(self, platform, caplog):
         platform.temp_sensors = ["a"]
@@ -128,7 +128,7 @@ class TestGenericPlatform(BaseKrunTest):
             platform.starting_temperatures = {"a": 1000, "b": 2000}
 
         expect = "Inconsistent sensors. ['a', 'b'] vs ['a']"
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
     def test_dmesg_filter0001(self, mock_platform, caplog, mock_manifest):
         last_dmesg = ["line1", "line2"]
@@ -139,8 +139,8 @@ class TestGenericPlatform(BaseKrunTest):
             [], last_dmesg, new_dmesg, mock_manifest)
 
         # and the log will indicate this also
-        assert "New dmesg lines" in caplog.text()
-        assert "\nline3" in caplog.text()
+        assert "New dmesg lines" in caplog.text
+        assert "\nline3" in caplog.text
 
     def test_dmesg_filter0002(self, mock_platform, caplog, mock_manifest):
         last_dmesg = ["line1", "line2"]
@@ -169,9 +169,9 @@ class TestGenericPlatform(BaseKrunTest):
         # line5 is a problem
         assert mock_platform._check_dmesg_for_changes(
             [], last_dmesg, new_dmesg, mock_manifest)
-        assert "\nline5\n" in caplog.text()
+        assert "\nline5\n" in caplog.text
         for num in xrange(1, 5):
-            assert not ("\nline%s\n" % num) in caplog.text()
+            assert not ("\nline%s\n" % num) in caplog.text
 
     def test_dmesg_filter0005(self, mock_platform, caplog, mock_manifest):
         # simulate 2 lines falling off the top of the dmesg buffer, *and* a
