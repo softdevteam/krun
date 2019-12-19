@@ -31,13 +31,19 @@ class TestLinuxPlatform(BaseKrunTest):
             "CONFIG_NO_HZ_PERIODIC": "n",
             "CONFIG_NO_HZ_IDLE": "n",
             "CONFIG_NO_HZ_FULL": "y",
-            "CONFIG_NO_HZ_FULL_ALL": "y",
+            # CONFIG_NO_HZ_FULL_ALL is absent on new kernels.
         }
 
         mock_open_kernel_config_file = mk_dummy_kernel_config_fn(opts)
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
+
+        def wrap_get_kernel_cmdline(self):
+            return "nohz_full=1-%s" % (platform.num_cpus - 1)
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_get_kernel_cmdline",
+                            wrap_get_kernel_cmdline)
 
         krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
@@ -97,7 +103,8 @@ class TestLinuxPlatform(BaseKrunTest):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_tickless0005(self, monkeypatch, platform, caplog):
-        """Adaptive-tick mode CPUs should not be overridden"""
+        """Adaptive-tick mode CPUs should not be overridden if kernel has
+        CONFIG_NO_HZ_FULL_ALL"""
 
         def dummy_get_kernel_cmdline(_self):
             # nohz_full overrides adaptive-tick CPU list
@@ -121,7 +128,7 @@ class TestLinuxPlatform(BaseKrunTest):
         with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
-        assert "Adaptive-ticks CPUs overridden on kernel command line" \
+        assert "CONFIG_NO_HZ_FULL_ALL overridden on kernel command line" \
             in caplog.text()
 
     def test_bench_cmdline_adjust0001(self, platform):

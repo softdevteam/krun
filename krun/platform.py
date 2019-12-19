@@ -754,17 +754,10 @@ class LinuxPlatform(UnixLikePlatform):
         # Omit scheduler ticks when CPU is idle.
         "CONFIG_NO_HZ_IDLE": False,
 
-        # Omit scheduler ticks when an adaptive tick CPU has only one
-        # runnable process. This enables the tickless functionality, but the
-        # system admin must manually specify on adaptive-tick CPUs via
-        # the kernel command line. By default, no CPUs are adaptive tick,
-        # so we insist also upon CONFIG_NO_HZ_FULL_ALL.
+        # Omit scheduler ticks when an adaptive tick CPU has only one runnable
+        # process. By default, no CPUs are adaptive tick and the user must turn
+        # in on per-core.
         "CONFIG_NO_HZ_FULL": True,
-
-        # Same as CONFIG_NO_HZ_FULL, but forces all CPUs apart from the
-        # boot CPU into adaptive tick mode. This is what we want to
-        # see enabled. Note that you cannot have all CPUs in adaptive-tick.
-        "CONFIG_NO_HZ_FULL_ALL": True,
     }
 
     def __init__(self, mailer, config):
@@ -1036,8 +1029,21 @@ class LinuxPlatform(UnixLikePlatform):
 
         debug("Checking linux kernel is tickless")
 
+        if self.num_cpus == 1:
+            # Tickless mode doesn't make sense on a single-CPU system, as you
+            # need at least one non-adaptive-ticks CPU to do various
+            # book-keeping.
+            debug("Only one CPU. Tickless irrelevant")
+            return
+
         # Start with all keys mapping to False
         modes = {k: False for k in self.EXPECT_TICKLESS_CONFIG.iterkeys()}
+
+        # CONFIG_NO_HZ_FULL_ALL is used only in older Linux kernels. It forces
+        # all CPUs apart from the boot CPU into adaptive tick mode. This is
+        # desirable, but on newer kernels this option is gone, and you have to
+        # set a kernel command line argument.
+        config_no_hz_full_all = None
 
         # Walk kernel config looking for a lines describing tickless operation
         fh = LinuxPlatform._open_kernel_config_file()
@@ -1047,6 +1053,9 @@ class LinuxPlatform(UnixLikePlatform):
                 continue
 
             k, v = line.split("=")
+
+            if k == "CONFIG_NO_HZ_FULL_ALL":
+                config_no_hz_full_all = v
 
             if k not in modes:
                 continue
@@ -1068,13 +1077,40 @@ class LinuxPlatform(UnixLikePlatform):
             msg += "Got: %s\n" % modes
             fatal(msg)
 
-        # Finally, check the adaptive tick CPUs were not overrideen
+        # Finally, check the tickless config on the kernel command line.
         cmdline = self._get_kernel_cmdline()
-        if "nohz_full" in cmdline:
-            msg = "Adaptive-ticks CPUs overridden on kernel command line:\n"
-            msg += "%s\n" % cmdline
-            msg += "Please remove 'nohz_full' from the kernel command line"
-            fatal(msg)
+        if config_no_hz_full_all is not None:
+            # Older kernel that uses CONFIG_NO_HZ_FULL_ALL.
+            if config_no_hz_full_all != "y":
+                msg = "CONFIG_NO_HZ_FULL_ALL = 'n'.\n"
+                msg += "For kernels using this, it should be set to 'y'"
+                fatal(msg)
+
+            if "nohz_full" in cmdline:
+                msg = ("CONFIG_NO_HZ_FULL_ALL overridden on kernel command "
+                       "line:\n")
+                msg += "%s\n" % cmdline
+                msg += "Please remove 'nohz_full' from the kernel command line"
+                fatal(msg)
+        else:
+            # Newer kernel after CONFIG_NO_HZ_FULL_ALL was removed.
+            if "nohz_full" not in cmdline:
+                msg = "nohz_full not specified on kernel command line\n"
+                msg += ("Please add 'nohz_full=1-%s' to the kernel command "
+                        "line" % (self.num_cpus - 1))
+                fatal(msg)
+
+            arg = cmdline[cmdline.index("nohz_full="):]
+            if " " in arg:
+                arg = arg[:arg.index(' ')]
+            _, cores = arg.split("=")
+
+            expect = "1-%s" % (self.num_cpus - 1)
+            if cores != expect:
+                msg = "nohz_full kernel command line incorrect\n"
+                msg += "%s\n" % cmdline
+                msg += ("Please set 'nohz_full=1-%s'" % (self.num_cpus - 1))
+                fatal(msg)
 
         debug(tickless_info_msg)
 
