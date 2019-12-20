@@ -1,10 +1,11 @@
 import pytest
+import logging
 import krun.platform
 from distutils.spawn import find_executable
 from krun.platform import LinuxPlatform
 from krun.tests import BaseKrunTest, subst_env_arg
 from krun.util import FatalKrunError, run_shell_cmd
-from krun.vm_defs import  PythonVMDef
+from krun.vm_defs import PythonVMDef
 from krun.tests.mocks import mock_manifest
 import sys
 from StringIO import StringIO
@@ -132,7 +133,7 @@ class TestLinuxPlatform(BaseKrunTest):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
         assert "CONFIG_NO_HZ_FULL_ALL overridden on kernel command line" \
-            in caplog.text()
+            in caplog.text
 
     def test_bench_cmdline_adjust0001(self, platform):
         expect = ['env', 'LD_LIBRARY_PATH=']
@@ -282,6 +283,8 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_collect_temperature_sensor_globs",
                             fake_collect_temperature_sensor_globs)
+
+        caplog.set_level(logging.DEBUG)
         platform = krun.platform.detect_platform(None, None)
         assert platform.temp_sensor_map == {
             'coretemp:5:temp4_input': '/sys/class/hwmon/hwmon0/temp4_input',
@@ -291,7 +294,7 @@ class TestLinuxPlatform(BaseKrunTest):
             '__krun_unknown_chip_name:1:temp1_input':
                 '/sys/class/hwmon/hwmon1/temp1_input',
             'coretemp:5:temp5_input': '/sys/class/hwmon/hwmon0/temp5_input'}
-        assert "Un-named temperature sensor chip found" in caplog.text()
+        assert "Un-named temperature sensor chip found" in caplog.text
 
     def test_find_temperature_sensors0003(self, monkeypatch, caplog):
         """Test two un-named chips with the same number of sensors"""
@@ -312,6 +315,8 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_collect_temperature_sensor_globs",
                             fake_collect_temperature_sensor_globs)
+
+        caplog.set_level(logging.DEBUG)
         platform = krun.platform.detect_platform(None, None)
         # The duplicate chips should be ignored
         assert platform.temp_sensor_map == {
@@ -321,7 +326,7 @@ class TestLinuxPlatform(BaseKrunTest):
             'coretemp:5:temp2_input': '/sys/class/hwmon/hwmon0/temp2_input',
             'coretemp:5:temp1_input': '/sys/class/hwmon/hwmon0/temp1_input'
         }
-        log = caplog.text()
+        log = caplog.text
         assert "Un-named temperature sensor chip found" in log
         assert ("Found duplicate chips named '%s' with 1 temperature sensor(s)"
                 % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME) in log
@@ -347,6 +352,8 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_collect_temperature_sensor_globs",
                             fake_collect_temperature_sensor_globs)
+
+        caplog.set_level(logging.DEBUG)
         platform = krun.platform.detect_platform(None, None)
         # The duplicate chips should be ignored
         assert platform.temp_sensor_map == {
@@ -356,7 +363,7 @@ class TestLinuxPlatform(BaseKrunTest):
             'coretemp:5:temp2_input': '/sys/class/hwmon/hwmon0/temp2_input',
             'coretemp:5:temp1_input': '/sys/class/hwmon/hwmon0/temp1_input'
         }
-        log = caplog.text()
+        log = caplog.text
         assert "Un-named temperature sensor chip found" in log
         assert ("Found duplicate chips named '%s' with 1 temperature sensor(s)"
                 % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME) in log
@@ -380,6 +387,8 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_collect_temperature_sensor_globs",
                             fake_collect_temperature_sensor_globs)
+
+        caplog.set_level(logging.DEBUG)
         platform = krun.platform.detect_platform(None, None)
         assert platform.temp_sensor_map == {
             # First un-named chip
@@ -391,7 +400,7 @@ class TestLinuxPlatform(BaseKrunTest):
             '%s:2:temp2_input' % LinuxPlatform.UNKNOWN_SENSOR_CHIP_NAME:
                 '/sys/class/hwmon/hwmon1/temp2_input',
         }
-        log = caplog.text()
+        log = caplog.text
         assert "Un-named temperature sensor chip found" in log
 
     def test_isolcpus0001(self, platform, monkeypatch, caplog):
@@ -406,7 +415,7 @@ class TestLinuxPlatform(BaseKrunTest):
             platform._check_isolcpus()
 
         find = "isolcpus should not be in the kernel command line"
-        assert find in caplog.text()
+        assert find in caplog.text
 
     def test_is_virtual0001(self, platform):
         """check that virtualisation check doesn't crash"""
@@ -439,6 +448,8 @@ class TestLinuxPlatform(BaseKrunTest):
             platform.get_dmesg_whitelist(), old_lines, new_lines, mock_manifest)
 
     def test_aslr0001(self, platform, caplog):
+        caplog.set_level(logging.DEBUG)
+
         # get current ASLR value
         with open(LinuxPlatform.ASLR_FILE, "r") as fh:
             old_val = fh.read().strip()
@@ -453,7 +464,7 @@ class TestLinuxPlatform(BaseKrunTest):
         with open(LinuxPlatform.ASLR_FILE, "r") as fh:
             new_val = fh.read().strip()
         assert new_val == '2'
-        assert "Adjust ASLR" in caplog.text()
+        assert "Adjust ASLR" in caplog.text
 
         # Restore old value
         cmd = "%s sh -c 'echo %s > %s'" % \

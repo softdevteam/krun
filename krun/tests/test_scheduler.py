@@ -47,9 +47,9 @@ def no_envlogs(monkeypatch):
     monkeypatch.setattr(util, 'stash_envlog', dummy_stash_envlog)
 
 
-def emulate_first_reboot(platform, config, monkeypatch):
-    no_results_instantiation_check(monkeypatch)
-
+# Tests calling this should also use the `no_results_instantiation_check`
+# fixture.
+def emulate_first_reboot(platform, config):
     platform.starting_temperatures = platform.take_temperature_readings()
     manifest = ManifestManager(config, platform, new_file=True)
     manifest.set_starting_temperatures(platform.starting_temperatures)
@@ -57,6 +57,9 @@ def emulate_first_reboot(platform, config, monkeypatch):
     results.write_to_file()
     return manifest
 
+
+# Tests calling this should also use the `no_results_instantiation_check`
+# fixture.
 def run_with_captured_reboots(config, platform, monkeypatch):
     """Runs a session to completion using exceptions to capture reboots
 
@@ -67,7 +70,7 @@ def run_with_captured_reboots(config, platform, monkeypatch):
     krun.util.assign_platform(config, platform)
     reboots = 0
 
-    manifest = emulate_first_reboot(platform, config, monkeypatch)
+    manifest = emulate_first_reboot(platform, config)
     if manifest.num_execs_left == 0:
         sched = ExecutionScheduler(config, platform.mailer, platform,
                                    dry_run=True)
@@ -101,7 +104,8 @@ class TestScheduler(BaseKrunTest):
         flts = [n / 10.0 for n in range(11)]
         assert mean(flts) * float(len(flts)) == sum(flts)
 
-    def test_run_schedule0001(self, monkeypatch, mock_platform):
+    def test_run_schedule0001(self, monkeypatch, mock_platform,
+                              no_results_instantiation_check):
         config = Config(os.path.join(TEST_DIR, "one_exec.krun"))
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
@@ -122,7 +126,8 @@ class TestScheduler(BaseKrunTest):
         os.unlink(config.results_filename())
         os.unlink(sched.manifest.path)
 
-    def test_run_schedule0002(self, mock_platform, monkeypatch):
+    def test_run_schedule0002(self, mock_platform, monkeypatch,
+                              no_results_instantiation_check):
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
@@ -141,7 +146,8 @@ class TestScheduler(BaseKrunTest):
         os.unlink(config.results_filename())
         os.unlink(sched.manifest.path)
 
-    def test_run_schedule0003(self, mock_platform, monkeypatch):
+    def test_run_schedule0003(self, mock_platform, monkeypatch,
+                              no_results_instantiation_check):
         config = Config(os.path.join(TEST_DIR, "example_all_skip.krun"))
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
@@ -149,7 +155,8 @@ class TestScheduler(BaseKrunTest):
         os.unlink(sched.manifest.path)
         os.unlink(config.results_filename())
 
-    def test_run_schedule0004(self, mock_platform, monkeypatch):
+    def test_run_schedule0004(self, mock_platform, monkeypatch,
+                              no_results_instantiation_check):
         config = Config(os.path.join(TEST_DIR, "example_skip_1vm.krun"))
         n_reboots, sched = run_with_captured_reboots(config, mock_platform,
                                                      monkeypatch)
@@ -172,7 +179,8 @@ class TestScheduler(BaseKrunTest):
         os.unlink(config.results_filename())
         os.unlink(sched.manifest.path)
 
-    def test_run_schedule0005(self, mock_platform, monkeypatch):
+    def test_run_schedule0005(self, mock_platform, monkeypatch,
+                              no_results_instantiation_check):
 
         def dummy_execjob_run(self, mailer, dryrun=False):
             return self.empty_measurements, {}, "E"  # pretend jobs fail
@@ -197,13 +205,14 @@ class TestScheduler(BaseKrunTest):
         os.unlink(config.results_filename())
         os.unlink(sched.manifest.path)
 
-    def test_num_emails_sent_persists0001(self, monkeypatch, mock_platform):
+    def test_num_emails_sent_persists0001(self, monkeypatch, mock_platform,
+                                          no_results_instantiation_check):
         make_reboot_raise(monkeypatch)
         no_envlogs(monkeypatch)
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config, monkeypatch)
+        emulate_first_reboot(mock_platform, config)
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
                                    dry_run=True)
         sched.mailer.recipients = ["noone@localhost"]
@@ -228,7 +237,8 @@ class TestScheduler(BaseKrunTest):
         assert sched.manifest.num_mails_sent == 1
         os.unlink(sched.manifest.path)
 
-    def test_error_flag_persists0001(self, monkeypatch, mock_platform):
+    def test_error_flag_persists0001(self, monkeypatch, mock_platform,
+                                     no_results_instantiation_check):
         """Check a failing exec will correctly set the error flag"""
 
         make_reboot_raise(monkeypatch)
@@ -242,7 +252,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config, monkeypatch)
+        emulate_first_reboot(mock_platform, config)
         results_path = config.results_filename()
 
         # To start, the error flag is not set
@@ -266,7 +276,8 @@ class TestScheduler(BaseKrunTest):
         os.unlink(sched.manifest.path)
         os.unlink(results_path)
 
-    def test_error_flag_persists0002(self, monkeypatch, mock_platform):
+    def test_error_flag_persists0002(self, monkeypatch, mock_platform,
+                                     no_results_instantiation_check):
         """Check a changed dmesg will correctly set the error flag"""
 
         make_reboot_raise(monkeypatch)
@@ -280,7 +291,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config, monkeypatch)
+        emulate_first_reboot(mock_platform, config)
         results_path = config.results_filename()
 
         # To start, the error flag is not set
@@ -304,7 +315,8 @@ class TestScheduler(BaseKrunTest):
         os.unlink(sched.manifest.path)
         os.unlink(results_path)
 
-    def test_pre_and_post_exec_cmds0001(self, monkeypatch, mock_platform):
+    def test_pre_and_post_exec_cmds0001(self, monkeypatch, mock_platform,
+                                        no_results_instantiation_check):
         cap_cmds = []
         def dummy_run_shell_cmd(cmd, failure_fatal=False, extra_env=None):
             cap_cmds.append(cmd)
@@ -325,7 +337,8 @@ class TestScheduler(BaseKrunTest):
         expect = ["cmd1", "cmd2", "cmd3", "cmd4"]
         assert cap_cmds == expect
 
-    def test_pre_and_post_exec_cmds0002(self, monkeypatch, mock_platform):
+    def test_pre_and_post_exec_cmds0002(self, monkeypatch, mock_platform,
+                                        no_results_instantiation_check):
         config = Config(os.path.join(TEST_DIR, "one_exec.krun"))
         path = os.path.join(TEST_DIR, "shell-out")
         cmd = "echo ${KRUN_RESULTS_FILE}:${KRUN_LOG_FILE}:${KRUN_MANIFEST_FILE} > %s" % path
@@ -352,7 +365,8 @@ class TestScheduler(BaseKrunTest):
         dirnames = [os.path.dirname(x) for x in elems]
         assert dirnames[0] == dirnames[1] == dirnames[2]
 
-    def test_pre_and_post_cmds0003(self, monkeypatch, mock_platform):
+    def test_pre_and_post_cmds0003(self, monkeypatch, mock_platform,
+                                   no_results_instantiation_check):
         """Check that the pre/post commands use a shell and don't just exec(3)"""
 
         config = Config(os.path.join(TEST_DIR, "one_exec.krun"))
@@ -374,14 +388,15 @@ class TestScheduler(BaseKrunTest):
         os.unlink(tmp_file)
         assert got == "pre\npost\n"
 
-    def test_boot_loop0001(self, monkeypatch, mock_platform, caplog):
+    def test_boot_loop0001(self, monkeypatch, mock_platform, caplog,
+                           no_results_instantiation_check):
         make_reboot_raise(monkeypatch)
         no_envlogs(monkeypatch)
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
 
-        emulate_first_reboot(mock_platform, config, monkeypatch)
+        emulate_first_reboot(mock_platform, config)
 
         # Simulate a boot loop
         sched = ExecutionScheduler(config, mock_platform.mailer, mock_platform,
@@ -396,12 +411,13 @@ class TestScheduler(BaseKrunTest):
                   "INVARIANT num_reboots <= num_jobs violated. Krun was about "
                   "to execute reboot number: 10000. 1 jobs have been "
                   "completed, 7 are left to go.")
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
         os.unlink(config.results_filename())
         os.unlink(sched.manifest.path)
 
-    def test_audit_differs0001(self, monkeypatch, mock_platform, caplog):
+    def test_audit_differs0001(self, monkeypatch, mock_platform, caplog,
+                               no_results_instantiation_check):
         """Check that if the audit differs, a crash occurs"""
 
         make_reboot_raise(monkeypatch)
@@ -409,7 +425,7 @@ class TestScheduler(BaseKrunTest):
 
         config = Config(os.path.join(TEST_DIR, "example.krun"))
         krun.util.assign_platform(config, mock_platform)
-        emulate_first_reboot(mock_platform, config, monkeypatch)
+        emulate_first_reboot(mock_platform, config)
         results_path = config.results_filename()
 
         # mutate the audit, so it won't match later
@@ -423,7 +439,7 @@ class TestScheduler(BaseKrunTest):
             sched.run()
 
         expect = "This is only valid if the machine you are using is identical"
-        assert expect in caplog.text()
+        assert expect in caplog.text
 
         os.unlink(sched.manifest.path)
         os.unlink(results_path)

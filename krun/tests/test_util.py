@@ -28,13 +28,12 @@ DUMMY_CONFIG.OUTLIER_WINDOW_SIZE = 10
 
 
 def test_fatal(capsys, caplog):
-    caplog.setLevel(logging.ERROR)
     msg = "example text"
     with pytest.raises(FatalKrunError):
         fatal(msg)
     out, err = capsys.readouterr()
     assert out == ""
-    assert msg in caplog.text()
+    assert msg in caplog.text
 
 
 def test_log_and_mail(mock_manifest, mock_mailer):
@@ -135,7 +134,7 @@ stderr:
 [iterations_runner.py] iteration 1/1
 --------------------------------------------------
 """ % stdout
-    assert excinfo.value.message == expected
+    assert excinfo.value.args[0] == expected
 
 
 def test_check_and_parse_execution_results0003():
@@ -156,7 +155,7 @@ stderr:
 [iterations_runner.py] iteration 1/1
 --------------------------------------------------
 """
-    assert excinfo.value.message == expected
+    assert excinfo.value.args[0] == expected
 
 
 def test_check_and_parse_execution_results0004(caplog):
@@ -171,7 +170,7 @@ def test_check_and_parse_execution_results0004(caplog):
     with pytest.raises(RerunExecution) as e:
         check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
 
-    assert e.value.message == \
+    assert e.value.args[0] == \
         "APERF/MPERF ratio badness detected\n" \
         "  in_proc_iter=0, core=0, type=turbo, ratio=1.5\n" \
         "  in_proc_iter=0, core=1, type=throttle, ratio=0.666666666667\n\n" \
@@ -188,7 +187,7 @@ def test_check_and_parse_execution_results0005(caplog):
 
     with pytest.raises(RerunExecution) as e:
         check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
-    assert e.value.message == \
+    assert e.value.args[0] == \
         "APERF/MPERF ratio badness detected\n" \
         "  in_proc_iter=1, core=0, type=throttle, ratio=0.75\n\n" \
         "The process execution will be retried until the ratios are OK."
@@ -328,7 +327,7 @@ def test_run_shell_cmd_list0002(caplog):
     assert got == "1\n"
 
     expect = "Command failed: '/flibblebop"
-    assert expect in caplog.text()
+    assert expect in caplog.text
 
 
 def test_run_shell_cmd_list0003():
@@ -359,7 +358,7 @@ def test_run_shell_cmd_list0004(caplog):
         run_shell_cmd_list(cmds, extra_env={"HOME": "test123"})
 
     expect = "Environment HOME is already defined"
-    assert expect in caplog.text()
+    assert expect in caplog.text
 
 
 def test_get_git_version0001():

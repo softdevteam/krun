@@ -62,8 +62,7 @@ def test_check_config_consistency_fails():
     with pytest.raises(Exception) as excinfo:
         config.check_config_consistency(config_string + "\n# different config!",
                                         "fakefilename")
-    print excinfo.value.message
-    assert "+# different config!" in excinfo.value.message
+    assert "+# different config!" in excinfo.value.args[0]
 
 @pytest.mark.skipif(JAVA is None, reason="No Java found")
 def test_config_init():
@@ -165,7 +164,7 @@ def test_skip0007():
     with pytest.raises(ValueError) as e:
         config.should_skip("wobble")
 
-    assert e.value.message == "bad benchmark key: wobble"
+    assert e.value.args[0] == "bad benchmark key: wobble"
 
 def test_skip0008():
     config = Config()
