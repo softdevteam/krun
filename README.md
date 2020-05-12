@@ -19,6 +19,7 @@ You need to have the following programs installed:
   * GNU make, a C compiler and libc (`build-essential` package in Debian)
   * cpufrequtils (Linux only. `cpufrequtils` package in Debian)
   * cffi (`python-cffi` package in Debian)
+  * subprocess32 Python module.
   * cset (for pinning on Linux only. `cpuset` package in Debian)
   * virt-what (Linux only. `virt-what` package in Debian)
   * Our custom Linux kernel (see below).
@@ -464,6 +465,10 @@ The structure of the JSON results is as follows:
                                 # (structure same as 'core_cycle_counts')
     'mperf_counts': {...}       # Per-core MPERF deltas
                                 # (structure same as 'core_cycle_counts')
+    'pexec_flags': {...}        # A flag for each process execution:
+                                # 'C' completed OK.
+                                # 'E' benchmark crashed.
+                                # 'T' benchmark timed out.
     'eta_estimates': {u"bmark:VM:variant": [t_0, t_1, ...], ...} # A dict mapping
                   # benchmark keys to rough process execution times. Used internally:
                   # users can ignore this.

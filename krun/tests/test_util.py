@@ -3,18 +3,20 @@ from krun.util import (format_raw_exec_results, log_and_mail, fatal,
                        run_shell_cmd_bench, get_git_version, ExecutionFailed,
                        get_session_info, run_shell_cmd_list, FatalKrunError,
                        stash_envlog, dump_instr_json, RerunExecution,
-                       make_instr_dir)
+                       make_instr_dir, read_popen_output_carefully)
 from krun.tests.mocks import MockMailer
 from krun.tests import TEST_DIR
 from krun.config import Config
 from krun.scheduler import ManifestManager
 from krun.tests.mocks import mock_platform, mock_manifest, mock_mailer
+from krun.platform import detect_platform
 from bz2 import BZ2File
 
 import json
 import logging
 import pytest
 import os
+import subprocess32
 from tempfile import NamedTemporaryFile
 
 
@@ -74,16 +76,15 @@ def test_run_shell_cmd_fatal():
     assert out == ""
 
 def test_run_shell_cmd_bench():
-    from krun.platform import detect_platform
     platform = detect_platform(None, None)
     msg = "example text\n"
-    out, err, rc = run_shell_cmd_bench("echo " + msg, platform)
+    out, err, rc, _ = run_shell_cmd_bench("echo " + msg, platform)
     assert out == msg
     assert err == ""
     assert rc == 0
 
     msg2 = "another example\n"
-    out, err, rc = run_shell_cmd_bench(
+    out, err, rc, _ = run_shell_cmd_bench(
         "(>&2 echo %s)  && (echo %s)" % (msg2, msg),
         platform)
     assert out == msg
@@ -91,10 +92,9 @@ def test_run_shell_cmd_bench():
     assert rc == 0
 
 def test_run_shell_cmd_bench_fatal():
-    from krun.platform import detect_platform
     cmd = "nonsensecommand"
     platform = detect_platform(None, None)
-    out, err, rc = run_shell_cmd_bench(cmd, platform, False)
+    out, err, rc, _ = run_shell_cmd_bench(cmd, platform, False)
     assert rc != 0
     assert cmd in err
     assert out == ""
@@ -405,3 +405,10 @@ def test_dump_instr_json0001():
     os.rmdir(dump_dir)
 
     assert js == instr_data
+
+
+def test_read_popen_output_carefully_0001():
+    platform = detect_platform(None, None)
+    process = subprocess32.Popen(["/bin/sleep", "5"], stdout=subprocess32.PIPE)
+    _, _, _, timed_out = read_popen_output_carefully(process, platform, timeout=1)
+    assert timed_out

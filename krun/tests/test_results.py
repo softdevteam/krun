@@ -28,6 +28,7 @@ def fake_results(mock_platform, no_results_instantiation_check):
                             [[[4., 4.], [4., 4.,]], [[4., 4.], [4., 4.]]]}
     results.mperf_counts = {"bench:vm:variant":
                             [[[5., 5.], [5., 5.,]], [[5., 5.], [5., 5.]]]}
+    results.pexec_flags = {"bench:vm:variant": ["C", "T"]}
     return results
 
 
@@ -91,6 +92,7 @@ class TestResults(BaseKrunTest):
         results0.core_cycle_counts = {u"dummy:Java:default-java": [[[2], [3], [4], [5]]]}
         results0.aperf_counts = {u"dummy:Java:default-java": [[[3], [4], [5], [6]]]}
         results0.mperf_counts = {u"dummy:Java:default-java": [[[4], [5], [6], [7]]]}
+        results0.pexec_flags = {u"dummy:Java:default-java": [[["C"], ["C"], ["C"], ["C"]]]}
         results0.reboots = 5
         results0.error_flag = False
         results0.write_to_file()

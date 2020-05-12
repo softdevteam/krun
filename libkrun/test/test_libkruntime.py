@@ -1,4 +1,4 @@
-from subprocess import Popen, PIPE
+import subprocess32
 import os
 import sys
 import pytest
@@ -19,8 +19,8 @@ MSR_SUPPORT = PLATFORM.num_per_core_measurements > 0
 def invoke_c_prog(mode):
     assert os.path.exists(TEST_PROG_PATH)
 
-    p = Popen(TEST_PROG_PATH + " " + mode,
-              stderr=PIPE, stdout=PIPE, shell=True)
+    p = subprocess32.Popen(TEST_PROG_PATH + " " + mode,
+        stderr=subprocess32.PIPE, stdout=subprocess32.PIPE, shell=True)
     out, err = p.communicate()
     return p.returncode, out.strip(), err.strip()
 

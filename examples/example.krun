@@ -13,6 +13,8 @@ LUAJIT_BIN  = find_executable("luajit")
 if LUAJIT_BIN is None:
     fatal("luajit binary not found in path")
 
+EXECUTION_TIMEOUT = 60  # time allowance for each process execution in seconds.
+
 # Who to mail
 MAIL_TO = []
 

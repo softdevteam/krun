@@ -4,11 +4,12 @@ import re
 import select
 import shutil
 import sys
-import subprocess
 import pwd
 import grp
 import getpass
-from subprocess import Popen, PIPE
+import time
+from datetime import datetime, timedelta
+import subprocess32  # For timeout support.
 from logging import error, debug, info, warn, root as root_logger
 from bz2 import BZ2File
 from krun.amperf import check_amperf_ratios
@@ -56,6 +57,7 @@ class RerunExecution(Exception):
 class FatalKrunError(Exception):
     pass
 
+
 def fatal(msg):
     error(msg)
 
@@ -93,7 +95,8 @@ def _run_shell_cmd_start_process(cmd, extra_env):
             ec = EnvChangeSet(var, val)
             ec.apply(env)
 
-    return Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE, env=env)
+    return subprocess32.Popen(cmd, shell=True, stdout=subprocess32.PIPE,
+        stderr=subprocess32.PIPE, env=env)
 
 def run_shell_cmd(cmd, failure_fatal=True, extra_env=None):
     p = _run_shell_cmd_start_process(cmd, extra_env)
@@ -112,7 +115,7 @@ def run_shell_cmd_bench(cmd, platform, failure_fatal=True, extra_env=None):
     Requires a platform."""
     process = _run_shell_cmd_start_process(cmd, extra_env)
     res = read_popen_output_carefully(process, platform, print_stderr=False)
-    stdout, stderr, rc = res
+    stdout, stderr, rc, _ = res
     if failure_fatal and rc != 0:
         msg = "Command failed: '%s'\n" % cmd
         msg += "stdout:\n%s\n" % stdout
@@ -147,10 +150,28 @@ def print_stderr_linewise(info):
             stderr_partial_line = []
             startindex = nl + 1
 
-def read_popen_output_carefully(process, platform, print_stderr=True):
-    """ helper function: given a process, read new data whenever it is
-    available, to make sure that the process is never blocked when trying to
-    write to stdout/stderr. """
+def read_popen_output_carefully(process, platform, print_stderr=True, timeout=None):
+    """A helper function that, given a process whose stdout (and maybe stderr)
+    are piped, reads data from the pipes if and when it is available, in such a
+    way that the child cannot block.
+
+    This differs from `subprocess.Popen()` in that `stderr` can be printed
+    "live" as data arrives on the file descriptor, rather than just being
+    buffered.  See `print_stderr` below.
+
+    `process` is an instance of `subprocess32.Popen`.
+
+    `platform` is an instance of a subclass of `krun.platform.BasePlatform`.
+
+    If `print_stderr` is `True` then `stderr` is printed as data arrives on the
+    file descriptor.
+
+    If `timeout` is not `None` then the command is given the specified number
+    of seconds to complete before a timeout is flagged."""
+
+    timeout_at = None
+    if timeout is not None:
+        timeout_at = datetime.now() + timedelta(seconds=timeout)
 
     # Get raw OS-level file descriptors and ensure they are unbuffered
     stdout_fd = process.stdout.fileno()
@@ -174,7 +195,17 @@ def read_popen_output_carefully(process, platform, print_stderr=True):
         stderr_consumer = None
 
     while open_fds:
-        ready = select.select(open_fds, [], [], SELECT_TIMEOUT)
+        if timeout_at is not None:
+            time_left = (timeout_at - datetime.now()).total_seconds()
+            if time_left <= 0:
+                return "".join(stdout_data), "".join(stderr_data), None, True
+            ready = select.select(open_fds, [], [], time_left)
+        else:
+            # The `select()` documentation doesn't specify what to pass for
+            # unlimited timeout. It only says that the parameter should be
+            # omitted (which I read as: is subject to change), so we duplicate
+            # the above call to `select()` with the parameter absent.
+            ready = select.select(open_fds, [], [])
 
         if stdout_fd in ready[0]:
             d = os.read(stdout_fd, PIPE_BUF_SZ)
@@ -195,17 +226,22 @@ def read_popen_output_carefully(process, platform, print_stderr=True):
     # We know stderr and stdout are closed.
     # Now we are just waiting for the process to exit, which may have
     # already happened of course.
+    time_left = None
+    if timeout_at is not None:
+        time_left = (timeout_at - datetime.now()).total_seconds()
+        if time_left <= 0:
+            return "".join(stdout_data), "".join(stderr_data), None, True
     try:
-        process.wait()
+        process.wait(time_left)
+    except subprocess32.TimeoutExpired:
+        return "".join(stdout_data), "".join(stderr_data), None, True
     except Exception as e:
         fatal("wait() failed on child pipe: %s" % str(e))
-
-    assert process.returncode is not None
 
     stderr = "".join(stderr_data)
     stdout = "".join(stdout_data)
 
-    return stdout, stderr, process.returncode
+    return stdout, stderr, process.returncode, False
 
 
 def check_and_parse_execution_results(stdout, stderr, rc, config,
@@ -306,7 +342,7 @@ def spawn_sanity_check(platform, entry_point, vm_def,
     param = 666
 
     key = "%s:sanity:default-sanity" % check_name
-    stdout, stderr, rc, envlog_filename = \
+    stdout, stderr, rc, envlog_filename, _ = \
         vm_def.run_exec(entry_point, iterations,
                         param, SANITY_CHECK_HEAP_KB, SANITY_CHECK_STACK_KB,
                         key, 0, force_dir=force_dir, sync_disks=False)
@@ -511,7 +547,7 @@ def _do_reboot(platform):
     else:
         # No need to close logging fds in the case of a real reboot. This also
         # allows the fatal() below to log in case of failure.
-        rc = subprocess.call(platform.get_reboot_cmd())
+        rc = subprocess32.call(platform.get_reboot_cmd())
         if rc != 0:
             fatal("Failed to reboot with: %s" % platform.get_reboot_cmd())
         else:
