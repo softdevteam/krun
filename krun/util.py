@@ -109,19 +109,6 @@ def run_shell_cmd(cmd, failure_fatal=True, extra_env=None):
         fatal(msg)
     return stdout.strip(), stderr.strip(), rc
 
-def run_shell_cmd_bench(cmd, platform, failure_fatal=True, extra_env=None):
-    """ The same as run_shell_cmd, but reads the output of the command more
-    carefully, by setting the pipes to unbuffered and using select.
-    Requires a platform."""
-    process = _run_shell_cmd_start_process(cmd, extra_env)
-    res = read_popen_output_carefully(process, platform, print_stderr=False)
-    stdout, stderr, rc, _ = res
-    if failure_fatal and rc != 0:
-        msg = "Command failed: '%s'\n" % cmd
-        msg += "stdout:\n%s\n" % stdout
-        msg += "stderr:\n%s\n" % stderr
-        fatal(msg)
-    return res
 
 def run_shell_cmd_list(cmds, failure_fatal=True, extra_env=None):
     """Run a list of shell commands, stopping on first failure."""

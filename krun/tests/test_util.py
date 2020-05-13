@@ -1,6 +1,6 @@
 from krun.util import (format_raw_exec_results, log_and_mail, fatal,
                        check_and_parse_execution_results, run_shell_cmd,
-                       run_shell_cmd_bench, get_git_version, ExecutionFailed,
+                       get_git_version, ExecutionFailed,
                        get_session_info, run_shell_cmd_list, FatalKrunError,
                        stash_envlog, dump_instr_json, RerunExecution,
                        make_instr_dir, read_popen_output_carefully)
@@ -75,29 +75,6 @@ def test_run_shell_cmd_fatal():
     assert cmd in err
     assert out == ""
 
-def test_run_shell_cmd_bench():
-    platform = detect_platform(None, None)
-    msg = "example text\n"
-    out, err, rc, _ = run_shell_cmd_bench("echo " + msg, platform)
-    assert out == msg
-    assert err == ""
-    assert rc == 0
-
-    msg2 = "another example\n"
-    out, err, rc, _ = run_shell_cmd_bench(
-        "(>&2 echo %s)  && (echo %s)" % (msg2, msg),
-        platform)
-    assert out == msg
-    assert err == msg2
-    assert rc == 0
-
-def test_run_shell_cmd_bench_fatal():
-    cmd = "nonsensecommand"
-    platform = detect_platform(None, None)
-    out, err, rc, _ = run_shell_cmd_bench(cmd, platform, False)
-    assert rc != 0
-    assert cmd in err
-    assert out == ""
 
 def test_check_and_parse_execution_results0001():
     stdout = json.dumps({
