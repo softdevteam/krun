@@ -42,12 +42,14 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
+        platform.num_cpus = 2
 
         def wrap_get_kernel_cmdline(self):
             return "nohz_full=1-%s" % (platform.num_cpus - 1)
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_get_kernel_cmdline",
                             wrap_get_kernel_cmdline)
+        platform.num_cpus = 2
 
         krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
@@ -65,6 +67,7 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
+        platform.num_cpus = 2
 
         with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
@@ -84,12 +87,13 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
+        platform.num_cpus = 2
 
         with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
     def test_tickless0004(self, monkeypatch, platform):
-        """A kernel config indicating no tick mode should exit"""
+        """A kernel config indicating no tickless mode should exit"""
 
         opts = {
             "CONFIG_NO_HZ_PERIODIC": "n",
@@ -102,6 +106,7 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_open_kernel_config_file",
                             mock_open_kernel_config_file)
+        platform.num_cpus = 2
 
         with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
@@ -128,12 +133,31 @@ class TestLinuxPlatform(BaseKrunTest):
         monkeypatch.setattr(krun.platform.LinuxPlatform,
                             "_get_kernel_cmdline",
                             dummy_get_kernel_cmdline)
+        platform.num_cpus = 2
 
         with pytest.raises(FatalKrunError):
             krun.platform.LinuxPlatform._check_tickless_kernel(platform)
 
         assert "CONFIG_NO_HZ_FULL_ALL overridden on kernel command line" \
             in caplog.text
+
+    def test_tickless0006(self, monkeypatch, platform):
+        """A kernel config indicating no tickless mode is fine for a uni-processor machine"""
+
+        opts = {
+            "CONFIG_NO_HZ_PERIODIC": "n",
+            "CONFIG_NO_HZ_IDLE": "n",
+            "CONFIG_NO_HZ_FULL": "n",
+            "CONFIG_NO_HZ_FULL_ALL": "n",
+        }
+
+        mock_open_kernel_config_file = mk_dummy_kernel_config_fn(opts)
+        monkeypatch.setattr(krun.platform.LinuxPlatform,
+                            "_open_kernel_config_file",
+                            mock_open_kernel_config_file)
+        platform.num_cpus = 1
+
+        krun.platform.LinuxPlatform._check_tickless_kernel(platform)  # No exception raised.
 
     def test_bench_cmdline_adjust0001(self, platform):
         expect = ['env', 'LD_LIBRARY_PATH=']
