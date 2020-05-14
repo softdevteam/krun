@@ -15,19 +15,21 @@ Unix variants is unlikely to be difficult, and we welcome patches.
 You need to have the following programs installed:
 
   * sudo
-  * Python2.7 (pre-installed in Debian)
+  * Python-2.7
+  * Python dependencies (see requirements.txt)
   * GNU make, a C compiler and libc (`build-essential` package in Debian)
   * cpufrequtils (Linux only. `cpufrequtils` package in Debian)
-  * cffi (`python-cffi` package in Debian)
-  * subprocess32 Python module.
   * cset (for pinning on Linux only. `cpuset` package in Debian)
   * virt-what (Linux only. `virt-what` package in Debian)
-  * Our custom Linux kernel (see below).
-  * Linux kernel headers (Linux only. linux-headers-3... in Debian)
-  * taskset (Linux only)
-  * msr-tools (Linux only)
+  * Optionally, our custom Linux kernel (Linux only, see below)
+  * Linux kernel headers (Linux only. `linux-headers-X.Y` package in Debian)
+  * taskset (Linux only. `util-linux` package in Debian)
+  * msr-tools (Linux only. `msr-tools` package in Debian)
   * policykit (Linux only, only if you want to use `systemctl start/stop` in
     `PRE/POST_EXECUTION_CMDS`. See *Benchmarking for Reliable Results* below)
+
+If you choose to use `pip` for the Python dependencies, you can install them
+using `pip -r requirements.txt`.
 
 If you want to benchmark Java, you will also need:
 
