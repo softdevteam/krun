@@ -32,6 +32,7 @@ class Config(object):
         self.AMPERF_RATIO_BOUNDS = None
         self.PRE_EXECUTION_CMDS = []
         self.POST_EXECUTION_CMDS = []
+        self.EXECUTION_TIMEOUT = None
 
         # config defaults (callbacks)
         self.custom_dmesg_whitelist = None
@@ -139,4 +140,5 @@ class Config(object):
                 (self.SKIP == other.SKIP) and
                 (self.N_EXECUTIONS == other.N_EXECUTIONS) and
                 (self.PRE_EXECUTION_CMDS == other.PRE_EXECUTION_CMDS) and
-                (self.POST_EXECUTION_CMDS == other.POST_EXECUTION_CMDS))
+                (self.POST_EXECUTION_CMDS == other.POST_EXECUTION_CMDS) and
+                (self.EXECUTION_TIMEOUT == other.EXECUTION_TIMEOUT))

@@ -1,4 +1,4 @@
-import subprocess
+import subprocess32
 import os
 import fnmatch
 import re
@@ -191,11 +191,11 @@ class BaseVMDef(object):
             args.extend([key, str(key_pexec_idx)])
 
         else:
-            stderr_file = subprocess.PIPE
+            stderr_file = subprocess32.PIPE
 
         if self.dry_run:
             warn("SIMULATED: Benchmark process execution (--dryrun)")
-            return ("", "", 0, None)
+            return ("", "", 0, None, False)
 
         if not self.platform.no_user_change:
             self.platform.make_fresh_krun_user()
@@ -215,13 +215,13 @@ class BaseVMDef(object):
         if sync_disks:
             self.platform.sync_disks()
 
-        out, err, rc = self._run_exec_popen(wrapper_args, stderr_file)
+        out, err, rc, timed_out = self._run_exec_popen(wrapper_args, stderr_file)
 
         if self.instrument:
             stderr_file.close()
 
         os.unlink(wrapper_filename)
-        return out, err, rc, envlog_filename
+        return out, err, rc, envlog_filename, timed_out
 
     # separate for testing
     def _wrapper_args(self, wrapper_filename):
@@ -246,7 +246,7 @@ class BaseVMDef(object):
         return wrapper_args
 
     # separate for testing purposes
-    def _run_exec_popen(self, args, stderr_file=subprocess.PIPE):
+    def _run_exec_popen(self, args, stderr_file=subprocess32.PIPE):
         """popen to the wrapper script
 
         arguments:
@@ -261,9 +261,10 @@ class BaseVMDef(object):
         # command with. Command line arguments will have been appended *inside*
         # to adjust the new user's environment once the user switch has
         # occurred.
-        child_pipe = subprocess.Popen(args, stdout=subprocess.PIPE,
+        child_pipe = subprocess32.Popen(args, stdout=subprocess32.PIPE,
                                       stderr=stderr_file, env={})
-        return read_popen_output_carefully(child_pipe, platform=self.platform)
+        return read_popen_output_carefully(child_pipe, platform=self.platform,
+            timeout=self.config.EXECUTION_TIMEOUT)
 
     def sanity_checks(self):
         pass

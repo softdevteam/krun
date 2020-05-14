@@ -3,3 +3,4 @@ py==1.7.0
 pycparser==2.19
 pytest==3.10.1
 pytest-cov==2.2.0
+subprocess32==3.5.4

@@ -32,6 +32,9 @@ class Results(object):
         self.aperf_counts = dict()
         self.mperf_counts = dict()
 
+        # Record the flag for each process execution.
+        self.pexec_flags = dict()
+
         # Record how long execs are taking so we can give the user a rough ETA.
         # Maps "bmark:vm:variant" -> [t_0, t_1, ...]
         self.eta_estimates = dict()
@@ -79,6 +82,7 @@ class Results(object):
                     self.core_cycle_counts[key] = []
                     self.aperf_counts[key] = []
                     self.mperf_counts[key] = []
+                    self.pexec_flags[key] = []
                     self.eta_estimates[key] = []
 
     def read_from_file(self, results_file):
@@ -104,6 +108,7 @@ class Results(object):
             cycles_len = len(self.core_cycle_counts[key])
             aperf_len = len(self.aperf_counts[key])
             mperf_len = len(self.mperf_counts[key])
+            pexec_flags_len = len(self.pexec_flags[key])
 
             if eta_len != wct_len:
                 fatal("inconsistent etas length: %s: %d vs %d" % (key, eta_len, wct_len))
@@ -116,6 +121,9 @@ class Results(object):
 
             if mperf_len != wct_len:
                 fatal("inconsistent mperf length: %s: %d vs %d" % (key, mperf_len, wct_len))
+
+            if pexec_flags_len != wct_len:
+                fatal("inconsistent pexec flags length: %s: %d vs %d" % (key, pexec_flags_len, wct_len))
 
             # Check the length of the different measurements match and that the
             # number of per-core measurements is consistent.
@@ -167,6 +175,7 @@ class Results(object):
             "core_cycle_counts": self.core_cycle_counts,
             "aperf_counts": self.aperf_counts,
             "mperf_counts": self.mperf_counts,
+            "pexec_flags": self.pexec_flags,
             "audit": self.audit.audit,
             "eta_estimates": self.eta_estimates,
             "error_flag": self.error_flag,
@@ -189,17 +198,22 @@ class Results(object):
                 self.core_cycle_counts == other.core_cycle_counts and
                 self.aperf_counts == other.aperf_counts and
                 self.mperf_counts == other.mperf_counts and
+                self.pexec_flags == other.pexec_flags and
                 self.audit == other.audit and
                 self.eta_estimates == other.eta_estimates and
                 self.error_flag == other.error_flag)
 
-    def append_exec_measurements(self, key, measurements):
+    def append_exec_measurements(self, key, measurements, flag):
         """Unpacks a measurements dict into the Results instance"""
+
+        # Only a subset of flags can arise at this time.
+        assert flag in ("C", "E", "T")
 
         # Consistently format monotonic time doubles
         wallclock_times = format_raw_exec_results(
             measurements["wallclock_times"])
 
+        self.pexec_flags[key].append(flag)
         self.wallclock_times[key].append(wallclock_times)
         self.core_cycle_counts[key].append(measurements["core_cycle_counts"])
         self.aperf_counts[key].append(measurements["aperf_counts"])

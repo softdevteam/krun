@@ -2,7 +2,7 @@ from email.mime.text import MIMEText
 import socket
 import textwrap
 import logging
-from subprocess import Popen, PIPE
+import subprocess32
 
 
 FROM_USER = "noreply"
@@ -79,7 +79,8 @@ class Mailer(object):
         logging.debug("Sending email to '%s' subject line '%s'" %
                       (msg['To'], msg['Subject']))
 
-        pipe = Popen([SENDMAIL, "-t", "-oi"], stdin=PIPE)
+        pipe = subprocess32.Popen([SENDMAIL, "-t", "-oi"],
+            stdin=subprocess32.PIPE)
         pipe.communicate(msg.as_string())
 
         rc = pipe.returncode

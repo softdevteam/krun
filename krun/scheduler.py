@@ -4,7 +4,7 @@ from krun import util
 
 from logging import warn, info, error, debug
 
-import os, subprocess, sys, time
+import os, sys, time
 import krun.util as util
 
 # Wait this many seconds for the init system to finish bringing up services.
@@ -139,7 +139,7 @@ class ManifestManager(object):
             if not key in self.completed_exec_counts:
                 self.completed_exec_counts[key] = 0
 
-            if flag in ["S", "E", "C"]:  # skip, error, completed
+            if flag in ["S", "E", "C", "T"]:  # skip, error, completed, timeout
                 pass
             elif flag == "O":  # outstanding
                 self.outstanding_exec_counts[key] += 1
@@ -158,7 +158,7 @@ class ManifestManager(object):
             else:
                 self.skipped_keys |= set([key])
 
-            if flag in ["E", "C"]:
+            if flag in ["E", "C", "T"]:
                 self.completed_exec_counts[key] += 1
 
             exec_idx += 1
@@ -370,12 +370,16 @@ class ExecutionJob(object):
         if not dry_run:
             self.sched.platform.collect_starting_throttle_counts()
 
-        stdout, stderr, rc, envlog_filename = \
+        stdout, stderr, rc, envlog_filename, timed_out = \
             vm_def.run_exec(entry_point, in_proc_iters, self.parameter,
                             heap_limit_kb, stack_limit_kb, self.key,
                             self.key_pexec_idx)
 
-        if not dry_run:
+        if timed_out:
+            measurements = self.empty_measurements
+            instr_data = {}
+            flag = "T"
+        elif not dry_run:
             try:
                 self.sched.platform.check_throttle_counts(self.sched.manifest)
                 measurements = util.check_and_parse_execution_results(
@@ -416,8 +420,15 @@ class ExecutionJob(object):
         info("Finished '%s(%d)' (%s variant) under '%s'" %
              (self.benchmark, self.parameter, self.variant, self.vm_name))
 
-        # Move the environment log out of /tmp
-        if not dry_run and flag != "O":
+        # Move the environment log out of /tmp.
+        #
+        # We don't do this for re-runs (O) as the log for the re-run pexec is
+        # the one we want.
+        #
+        # We don't do this for timeouts (T) because the wrapper script is
+        # killed upon timeout, and thus doesn't get a chance to log the
+        # environment.
+        if not dry_run and flag not in ("O", "T"):
             key_exec_num = self.sched.manifest.completed_exec_counts[self.key]
             util.stash_envlog(envlog_filename, self.sched.config,
                               self.sched.platform, self.key, key_exec_num)
@@ -557,7 +568,7 @@ class ExecutionScheduler(object):
                 raise RuntimeError("reached unreachable code!")
 
             # Store new result.
-            results.append_exec_measurements(job.key, measurements)
+            results.append_exec_measurements(job.key, measurements, flag)
 
             # Store instrumentation data in a separate file
             if job.vm_info["vm_def"].instrument:

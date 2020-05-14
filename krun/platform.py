@@ -5,7 +5,7 @@ import os
 import difflib
 import sys
 import glob
-import subprocess
+import subprocess32
 import re
 import pwd
 import cffi
@@ -491,7 +491,7 @@ class UnixLikePlatform(BasePlatform):
         """Force pending I/O to physical disks"""
 
         debug("sync disks...")
-        rc = subprocess.call("/bin/sync")
+        rc = subprocess32.call("/bin/sync")
         if rc != 0:
             fatal("sync failed")
 

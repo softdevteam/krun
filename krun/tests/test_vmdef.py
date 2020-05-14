@@ -85,7 +85,7 @@ class TestVMDef(BaseKrunTest):
         monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
 
         def fake_run_exec_popen(args, stderr_file=None):
-            return "[1]", "", 0  # stdout, stderr, exit_code
+            return "[1]", "", 0, False  # stdout, stderr, exit_code, timed_out
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
         vm_def.run_exec(ep, 1, 1, 1, 1, "test:dummyvm:default", 0)
@@ -113,7 +113,7 @@ class TestVMDef(BaseKrunTest):
         monkeypatch.setattr(platform, "sync_disks", fake_sync_disks)
 
         def fake_run_exec_popen(args, stderr_file=None):
-            return stdout, "", 0  # stdout, stderr, exit_code
+            return stdout, "", 0, False  # stdout, stderr, exit_code, timed_out
 
         monkeypatch.setattr(vm_def, "_run_exec_popen", fake_run_exec_popen)
 
@@ -130,11 +130,12 @@ class TestVMDef(BaseKrunTest):
 
         args = [sys.executable, "-c",
                 "import sys; sys.stdout.write('STDOUT'); sys.stderr.write('STDERR')"]
-        out, err, rv = vm_def._run_exec_popen(args)
+        out, err, rv, timed_out = vm_def._run_exec_popen(args)
 
         assert err == "STDERR"
         assert out == "STDOUT"
         assert rv == 0
+        assert timed_out == False
 
     def test_run_exec_popen0002(self, monkeypatch):
         """Check that writing stderr to a file works. Used for instrumentation"""
@@ -149,11 +150,12 @@ class TestVMDef(BaseKrunTest):
 
         with NamedTemporaryFile(delete=False, prefix="kruntest") as fh:
             filename = fh.name
-            out, err, rv = vm_def._run_exec_popen(args, fh)
+            out, err, rv, timed_out = vm_def._run_exec_popen(args, fh)
 
         assert err == ""  # not here due to redirection
         assert out == "STDOUT"  # behaviour should be unchanged
         assert rv == 0
+        assert timed_out == False
 
         # stderr should be in this file
         with open(filename) as fh:
