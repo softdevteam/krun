@@ -231,7 +231,7 @@ def read_popen_output_carefully(process, platform, print_stderr=True, timeout=No
     return stdout, stderr, process.returncode, False
 
 
-def check_and_parse_execution_results(stdout, stderr, rc, config,
+def check_and_parse_execution_results(stdout, stderr, rc, config, key,
                                       sanity_check=False, instrument=False):
     json_exn = None
 
@@ -248,7 +248,7 @@ def check_and_parse_execution_results(stdout, stderr, rc, config,
     if json_exn or rc != 0:
         # Something went wrong
         rule = 50 * "-"
-        err_s = ("Benchmark returned non-zero or emitted invalid JSON.\n")
+        err_s = ("Benchmark '%s' returned non-zero or emitted invalid JSON.\n" % key)
         if json_exn:
             err_s += "Exception string: %s\n" % str(e)
         err_s += "return code: %d\n" % rc
@@ -337,7 +337,7 @@ def spawn_sanity_check(platform, entry_point, vm_def,
 
     try:
         _ = check_and_parse_execution_results(stdout, stderr, rc,
-                                              platform.config,
+                                              platform.config, key,
                                               sanity_check=True)
     except ExecutionFailed as e:
         fatal("%s sanity check failed: %s" % (check_name, e.message))

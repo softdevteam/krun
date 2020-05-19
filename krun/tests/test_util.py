@@ -84,7 +84,7 @@ def test_check_and_parse_execution_results0001():
         "mperf_counts": [[5], [5], [5], [5]],
     })
     stderr = "[iterations_runner.py] iteration 1/1"
-    js = check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
+    js = check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG, "a:b:c")
     assert js == json.loads(stdout)
 
 
@@ -98,8 +98,8 @@ def test_check_and_parse_execution_results0002():
     stderr = "[iterations_runner.py] iteration 1/1"
     # Non-zero return code.
     with pytest.raises(ExecutionFailed) as excinfo:
-        check_and_parse_execution_results(stdout, stderr, 1, DUMMY_CONFIG)
-    expected = """Benchmark returned non-zero or emitted invalid JSON.
+        check_and_parse_execution_results(stdout, stderr, 1, DUMMY_CONFIG, "a:b:c")
+    expected = """Benchmark 'a:b:c' returned non-zero or emitted invalid JSON.
 return code: 1
 stdout:
 --------------------------------------------------
@@ -119,8 +119,8 @@ def test_check_and_parse_execution_results0003():
     stdout = "[0.000403["
     # Corrupt JSON in STDOUT.
     with pytest.raises(ExecutionFailed) as excinfo:
-        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
-    expected = """Benchmark returned non-zero or emitted invalid JSON.\nException string: Expecting , delimiter: line 1 column 10 (char 9)
+        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG, "a:b:c")
+    expected = """Benchmark 'a:b:c' returned non-zero or emitted invalid JSON.\nException string: Expecting , delimiter: line 1 column 10 (char 9)
 return code: 0
 stdout:
 --------------------------------------------------
@@ -145,7 +145,7 @@ def test_check_and_parse_execution_results0004(caplog):
     stderr = "[iterations_runner.py] iteration 1/1"
 
     with pytest.raises(RerunExecution) as e:
-        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
+        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG, "a:b:c")
 
     assert e.value.args[0] == \
         "APERF/MPERF ratio badness detected\n" \
@@ -163,7 +163,7 @@ def test_check_and_parse_execution_results0005(caplog):
     stderr = "[iterations_runner.py] iteration 1/1"
 
     with pytest.raises(RerunExecution) as e:
-        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG)
+        check_and_parse_execution_results(stdout, stderr, 0, DUMMY_CONFIG, "a:b:c")
     assert e.value.args[0] == \
         "APERF/MPERF ratio badness detected\n" \
         "  in_proc_iter=1, core=0, type=throttle, ratio=0.75\n\n" \
