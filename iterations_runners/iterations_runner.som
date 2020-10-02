@@ -1,0 +1,127 @@
+BenchmarkHarness = (
+    | benchmarkClass numIterations param debug instrument numCores |
+
+    krunInit = primitive
+    krunDone = primitive
+    krunGetNumCores = primitive
+    krunMeasure: idx = primitive
+    krunGetWallclock: idx = primitive
+    krunGetCoreCyclesDouble: index core: core = primitive
+
+    run: args = (
+        self processArguments: args.
+        self runBenchmark.
+    )
+
+    usage = (
+      'Iterations runner for SOM VMs.\n' println.
+      'Executes a benchmark many times within a single process.\n' println.
+      'usage: iterations_runner.som <benchmark> <# of iterations> <benchmark param>' println.
+      '<debug flag> [instrumentation dir] [key] [key pexec index]\n' println.
+      'Arguments in [] are for instrumentation mode only.' println.
+      system exit.
+    )
+
+    processArguments: args = (
+        args length < 5 ifTrue: [ ^ self usage ].
+
+        self loadBenchmarkClass: (args at: 2). "First argument is the Benchmark"
+        numIterations := (args at: 3) asInteger.
+        param := (args at: 4) asInteger.
+        debug := (args at: 5) asInteger.
+
+        instrument := false.
+        args length >= 6 ifTrue: [
+            instrument := true.
+        ].
+
+        instrument && (args length ~= 8) ifTrue: [ ^ self usage ].
+    )
+
+    loadBenchmarkClass: className = (
+        | sym cls |
+        sym := className asSymbol.
+        cls := system load: sym.
+        cls println.
+        cls ifNil: [
+            self error: 'Failed loading benchmark: ' + className ].
+        benchmarkClass := cls.
+    )
+
+    runBenchmark = (
+        | bench wallclockTimes coreCycleCounts i |
+
+        self krunInit.
+        numCores := self krunGetNumCores.
+        bench := benchmarkClass new.
+        wallclockTimes := Array new: numIterations.
+        coreCycleCounts := Array new: numCores.
+        coreCycleCounts doIndexes: [:i | coreCycleCounts at: i put: (Array new: numIterations)].
+
+        i := 0.
+        [ i < numIterations ] whileTrue: [
+            | start end core |
+            debug > 0 ifTrue: [
+                ('[iterations_runner.som] iteration ' + i + '/' + numIterations) println.
+            ].
+
+            self krunMeasure: 0.
+            bench run_iter: param.
+            self krunMeasure: 1.
+
+            start := self krunGetWallclock: 0.
+            end := self krunGetWallclock: 1.
+
+            wallclockTimes at: (i + 1) put: (end - start).
+
+            core := 1.
+            [ core < (numCores + 1) ] whileTrue: [
+                | cycle_start cycle_end |
+
+                cycle_end := (self krunGetCoreCyclesDouble: 1 core: (core - 1)).
+                cycle_start := (self krunGetCoreCyclesDouble: 0 core: (core -1)).
+
+                (coreCycleCounts at: core) at: (i + 1) put: (cycle_end - cycle_start).
+                core := core + 1.
+            ].
+
+            i := i + 1.
+        ].
+
+        self krunDone.
+        "Emit measurements"
+        '{' print.
+        '"wallclock_times": [' print.
+        wallclockTimes from: 1 to: (wallclockTimes length - 1) do: [:i | ('' + i + ', ') print].
+        (wallclockTimes at: wallclockTimes length) print.
+        ', "core_cycle_counts": ' print.
+        self emitPerCoreMeasurement: coreCycleCounts.
+
+        "TODO - aperf and mperf counts not yet implemented."
+        ', "aperf_counts": [] ' print.
+        ', "mperf_counts": [] ' print.
+        '}' println.
+    )
+
+    emitPerCoreMeasurement: array = (
+        | core |
+        core := 1.
+        '[' print.
+        [ core < (numCores + 1) ] whileTrue: [
+            | coreMetrics |
+            '[' print.
+
+            coreMetrics := (array at: core).
+            coreMetrics from: 1 to: (coreMetrics length - 1) do: [:i | ('' + i + ', ') print].
+            (coreMetrics at: coreMetrics length) print.
+
+            ']' print.
+
+            core < numCores ifTrue: [
+                ', ' print.
+            ].
+            core := core + 1.
+        ].
+        ']' print.
+    )
+)
