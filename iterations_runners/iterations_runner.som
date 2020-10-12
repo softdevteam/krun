@@ -42,7 +42,6 @@ BenchmarkHarness = (
         | sym cls |
         sym := className asSymbol.
         cls := system load: sym.
-        cls println.
         cls ifNil: [
             self error: 'Failed loading benchmark: ' + className ].
         benchmarkClass := cls.
@@ -94,7 +93,7 @@ BenchmarkHarness = (
         '"wallclock_times": [' print.
         wallclockTimes from: 1 to: (wallclockTimes length - 1) do: [:i | ('' + i + ', ') print].
         (wallclockTimes at: wallclockTimes length) print.
-        ', "core_cycle_counts": ' print.
+        '], "core_cycle_counts": ' print.
         self emitPerCoreMeasurement: coreCycleCounts.
 
         "TODO - aperf and mperf counts not yet implemented."
