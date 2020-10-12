@@ -740,3 +740,25 @@ class V8VMDef(JavascriptVMDef):
 
         return self._run_exec(args, heap_lim_k, stack_lim_k, key,
                               key_pexec_idx, sync_disks=sync_disks)
+
+
+class SomVMDef(GenericScriptingVMDef):
+    def __init__(self, vm_path, classpaths, env=None):
+        GenericScriptingVMDef.__init__(self, vm_path, "iterations_runner.som",
+                                       env=env)
+        self.classpaths = classpaths
+
+    def run_exec(self, entry_point, iterations, param, heap_lim_k,
+                 stack_lim_k, key, key_pexec_idx, force_dir=None,
+                 sync_disks=True):
+
+        benchmark = key.split(":")[0]
+        script_dir = os.path.join(BENCHMARKS_DIR, benchmark)
+        script_path = self._get_benchmark_path(benchmark, entry_point,
+                                               force_dir=force_dir)
+
+        args = [self.vm_path, '--cp', ':'.join(self.classpath)] + self.extra_vm_args + \
+            [self.iterations_runner, script_path, str(iterations), str(param)]
+
+        return self._run_exec(args, heap_lim_k, stack_lim_k, key,
+                              key_pexec_idx, sync_disks=sync_disks)
