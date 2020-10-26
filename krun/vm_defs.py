@@ -757,7 +757,11 @@ class SomVMDef(GenericScriptingVMDef):
         script_path = self._get_benchmark_path(benchmark, entry_point,
                                                force_dir=force_dir)
 
-        args = [self.vm_path, '--cp', ':'.join(self.classpath)] + self.extra_vm_args + \
+        cp = '-cp'
+        if self.vm_path.endswith('yksom'):
+            cp = '--cp'
+
+        args = [self.vm_path, cp, ':'.join(self.classpaths)] + self.extra_vm_args + \
             [self.iterations_runner, script_path, str(iterations), str(param)]
 
         return self._run_exec(args, heap_lim_k, stack_lim_k, key,
