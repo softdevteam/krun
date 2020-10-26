@@ -1,4 +1,4 @@
-BenchmarkHarness = (
+iterations_runner = (
     | benchmarkClass numIterations param debug instrument numCores |
 
     krunInit = primitive
