@@ -1,14 +1,8 @@
 iterations_runner = (
-    | benchmarkClass numIterations param debug instrument numCores |
-
-    krunInit = primitive
-    krunDone = primitive
-    krunGetNumCores = primitive
-    krunMeasure: idx = primitive
-    krunGetWallclock: idx = primitive
-    krunGetCoreCyclesDouble: index core: core = primitive
+    | benchmarkClass numIterations param debug instrument numCores krun |
 
     run: args = (
+        krun := Krun new.
         self processArguments: args.
         self runBenchmark.
     )
@@ -50,8 +44,8 @@ iterations_runner = (
     runBenchmark = (
         | bench wallclockTimes coreCycleCounts i |
 
-        self krunInit.
-        numCores := self krunGetNumCores.
+        krun krunInit.
+        numCores := krun krunGetNumCores.
         bench := benchmarkClass new.
         wallclockTimes := Array new: numIterations.
         coreCycleCounts := Array new: numCores.
@@ -64,12 +58,12 @@ iterations_runner = (
                 ('[iterations_runner.som] iteration ' + i + '/' + numIterations) println.
             ].
 
-            self krunMeasure: 0.
+            krun krunMeasure: 0.
             bench run_iter: param.
-            self krunMeasure: 1.
+            krun krunMeasure: 1.
 
-            start := self krunGetWallclock: 0.
-            end := self krunGetWallclock: 1.
+            start := krun krunGetWallclock: 0.
+            end := krun krunGetWallclock: 1.
 
             wallclockTimes at: (i + 1) put: (end - start).
 
@@ -77,8 +71,8 @@ iterations_runner = (
             [ core < (numCores + 1) ] whileTrue: [
                 | cycle_start cycle_end |
 
-                cycle_end := (self krunGetCoreCyclesDouble: 1 core: (core - 1)).
-                cycle_start := (self krunGetCoreCyclesDouble: 0 core: (core -1)).
+                cycle_end := (krun krunGetCoreCyclesDouble: 1 core: (core - 1)).
+                cycle_start := (krun krunGetCoreCyclesDouble: 0 core: (core -1)).
 
                 (coreCycleCounts at: core) at: (i + 1) put: (cycle_end - cycle_start).
                 core := core + 1.
@@ -87,7 +81,7 @@ iterations_runner = (
             i := i + 1.
         ].
 
-        self krunDone.
+        krun krunDone.
         "Emit measurements"
         '{' print.
         '"wallclock_times": [' print.
