@@ -1,5 +1,5 @@
 cffi==1.12.2
-py==1.7.0
+py==1.10.0
 pycparser==2.19
 pytest==3.10.1
 pytest-cov==2.2.0
