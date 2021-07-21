@@ -30,7 +30,7 @@
 #define ACTUAL_CLOCK_MONOTONIC    CLOCK_MONOTONIC
 #endif
 
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
 // pick up our Krun syscall numbers
 #include <sys/krun-syscall.h>
 #endif
@@ -55,10 +55,10 @@ static int krun_num_cores = 0;
 // Private prototypes
 #ifdef __linux__
 static void     krun_mdata_bounds_check(int mdata_idx);
-#ifndef NO_MSRS
+#ifndef MSRS
 static int      krun_get_fixed_pctr1_width(void);
 static void     krun_core_bounds_check(int core);
-#endif // NO_MSRS
+#endif // MSRS
 #endif // __linux__
 void            krun_check_mdata(void);
 
@@ -76,7 +76,7 @@ krun_xcalloc(size_t nmemb, size_t size)
     return p;
 }
 
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
 static void
 krun_core_bounds_check(int core)
 {
@@ -85,7 +85,7 @@ krun_core_bounds_check(int core)
         exit(EXIT_FAILURE);
     }
 }
-#endif // defined(__linux__) && !defined(NO_MSRS)
+#endif // defined(__linux__) && defined(MSRS)
 
 static void
 krun_mdata_bounds_check(int mdata_idx)
@@ -96,19 +96,19 @@ krun_mdata_bounds_check(int mdata_idx)
     }
 }
 
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
 /*
  * Fixed-function counters vary in size across machines.
  * (configured in initialisation).
  */
 static uint64_t krun_pctr_val_mask = 0;
 
-#elif defined(__linux__) && defined(NO_MSRS)
+#elif defined(__linux__) && !defined(MSRS)
 #elif defined(__OpenBSD__)
 // We do not yet support performance counters on OpenBSD
 #else
 #error "Unsupported platform"
-#endif // __linux__ && !NO_MSRS
+#endif // __linux__ && defined(MSRS)
 
 double
 krun_clock_gettime_monotonic()
@@ -189,7 +189,7 @@ Java_IterationsRunner_JNI_1krun_1get_1num_1cores(JNIEnv *e, jclass c)
 }
 #endif
 
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
 static int
 /*
  * Fetches the width of the fixed-function performance counters so we can
@@ -238,17 +238,17 @@ krun_get_fixed_pctr1_width()
 
     return fixed_ctr_width;
 }
-#elif defined(__linux__) && defined(NO_MSRS)
+#elif defined(__linux__) && !defined(MSRS)
 #elif defined(__OpenBSD__)
 // We do not yet support performance counters on OpenBSD
 #else
 #error "Unsupported platform"
-#endif // linux && !NO_MSRS
+#endif // linux && defined(MSRS)
 
 void
 krun_init(void)
 {
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
     int i, err;
 
     /* See how wide the counter values are and make an appropriate mask */
@@ -272,18 +272,18 @@ krun_init(void)
     /* Reset all MSRs of interest */
     syscall(SYSCALL_KRUN_RESET_MSRS, krun_num_cores);
 
-#elif defined(__linux__) && defined(NO_MSRS)
+#elif defined(__linux__) && !defined(MSRS)
 #elif defined(__OpenBSD__)
     // We do not yet support performance counters on OpenBSD
 #else
 #   error "Unsupported platform"
-#endif  // __linux__ && !NO_MSRS
+#endif  // __linux__ && defined(MSRS)
 }
 
 void
 krun_done(void)
 {
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
     int i;
 
     /* Free per-core arrays */
@@ -292,12 +292,12 @@ krun_done(void)
         free(krun_mdata[i].aperf);
         free(krun_mdata[i].mperf);
     }
-#elif defined(__linux__) && defined(NO_MSRS)
+#elif defined(__linux__) && !defined(MSRS)
 #elif defined(__OpenBSD__)
     // We do not yet support performance counters on OpenBSD
 #else
 #error "Unsupported platform"
-#endif  // __linux__ && !NO_MSRS
+#endif  // __linux__ && defined(MSRS)
 }
 
 /*
@@ -330,7 +330,7 @@ krun_measure(int mdata_idx)
     struct krun_data *data = &(krun_mdata[mdata_idx]);
     krun_mdata_bounds_check(mdata_idx);
 
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
     int err;
 
     /*
@@ -360,7 +360,7 @@ krun_measure(int mdata_idx)
         fprintf(stderr, "krun_read_msrs() syscall failed\n");
         exit(EXIT_FAILURE);
     }
-#elif defined(__linux__) && defined(NO_MSRS)
+#elif defined(__linux__) && !defined(MSRS)
     data->wallclock = krun_clock_gettime_monotonic();
 #elif defined(__OpenBSD__)
     data->wallclock = krun_clock_gettime_monotonic();
@@ -423,40 +423,40 @@ krun_get_wallclock(int mdata_idx)
 uint64_t
 krun_get_core_cycles(int mdata_idx, int core)
 {
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
     krun_mdata_bounds_check(mdata_idx);
     krun_core_bounds_check(core);
     return krun_mdata[mdata_idx].core_cycles[core] & krun_pctr_val_mask;
 #else
     fprintf(stderr, "%s: libkruntime was built without MSR support\n", __func__);
     exit(EXIT_FAILURE);
-#endif // defined(__linux__) && !defined(NO_MSRS)
+#endif // defined(__linux__) && defined(MSRS)
 }
 
 uint64_t
 krun_get_aperf(int mdata_idx, int core)
 {
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
     krun_mdata_bounds_check(mdata_idx);
     krun_core_bounds_check(core);
     return krun_mdata[mdata_idx].aperf[core];
 #else
     fprintf(stderr, "%s: libkruntime was built without MSR support\n", __func__);
     exit(EXIT_FAILURE);
-#endif // defined(__linux__) && !defined(NO_MSRS)
+#endif // defined(__linux__) && defined(MSRS)
 }
 
 uint64_t
 krun_get_mperf(int mdata_idx, int core)
 {
-#if defined(__linux__) && !defined(NO_MSRS)
+#if defined(__linux__) && defined(MSRS)
     krun_mdata_bounds_check(mdata_idx);
     krun_core_bounds_check(core);
     return krun_mdata[mdata_idx].mperf[core];
 #else
     fprintf(stderr, "%s: libkruntime was built without MSR support\n", __func__);
     exit(EXIT_FAILURE);
-#endif // defined(__linux__) && !defined(NO_MSRS)
+#endif // defined(__linux__) && defined(MSRS)
 }
 
 /*

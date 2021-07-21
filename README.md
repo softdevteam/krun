@@ -63,7 +63,7 @@ you will need to use the (now rather out of date) custom Linux kernel at:
 
   https://github.com/softdevteam/krun-linux-kernel
 
-If you do use this kernel you will need to set `NO_MSRS=0` in your Unix
+If you do use this kernel you will need to set `MSRS=1` in your Unix
 environment when building Krun (see later).
 
 ### Tickless Kernel
