@@ -53,23 +53,18 @@ resulting benchmarking numbers.
 
 ### Performance counters
 
-We recommend using our custom Linux kernel found at:
-
-  https://github.com/softdevteam/krun-linux-kernel
-
-which provides low latency access to the following counters:
+If you want low latency access to the following counters:
 
   * `IA32_PERF_FIXED_CTR1` (the core cycle counter)
   * `IA32_APERF` counts
   * `IA32_MPERF` counts
 
-If you are unable to do this, you can set `NO_MSRS=1` in your Unix environment
-when building Krun (see later), but be aware that this degrades the quality of
-the resulting benchmarking numbers.
+you will need to use the (now rather out of date) custom Linux kernel at:
 
-Krun works on any version of the kernel if NO_MSRS=1 is set. If a suitable
-version of the Krun custom kernel (>= 4.9.88) is used, the MSRs are also
-available.
+  https://github.com/softdevteam/krun-linux-kernel
+
+If you do use this kernel you will need to set `MSRS=1` in your Unix
+environment when building Krun (see later).
 
 ### Tickless Kernel
 

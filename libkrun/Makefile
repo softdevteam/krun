@@ -21,11 +21,11 @@ ifeq ($(shell uname -s),Linux)
 	# Under virtualised conditions, we have no performance counters.
 	# MSR-centric code is also guarded on a per-OS basis in libkruntime.c
 	ifeq (${VIRTUALISED},1)
-		COMMON_CFLAGS += -DNO_MSRS
-	else ifeq (${NO_MSRS},1)
+		COMMON_CFLAGS += -DMSRS
+	else ifeq (${MSRS},1)
 		# You can also force off MSR support. This can be useful for
 		# testing on machines without the Krun Linux kernel installed.
-		COMMON_CFLAGS += -DNO_MSRS
+		COMMON_CFLAGS += -DMSRS
 	endif
 endif
 
