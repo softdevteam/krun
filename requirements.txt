@@ -1,6 +1,6 @@
 cffi==1.12.2
 py==1.10.0
 pycparser==2.19
-pytest==3.10.1
+pytest==9.0.3
 pytest-cov==2.2.0
 subprocess32==3.5.4
